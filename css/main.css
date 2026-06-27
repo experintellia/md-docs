@@ -182,20 +182,23 @@ html, body {
 .cm-editor .cm-ySelectionInfo {
   /* !important beats y-codemirror's baseTheme (equal specificity, loaded
      later); without it the label keeps the inherited bright peer colour. */
-  background-color: rgba(0, 0, 0, 0.82) !important;
+  background-color: #000 !important;
   color: #fff !important;
+  font-family: sans-serif !important;
   font-size: 0.7em;
   padding: 0 4px;
   border-radius: 3px;
-  /* Peer colour as a border so the dark chip still reads as that peer's and
+  /* Peer colour as a wider border so the dark chip reads as that peer's and
      ties back to the caret. `inherit` picks up the caret's inline border-color
      (set to the peer colour by y-codemirror). */
-  border: 1px solid;
+  border: 2px solid;
   border-color: inherit !important;
 }
 
-/* On touch there's no hover to reveal the flag, and the caret is a hairline —
-   so show it always. */
+/* When the flag is shown, one opacity over the whole chip so the dark fill,
+   the coloured border and the white text share the same translucency. Desktop
+   reveals it on hover; touch (no hover, hairline caret) shows it always. */
+.cm-editor .cm-ySelectionCaret:hover > .cm-ySelectionInfo { opacity: 0.8 !important; }
 @media (pointer: coarse) {
-  .cm-editor .cm-ySelectionInfo { opacity: 1; }
+  .cm-editor .cm-ySelectionInfo { opacity: 0.8 !important; }
 }
