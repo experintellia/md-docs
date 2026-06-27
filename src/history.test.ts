@@ -54,4 +54,22 @@ test('history reconstructs versions, dedups no-ops, and counts char changes', ()
   assert.equal(sent.length, 1, 'send delegated to real webxdc');
   assert.equal(sent[0].payload.author, 'Alice', 'author injected on send');
   assert.equal(typeof sent[0].payload.t, 'number', 'timestamp injected on send');
+
+  // markRestore tags exactly the next outgoing batch (one-shot).
+  history.markRestore({ t: 1000, author: 'Alice' });
+  history.webxdc.sendUpdate({ payload: { serializedYjsUpdate: 'y' } } as never, '');
+  history.webxdc.sendUpdate({ payload: { serializedYjsUpdate: 'z' } } as never, '');
+  assert.deepEqual(sent[1].payload.restoredFrom, { t: 1000, author: 'Alice' }, 'restore tag injected');
+  assert.equal(sent[2].payload.restoredFrom, undefined, 'restore tag is one-shot');
+
+  // An incoming restore batch surfaces its source in versions().
+  src.transact(() => text.insert(5, '!')); // "hello" -> "hello!"
+  listener!({ payload: {
+    serializedYjsUpdate: b64(updates[4]), t: 5000, author: 'Alice',
+    restoredFrom: { t: 1000, author: 'Alice' },
+  } });
+  const after = history.versions();
+  const last = after[after.length - 1];
+  assert.equal(last.text, 'hello!', 'restore batch reconstructed');
+  assert.deepEqual(last.restoredFrom, { t: 1000, author: 'Alice' }, 'restoredFrom surfaced');
 });
