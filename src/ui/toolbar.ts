@@ -1,5 +1,7 @@
 import { indentMore, indentLess } from '@codemirror/commands';
 import type { Command, EditorView } from '@codemirror/view';
+import { faSquareCheck } from '@fortawesome/free-regular-svg-icons';
+import { faListUl } from '@fortawesome/free-solid-svg-icons';
 import {
   cycleHeading,
   toggleBold,
@@ -7,9 +9,11 @@ import {
   toggleChecklist,
   toggleItalic,
 } from '../commands';
+import { faSvg } from './icon';
 
 interface Action {
-  label: string;
+  /** Text glyph, or a Font Awesome icon rendered as inline SVG. */
+  label: string | (() => Node);
   title: string;
   run: Command;
 }
@@ -18,10 +22,8 @@ const ACTIONS: Action[] = [
   { label: 'H', title: 'Heading (cycle level)', run: cycleHeading },
   { label: 'B', title: 'Bold', run: toggleBold },
   { label: 'I', title: 'Italic', run: toggleItalic },
-  { label: '•', title: 'Bullet list', run: toggleBullet },
-  // ︎ forces monochrome text presentation so the glyph matches the other
-  // toolbar buttons instead of rendering as a colourful emoji.
-  { label: '☑︎', title: 'Checklist item', run: toggleChecklist },
+  { label: () => faSvg(faListUl), title: 'Bullet list', run: toggleBullet },
+  { label: () => faSvg(faSquareCheck), title: 'Checklist item', run: toggleChecklist },
   { label: '⇤', title: 'Outdent list item', run: indentLess },
   { label: '⇥', title: 'Indent list item', run: indentMore },
 ];
@@ -59,11 +61,12 @@ export function mountToolbar(container: HTMLElement, view: EditorView): void {
   }
 }
 
-function utilButton(label: string, title: string): HTMLButtonElement {
+function utilButton(label: string | (() => Node), title: string): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'md-tool-btn';
-  btn.textContent = label;
+  if (typeof label === 'string') btn.textContent = label;
+  else btn.appendChild(label());
   btn.title = title;
   btn.setAttribute('aria-label', title);
   return btn;

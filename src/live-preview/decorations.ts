@@ -48,6 +48,29 @@ function headingClass(name: string): string | null {
   return m ? `md-h${m[1]}` : null;
 }
 
+// Pull the destination out of a `[text](url)` / `[text](url "title")` source.
+function linkUrl(src: string): string | null {
+  const m = /\]\(\s*([^)\s]+)/.exec(src);
+  return m ? m[1] : null;
+}
+
+/**
+ * Open a previewed link on click. The link is a styled span (not a real anchor,
+ * which contenteditable would swallow), so we open its data-href ourselves.
+ * webxdc runs sandboxed: the messenger handles `window.open` for http(s),
+ * routing to the system browser.
+ */
+export const linkClickHandler = EditorView.domEventHandlers({
+  mousedown(event) {
+    const target = event.target as HTMLElement | null;
+    const href = target?.closest<HTMLElement>('.md-link[data-href]')?.dataset.href;
+    if (!href) return false;
+    event.preventDefault();
+    window.open(href, '_blank');
+    return true;
+  },
+});
+
 function buildDecorations(view: EditorView): DecorationSet {
   const ranges: Range<Decoration>[] = [];
   const { state } = view;
@@ -88,8 +111,17 @@ function buildDecorations(view: EditorView): DecorationSet {
           return;
         }
         if (name === 'Link') {
+          // In preview (markers hidden) the link text becomes clickable via a
+          // data-href the click handler below opens; while editing the line we
+          // leave it as plain styled text so the raw `[text](url)` stays editable.
+          const url = lineHasSelection(state, node.from)
+            ? null
+            : linkUrl(doc.sliceString(node.from, node.to));
           ranges.push(
-            Decoration.mark({ class: 'md-link' }).range(node.from, node.to),
+            Decoration.mark({
+              class: 'md-link',
+              attributes: url ? { 'data-href': url } : undefined,
+            }).range(node.from, node.to),
           );
           return;
         }
