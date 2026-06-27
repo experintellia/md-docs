@@ -1,7 +1,19 @@
 import { indentMore, indentLess } from '@codemirror/commands';
 import type { Command, EditorView } from '@codemirror/view';
-import { faSquareCheck } from '@fortawesome/free-regular-svg-icons';
-import { faListUl } from '@fortawesome/free-solid-svg-icons';
+import {
+  faCircleQuestion,
+  faSquareCheck,
+} from '@fortawesome/free-regular-svg-icons';
+import {
+  faBold,
+  faHeading,
+  faIndent,
+  faItalic,
+  faListUl,
+  faMoon,
+  faOutdent,
+  faSun,
+} from '@fortawesome/free-solid-svg-icons';
 import {
   cycleHeading,
   toggleBold,
@@ -12,20 +24,19 @@ import {
 import { faSvg } from './icon';
 
 interface Action {
-  /** Text glyph, or a Font Awesome icon rendered as inline SVG. */
-  label: string | (() => Node);
+  icon: () => Node;
   title: string;
   run: Command;
 }
 
 const ACTIONS: Action[] = [
-  { label: 'H', title: 'Heading (cycle level)', run: cycleHeading },
-  { label: 'B', title: 'Bold', run: toggleBold },
-  { label: 'I', title: 'Italic', run: toggleItalic },
-  { label: () => faSvg(faListUl), title: 'Bullet list', run: toggleBullet },
-  { label: () => faSvg(faSquareCheck), title: 'Checklist item', run: toggleChecklist },
-  { label: '⇤', title: 'Outdent list item', run: indentLess },
-  { label: '⇥', title: 'Indent list item', run: indentMore },
+  { icon: () => faSvg(faHeading), title: 'Heading (cycle level)', run: cycleHeading },
+  { icon: () => faSvg(faBold), title: 'Bold', run: toggleBold },
+  { icon: () => faSvg(faItalic), title: 'Italic', run: toggleItalic },
+  { icon: () => faSvg(faListUl), title: 'Bullet list', run: toggleBullet },
+  { icon: () => faSvg(faSquareCheck), title: 'Checklist item', run: toggleChecklist },
+  { icon: () => faSvg(faOutdent), title: 'Outdent list item', run: indentLess },
+  { icon: () => faSvg(faIndent), title: 'Indent list item', run: indentMore },
 ];
 
 /**
@@ -40,7 +51,7 @@ export function mountToolbar(container: HTMLElement, view: EditorView): void {
   container.replaceChildren();
 
   for (const action of ACTIONS) {
-    const btn = utilButton(action.label, action.title);
+    const btn = utilButton(action.icon, action.title);
     // Use mousedown + preventDefault so the editor keeps focus/selection.
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -61,12 +72,11 @@ export function mountToolbar(container: HTMLElement, view: EditorView): void {
   }
 }
 
-function utilButton(label: string | (() => Node), title: string): HTMLButtonElement {
+function utilButton(icon: () => Node, title: string): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'md-tool-btn';
-  if (typeof label === 'string') btn.textContent = label;
-  else btn.appendChild(label());
+  btn.appendChild(icon());
   btn.title = title;
   btn.setAttribute('aria-label', title);
   return btn;
@@ -76,8 +86,11 @@ function utilButton(label: string | (() => Node), title: string): HTMLButtonElem
  *  this same `color-schema` key, so the choice survives a reload. */
 function themeButton(): HTMLButtonElement {
   const root = document.documentElement;
-  const btn = utilButton('', 'Toggle dark / light theme');
-  const sync = (): void => { btn.textContent = root.classList.contains('dark') ? '☀︎' : '☾'; };
+  const btn = utilButton(() => faSvg(faMoon), 'Toggle dark / light theme');
+  // Show the sun in dark mode (tap to go light) and the moon in light mode.
+  const sync = (): void => {
+    btn.replaceChildren(faSvg(root.classList.contains('dark') ? faSun : faMoon));
+  };
   btn.addEventListener('click', () => {
     const dark = root.classList.toggle('dark');
     localStorage.setItem('color-schema', dark ? 'dark' : 'light');
@@ -88,7 +101,7 @@ function themeButton(): HTMLButtonElement {
 }
 
 function helpButton(): HTMLButtonElement {
-  const btn = utilButton('?', 'Help & markdown syntax');
+  const btn = utilButton(() => faSvg(faCircleQuestion), 'Help & markdown syntax');
   btn.addEventListener('click', openHelp);
   return btn;
 }
@@ -104,6 +117,8 @@ function buildHelp(): HTMLElement {
   const overlay = document.createElement('div');
   overlay.id = 'help-overlay';
   overlay.hidden = true;
+  // Inline the toolbar's own icons so the help mirrors the buttons exactly.
+  const ico = (def: Parameters<typeof faSvg>[0]): string => faSvg(def).outerHTML;
   overlay.innerHTML = `
     <div class="help-card" role="dialog" aria-modal="true" aria-label="Help">
       <button class="help-close" type="button" aria-label="Close help" title="Close">×</button>
@@ -113,18 +128,19 @@ function buildHelp(): HTMLElement {
          the <strong>first line becomes the document's title</strong> shown in chat.</p>
       <h2>Markdown syntax</h2>
       <table>
-        <tr><td><code># Heading</code></td><td>Heading (use the <strong>H</strong> button to cycle levels)</td></tr>
-        <tr><td><code>**bold**</code></td><td>Bold text (<strong>B</strong>)</td></tr>
-        <tr><td><code>*italic*</code></td><td>Italic text (<strong>I</strong>)</td></tr>
-        <tr><td><code>- item</code></td><td>Bullet list (<strong>•</strong>)</td></tr>
-        <tr><td><code>- [ ] task</code></td><td>Checklist item (<strong>☑</strong>); click the box to tick it</td></tr>
+        <tr><td><code># Heading</code></td><td>Heading (use the ${ico(faHeading)} button to cycle levels)</td></tr>
+        <tr><td><code>**bold**</code></td><td>Bold text (${ico(faBold)})</td></tr>
+        <tr><td><code>*italic*</code></td><td>Italic text (${ico(faItalic)})</td></tr>
+        <tr><td><code>- item</code></td><td>Bullet list (${ico(faListUl)})</td></tr>
+        <tr><td><code>- [ ] task</code></td><td>Checklist item (${ico(faSquareCheck)}); click the box to tick it</td></tr>
         <tr><td><code>&gt; quote</code></td><td>Block quote</td></tr>
         <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
         <tr><td><code>[text](url)</code></td><td>Link</td></tr>
       </table>
       <h2>Toolbar</h2>
-      <p>Use <strong>⇥ / ⇤</strong> to indent or outdent list items, <strong>☾ / ☀</strong>
-         to switch theme, and <strong>?</strong> to reopen this help.</p>
+      <p>Use ${ico(faIndent)} / ${ico(faOutdent)} to indent or outdent list items,
+         ${ico(faMoon)} / ${ico(faSun)} to switch theme, and ${ico(faCircleQuestion)}
+         to reopen this help.</p>
     </div>`;
 
   const close = (): void => { overlay.hidden = true; };

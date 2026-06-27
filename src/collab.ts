@@ -7,10 +7,12 @@ import WebxdcProvider from 'y-webxdc';
  * webxdc persistent channel, plus the pieces `yCollab` needs (text, awareness,
  * undo manager). See PLAN.md Phase 2.
  *
- * Remote cursors won't go *live* until the deferred realtime transport lands
- * (PLAN.md "LATER"); awareness is wired now so that flip is small.
+ * Durable document sync rides this persistent channel; live typing and remote
+ * cursors ride the faster ephemeral realtime channel (see realtime.ts). Both
+ * feed this same Y.Doc.
  */
 export interface Collab {
+  ydoc: Y.Doc;
   ytext: Y.Text;
   awareness: Awareness;
   undoManager: Y.UndoManager;
@@ -40,9 +42,8 @@ export function createCollab(): Collab {
   const { webxdc } = window;
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText('codemirror');
-  // ponytail: awareness is created so yCollab can bind it, but local cursor
-  // state (name/color) is set in the LATER transport phase — without the
-  // realtime channel no peer ever receives it, so setting it now is dead.
+  // Bound by yCollab to render remote cursors; local cursor state and the
+  // peer-to-peer transport are set up in realtime.ts (the realtime channel).
   const awareness = new Awareness(ydoc);
   const undoManager = new Y.UndoManager(ytext);
 
@@ -66,5 +67,5 @@ export function createCollab(): Collab {
     },
   });
 
-  return { ytext, awareness, undoManager, provider };
+  return { ydoc, ytext, awareness, undoManager, provider };
 }
