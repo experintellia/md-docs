@@ -1,8 +1,7 @@
+import { indentMore, indentLess } from '@codemirror/commands';
 import type { Command, EditorView } from '@codemirror/view';
 import {
   cycleHeading,
-  indentList,
-  outdentList,
   toggleBold,
   toggleChecklist,
   toggleItalic,
@@ -18,8 +17,8 @@ const ACTIONS: Action[] = [
   { label: 'H', title: 'Heading (cycle level)', run: cycleHeading },
   { label: 'B', title: 'Bold', run: toggleBold },
   { label: 'I', title: 'Italic', run: toggleItalic },
-  { label: '⇤', title: 'Outdent list item', run: outdentList },
-  { label: '⇥', title: 'Indent list item', run: indentList },
+  { label: '⇤', title: 'Outdent list item', run: indentLess },
+  { label: '⇥', title: 'Indent list item', run: indentMore },
   { label: '☑', title: 'Checklist item', run: toggleChecklist },
 ];
 

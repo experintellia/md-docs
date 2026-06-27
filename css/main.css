@@ -85,6 +85,17 @@ html, body {
   overflow: auto;
 }
 
+/* Save/sync indicator — unobtrusive bottom-right corner. */
+#status {
+  position: fixed;
+  right: 8px;
+  bottom: 6px;
+  z-index: 5;
+  font-size: 11px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
 /* CodeMirror fills the editor area. */
 .cm-editor { height: 100%; }
 .cm-editor .cm-scroller {

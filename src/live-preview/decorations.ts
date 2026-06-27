@@ -1,5 +1,5 @@
 import { syntaxTree } from '@codemirror/language';
-import { type Range } from '@codemirror/state';
+import { type EditorState, type Range } from '@codemirror/state';
 import {
   Decoration,
   type DecorationSet,
@@ -7,8 +7,19 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from '@codemirror/view';
-import { lineHasSelection } from './reveal-on-cursor';
 import { CheckboxWidget } from './widgets/checkbox';
+
+/**
+ * Obsidian-style "reveal on cursor": markdown syntax markers are hidden unless
+ * the cursor / selection touches the same line, in which case the raw markup is
+ * shown so it can be edited. Reveal is per-line (not per-node).
+ */
+function lineHasSelection(state: EditorState, pos: number): boolean {
+  const line = state.doc.lineAt(pos);
+  return state.selection.ranges.some(
+    (r) => r.from <= line.to && r.to >= line.from,
+  );
+}
 
 // Inline nodes whose whole range gets a styling class.
 const INLINE_MARK_CLASS: Record<string, string> = {

@@ -1,4 +1,3 @@
-import { indentMore, indentLess } from '@codemirror/commands';
 import type { Command, KeyBinding } from '@codemirror/view';
 
 /** Toggle an inline wrapper (e.g. `**` for bold) around each selection range. */
@@ -75,10 +74,6 @@ export const toggleChecklist: Command = (view) => {
   view.dispatch({ changes: { from: pos, to: pos, insert: '- [ ] ' } });
   return true;
 };
-
-/** List indent / outdent — Tab / Shift-Tab under the hood. */
-export const indentList: Command = (view) => indentMore(view);
-export const outdentList: Command = (view) => indentLess(view);
 
 /** Keyboard shortcuts (desktop) mirroring the toolbar actions. */
 export const markdownKeymap: KeyBinding[] = [
