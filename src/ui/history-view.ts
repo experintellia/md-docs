@@ -11,6 +11,7 @@ import {
 import { faSvg } from './icon.ts';
 import { livePreview } from '../live-preview/index.ts';
 import type { Collab } from '../collab.ts';
+import type { HistoryVersion } from '../history.ts';
 
 /**
  * Full-screen document history: a scrollable list of past versions (datetime +
@@ -48,6 +49,7 @@ class HistoryOverlay {
   private readonly preview = new Compartment();
   private rendered = true;
   private selected: number | null = null;
+  private rows: HistoryVersion[] = [];
   private readonly collab: Collab;
 
   constructor(collab: Collab) {
@@ -116,37 +118,44 @@ class HistoryOverlay {
   }
 
   private renderList(): void {
-    const entries = this.collab.history.list();
+    this.rows = this.collab.history.versions();
     this.listEl.replaceChildren();
     // Newest first.
-    for (let i = entries.length - 1; i >= 0; i--) {
-      const { index, t, author } = entries[i];
+    for (let i = this.rows.length - 1; i >= 0; i--) {
+      const { t, author, added, removed } = this.rows[i];
       const li = document.createElement('li');
       li.className = 'hist-row';
       li.setAttribute('role', 'button');
       li.tabIndex = 0;
-      if (index === this.selected) li.classList.add('selected');
-      li.innerHTML = `<span class="hist-when">${new Date(t).toLocaleString()}</span>
-        <span class="hist-who">${escapeHtml(author)}</span>`;
-      const pick = (): void => this.select(index);
+      if (i === this.selected) li.classList.add('selected');
+      const rel = relativeTime(t);
+      li.innerHTML = `<span class="hist-when">${new Date(t).toLocaleTimeString()}${
+        rel ? ` · ${rel}` : ''}</span>
+        <span class="hist-meta">
+          <span class="hist-who">${escapeHtml(author)}</span>
+          ${added || removed ? `<span class="hist-diff"
+            ><span class="hist-add">+${added}</span> <span class="hist-del">−${removed}</span></span>` : ''}
+        </span>`;
+      const pick = (): void => this.select(i);
       li.addEventListener('click', pick);
       li.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); }
       });
       this.listEl.appendChild(li);
     }
-    // Default to the latest version when nothing is picked yet.
-    if (this.selected === null && entries.length) this.select(entries.length - 1);
+    // Keep the selection valid as new versions arrive; default to the latest.
+    if ((this.selected === null || this.selected >= this.rows.length) && this.rows.length) {
+      this.select(this.rows.length - 1);
+    }
   }
 
   private select(index: number): void {
     this.selected = index;
-    const text = this.collab.history.textAt(index);
+    const text = this.rows[index]?.text ?? '';
     this.viewer.dispatch({ changes: { from: 0, to: this.viewer.state.doc.length, insert: text } });
     this.listEl.querySelectorAll('.hist-row').forEach((row, i) => {
-      // rows are newest-first; map back to entry index
-      const entries = this.collab.history.list();
-      row.classList.toggle('selected', entries[entries.length - 1 - i]?.index === index);
+      // rows are rendered newest-first; map display position back to row index.
+      row.classList.toggle('selected', this.rows.length - 1 - i === index);
     });
   }
 
@@ -168,7 +177,7 @@ class HistoryOverlay {
 
   private restore(): void {
     if (this.selected === null) return;
-    const text = this.collab.history.textAt(this.selected);
+    const text = this.rows[this.selected]?.text ?? '';
     if (!window.confirm('Restore this version? This replaces the current document for everyone.')) {
       return;
     }
@@ -185,4 +194,14 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!
   ));
+}
+
+// Short relative label for timestamps within the last hour; null otherwise (the
+// absolute time already covers older versions). ponytail: no ticking refresh —
+// the list re-renders whenever history changes, which is often enough.
+function relativeTime(t: number): string | null {
+  const diff = Date.now() - t;
+  if (diff < 0 || diff >= 3_600_000) return null;
+  const mins = Math.floor(diff / 60_000);
+  return mins < 1 ? 'just now' : `${mins} min ago`;
 }
