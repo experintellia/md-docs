@@ -11,11 +11,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 24: runs the TS test files directly via native type stripping (node --test).
+          node-version: 24
           cache: npm
       - name: Install
         run: npm ci
-      - name: Test (typecheck + lint)
+      - name: Test (typecheck + lint + unit)
         run: npm test
       - name: Build
         run: npm run build
