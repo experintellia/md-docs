@@ -1,0 +1,5 @@
+node_modules
+dist
+dist-release
+webxdc.js
+vite.config.ts

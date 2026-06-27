@@ -1,0 +1,44 @@
+{
+  "name": "md-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MD-Docs — a collaborative Obsidian-style markdown editor for webxdc.",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && npm run check",
+    "check": "eslint . --ext .ts",
+    "fix": "eslint . --ext .ts --fix",
+    "start": "concurrently \"npm run serve:app\" \"npm run webxdc-server\"",
+    "serve:app": "vite --port 3333",
+    "webxdc-server": "webxdc-dev run http://localhost:3333"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.6.0",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.10.0",
+    "@codemirror/state": "^6.4.0",
+    "@codemirror/view": "^6.28.0",
+    "@lezer/common": "^1.2.0",
+    "@lezer/highlight": "^1.2.0",
+    "@lezer/markdown": "^1.6.4",
+    "codemirror": "^6.0.1",
+    "y-codemirror.next": "^0.3.5",
+    "y-protocols": "^1.0.6",
+    "y-webxdc": "^1.2.0",
+    "yjs": "^13.6.6"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@webxdc/types": "^2.2.0",
+    "concurrently": "^8.2.0",
+    "eruda": "^3.0.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.3.0",
+    "vite-plugin-zip-pack": "^1.2.0",
+    "webxdc-dev": "^0.17.0"
+  }
+}

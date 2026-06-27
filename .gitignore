@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-release
+*.xdc
+*.local
+*.log
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,28 @@
+# Build the .xdc and attach it to a GitHub Release when a vX.Y.Z tag is pushed.
+name: Release .xdc
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-release/*.xdc
+          fail_on_unmatched_files: true
