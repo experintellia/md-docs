@@ -1,23 +1,35 @@
+import { EditorSelection } from '@codemirror/state';
 import type { Command, KeyBinding } from '@codemirror/view';
 
-/** Toggle an inline wrapper (e.g. `**` for bold) around each selection range. */
+/**
+ * Toggle an inline wrapper (e.g. `**` for bold) around each selection range.
+ * Uses changeByRange so the selection follows the edit: a collapsed cursor
+ * lands between the markers (`**|**`), a selection stays wrapped on the text.
+ */
 function toggleWrap(marker: string): Command {
   return (view) => {
-    const { state } = view;
-    const changes: { from: number; to: number; insert: string }[] = [];
-    for (const range of state.selection.ranges) {
-      const before = state.sliceDoc(range.from - marker.length, range.from);
-      const after = state.sliceDoc(range.to, range.to + marker.length);
-      if (before === marker && after === marker) {
-        changes.push({ from: range.from - marker.length, to: range.from, insert: '' });
-        changes.push({ from: range.to, to: range.to + marker.length, insert: '' });
-      } else {
-        changes.push({ from: range.from, to: range.from, insert: marker });
-        changes.push({ from: range.to, to: range.to, insert: marker });
-      }
-    }
-    if (!changes.length) return false;
-    view.dispatch({ changes });
+    const m = marker.length;
+    const tr = view.state.changeByRange((range) => {
+      const wrapped =
+        view.state.sliceDoc(range.from - m, range.from) === marker &&
+        view.state.sliceDoc(range.to, range.to + m) === marker;
+      return wrapped
+        ? {
+          changes: [
+            { from: range.from - m, to: range.from },
+            { from: range.to, to: range.to + m },
+          ],
+          range: EditorSelection.range(range.from - m, range.to - m),
+        }
+        : {
+          changes: [
+            { from: range.from, insert: marker },
+            { from: range.to, insert: marker },
+          ],
+          range: EditorSelection.range(range.from + m, range.to + m),
+        };
+    });
+    view.dispatch(view.state.update(tr, { scrollIntoView: true }));
     return true;
   };
 }
