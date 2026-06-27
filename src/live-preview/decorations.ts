@@ -7,8 +7,8 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from '@codemirror/view';
-import { BulletWidget } from './widgets/bullet';
-import { CheckboxWidget } from './widgets/checkbox';
+import { BulletWidget } from './widgets/bullet.ts';
+import { CheckboxWidget } from './widgets/checkbox.ts';
 
 /**
  * Obsidian-style "reveal on cursor": markdown syntax markers are hidden unless
@@ -71,7 +71,7 @@ export const linkClickHandler = EditorView.domEventHandlers({
   },
 });
 
-function buildDecorations(view: EditorView): DecorationSet {
+export function buildDecorations(view: EditorView): DecorationSet {
   const ranges: Range<Decoration>[] = [];
   const { state } = view;
   const doc = state.doc;

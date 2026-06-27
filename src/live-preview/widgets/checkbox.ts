@@ -6,12 +6,15 @@ import { WidgetType, type EditorView } from '@codemirror/view';
  * Yjs once collaboration is wired up).
  */
 export class CheckboxWidget extends WidgetType {
-  constructor(
-    readonly checked: boolean,
-    readonly from: number,
-    readonly to: number,
-  ) {
+  readonly checked: boolean;
+  readonly from: number;
+  readonly to: number;
+
+  constructor(checked: boolean, from: number, to: number) {
     super();
+    this.checked = checked;
+    this.from = from;
+    this.to = to;
   }
 
   override eq(other: CheckboxWidget): boolean {
