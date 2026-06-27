@@ -38,7 +38,7 @@ function main(): void {
     [placeholder('# Start writing…')],
     collab,
   );
-  if (toolbarEl) mountToolbar(toolbarEl, view);
+  if (toolbarEl) mountToolbar(toolbarEl, view, collab);
 
   // Live typing + remote cursors over the ephemeral realtime channel (no-op in
   // messengers that don't implement it yet — persistent sync still works).
