@@ -20,8 +20,8 @@ import {
   toggleBullet,
   toggleChecklist,
   toggleItalic,
-} from '../commands';
-import { faSvg } from './icon';
+} from '../commands.ts';
+import { faSvg } from './icon.ts';
 
 interface Action {
   icon: () => Node;
