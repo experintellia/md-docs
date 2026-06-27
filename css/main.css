@@ -181,7 +181,17 @@ html, body {
 .hist-row:hover { background: rgba(127, 127, 127, 0.1); }
 .hist-row.selected { background: rgba(127, 127, 127, 0.2); }
 .hist-when { font-size: 13px; }
-.hist-who { font-size: 11px; color: var(--muted); }
+.hist-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+.hist-who { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-diff { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.hist-add { color: #1a7f37; }
+.hist-del { color: #cf222e; }
 .hist-viewer { flex: 1 1 auto; min-width: 0; overflow: auto; }
 
 /* Stack list above viewer on narrow screens. */

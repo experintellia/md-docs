@@ -14,20 +14,25 @@ import * as Y from 'yjs';
  * the provider and stamp `{ t, author }` onto each outgoing payload — a few extra
  * bytes that then travel with every version, including historical/offline ones.
  */
-export interface HistoryEntry {
-  /** index into the underlying record list, for `textAt()` */
-  index: number;
+export interface HistoryVersion {
   t: number;
   author: string;
+  /** the full document text as of this version */
+  text: string;
+  /** characters added / removed vs the previous shown version */
+  added: number;
+  removed: number;
 }
 
 export interface History {
   /** webxdc shim to hand to `new WebxdcProvider({ webxdc })` */
   webxdc: typeof window.webxdc;
-  /** versions in chronological (receipt) order */
-  list(): HistoryEntry[];
-  /** the document text as of version `index` */
-  textAt(index: number): string;
+  /**
+   * The timeline in chronological (receipt) order: each update batch
+   * reconstructed to its full text, consecutive no-op batches (identical text)
+   * dropped, and per-version char add/remove counts vs the previous shown one.
+   */
+  versions(): HistoryVersion[];
   onChange(cb: () => void): void;
 }
 
@@ -95,18 +100,41 @@ export function setupHistory(real: typeof window.webxdc): History {
 
   return {
     webxdc,
-    list: () => records.map((r, index) => ({ index, t: r.t, author: r.author })),
-    textAt: (index) => {
+    versions: () => {
+      // One forward pass: apply each batch cumulatively into a single doc and
+      // snapshot the text after each — O(n) applies, not O(n²) per-row replays.
+      // ponytail: recomputed per call; the UI calls it once per render and reuses,
+      // and n is small. Cache against a dirty flag only if it ever shows up hot.
       const doc = new Y.Doc();
-      for (let k = 0; k <= index && k < records.length; k++) {
-        Y.applyUpdateV2(doc, b64ToBytes(records[k].blob));
+      const out: HistoryVersion[] = [];
+      let prev = '';
+      for (const r of records) {
+        Y.applyUpdateV2(doc, b64ToBytes(r.blob));
+        const text = doc.getText('codemirror').toString();
+        if (text === prev) continue; // drop consecutive no-op batches
+        const { added, removed } = charDiff(prev, text);
+        out.push({ t: r.t, author: r.author, text, added, removed });
+        prev = text;
       }
-      const text = doc.getText('codemirror').toString();
       doc.destroy();
-      return text;
+      return out;
     },
     onChange: (cb) => { listeners.push(cb); },
   };
+}
+
+// Added/removed character counts between two versions, by trimming the common
+// prefix and suffix. Exact for a single contiguous edit; for a batch that edits
+// two far-apart spots it reports the span covering both — a slight over-count,
+// acceptable for ~10s batches whose edits are usually localized.
+// ponytail: upgrade to a real word/line diff only if multi-region batches matter.
+function charDiff(prev: string, next: string): { added: number; removed: number } {
+  let p = 0;
+  const min = Math.min(prev.length, next.length);
+  while (p < min && prev[p] === next[p]) p++;
+  let s = 0;
+  while (s < min - p && prev[prev.length - 1 - s] === next[next.length - 1 - s]) s++;
+  return { removed: prev.length - p - s, added: next.length - p - s };
 }
 
 // Decode the provider's base64 payload natively — avoids importing js-base64
