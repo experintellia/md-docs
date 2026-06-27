@@ -22,6 +22,8 @@ import {
   toggleItalic,
 } from '../commands';
 import { faSvg } from './icon';
+import { historyButton } from './history-view';
+import type { Collab } from '../collab';
 
 interface Action {
   icon: () => Node;
@@ -47,7 +49,7 @@ const ACTIONS: Action[] = [
  *  - Mobile (coarse pointer): docks above the on-screen keyboard, tracked via
  *    the VisualViewport API.
  */
-export function mountToolbar(container: HTMLElement, view: EditorView): void {
+export function mountToolbar(container: HTMLElement, view: EditorView, collab?: Collab): void {
   container.replaceChildren();
 
   for (const action of ACTIONS) {
@@ -65,7 +67,10 @@ export function mountToolbar(container: HTMLElement, view: EditorView): void {
   // commands, so a plain click is fine — no need to preserve selection.
   const spacer = document.createElement('div');
   spacer.className = 'md-tool-spacer';
-  container.append(spacer, themeButton(), helpButton());
+  container.append(spacer);
+  // History needs the synced update stream, so only when collaborating.
+  if (collab) container.append(historyButton(collab));
+  container.append(themeButton(), helpButton());
 
   if (isMobile()) {
     enableKeyboardDocking(container);
