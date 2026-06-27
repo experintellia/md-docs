@@ -206,6 +206,51 @@ html, body {
 }
 .hist-banner[hidden] { display: none; }
 
+/* View-mode menu (Rendered / Source / Diff). */
+.hist-mode { position: relative; }
+.hist-mode > [data-act="mode"] { width: auto; padding: 0 8px; font-size: 13px; }
+.hist-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1;
+  min-width: 120px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.hist-menu[hidden] { display: none; }
+.hist-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.hist-menu button:hover { background: rgba(127, 127, 127, 0.15); }
+
+/* Diff view: raw text with struck removals + highlighted additions. */
+.hist-diff-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+}
+.hist-diff-pane[hidden] { display: none; }
+.hist-diff-pane del { background: rgba(207, 34, 46, 0.15); color: #cf222e; text-decoration: line-through; }
+.hist-diff-pane ins { background: rgba(26, 127, 55, 0.15); color: #1a7f37; text-decoration: none; }
+
 /* Stack list above viewer on narrow screens. */
 @media (max-width: 560px) {
   .hist-body { flex-direction: column; }
