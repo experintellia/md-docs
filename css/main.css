@@ -161,6 +161,26 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 .hist-header h1 { margin: 0; font-size: 16px; }
+.hist-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--border);
+}
+.hist-footer-meta {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hist-footer button { font-size: 18px; line-height: 1; }
+.hist-footer button:disabled { opacity: 0.35; cursor: default; }
+/* Read-only viewer: keep the text selectable but with no blinking caret. */
+.hist-cm .cm-cursor { display: none; }
 .hist-body { flex: 1 1 auto; min-height: 0; display: flex; }
 .hist-list {
   flex: 0 0 240px;

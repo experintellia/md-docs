@@ -55,6 +55,7 @@ class HistoryOverlay {
   private readonly cmEl: HTMLElement;
   private readonly diffEl: HTMLElement;
   private readonly menuEl: HTMLElement;
+  private readonly footerEl: HTMLElement;
   private readonly viewer: EditorView;
   private readonly preview = new Compartment();
   private mode: ViewMode = 'rendered';
@@ -91,6 +92,11 @@ class HistoryOverlay {
             <pre class="hist-diff-pane" hidden></pre>
           </div>
         </div>
+        <footer class="hist-footer">
+          <button class="md-tool-btn" data-act="prev" title="Older version" aria-label="Older version">‹</button>
+          <span class="hist-footer-meta"></span>
+          <button class="md-tool-btn" data-act="next" title="Newer version" aria-label="Newer version">›</button>
+        </footer>
       </div>`;
 
     this.btn('back').appendChild(faSvg(faArrowLeft));
@@ -101,6 +107,7 @@ class HistoryOverlay {
     this.cmEl = this.el.querySelector('.hist-cm')!;
     this.diffEl = this.el.querySelector('.hist-diff-pane')!;
     this.menuEl = this.el.querySelector('.hist-menu')!;
+    this.footerEl = this.el.querySelector('.hist-footer-meta')!;
     this.syncModeButton();
     this.viewer = new EditorView({
       parent: this.cmEl,
@@ -108,6 +115,8 @@ class HistoryOverlay {
         doc: '',
         extensions: [
           EditorState.readOnly.of(true),
+          // Non-editable: no blinking caret, but text stays selectable/copyable.
+          EditorView.editable.of(false),
           EditorView.lineWrapping,
           markdown({ base: markdownLanguage, codeLanguages: [] }),
           this.preview.of(livePreview()),
@@ -117,6 +126,8 @@ class HistoryOverlay {
 
     this.btn('back').addEventListener('click', () => this.close());
     this.btn('restore').addEventListener('click', () => this.restore());
+    this.btn('prev').addEventListener('click', () => this.navigate(-1)); // older
+    this.btn('next').addEventListener('click', () => this.navigate(+1)); // newer
 
     // Mode menu: the button toggles it; items pick a mode; outside-click closes.
     this.btn('mode').addEventListener('click', (e) => {
@@ -199,11 +210,32 @@ class HistoryOverlay {
       this.bannerEl.textContent =
         `Restored from ${new Date(from.t).toLocaleString()} · ${from.author}`;
     }
+    let selectedRow: Element | undefined;
     this.listEl.querySelectorAll('.hist-row').forEach((row, i) => {
       // rows are rendered newest-first; map display position back to row index.
-      row.classList.toggle('selected', this.rows.length - 1 - i === index);
+      const on = this.rows.length - 1 - i === index;
+      row.classList.toggle('selected', on);
+      if (on) selectedRow = row;
     });
+    selectedRow?.scrollIntoView({ block: 'nearest' });
+    this.updateFooter();
     this.renderViewer();
+  }
+
+  // Move to the older (-1) or newer (+1) version; no-op past the ends.
+  private navigate(delta: number): void {
+    if (this.selected === null) return;
+    const next = this.selected + delta;
+    if (next >= 0 && next < this.rows.length) this.select(next);
+  }
+
+  private updateFooter(): void {
+    const v = this.selected === null ? undefined : this.rows[this.selected];
+    if (!v) { this.footerEl.textContent = ''; return; }
+    const diff = v.added || v.removed ? ` · +${v.added} −${v.removed}` : '';
+    this.footerEl.textContent = `${new Date(v.t).toLocaleString()} · ${v.author}${diff}`;
+    (this.btn('prev') as HTMLButtonElement).disabled = this.selected === 0;
+    (this.btn('next') as HTMLButtonElement).disabled = this.selected === this.rows.length - 1;
   }
 
   private setMode(mode: ViewMode): void {
