@@ -3,6 +3,7 @@ import type { Command, EditorView } from '@codemirror/view';
 import {
   cycleHeading,
   toggleBold,
+  toggleBullet,
   toggleChecklist,
   toggleItalic,
 } from '../commands';
@@ -17,9 +18,10 @@ const ACTIONS: Action[] = [
   { label: 'H', title: 'Heading (cycle level)', run: cycleHeading },
   { label: 'B', title: 'Bold', run: toggleBold },
   { label: 'I', title: 'Italic', run: toggleItalic },
+  { label: '•', title: 'Bullet list', run: toggleBullet },
+  { label: '☑', title: 'Checklist item', run: toggleChecklist },
   { label: '⇤', title: 'Outdent list item', run: indentLess },
   { label: '⇥', title: 'Indent list item', run: indentMore },
-  { label: '☑', title: 'Checklist item', run: toggleChecklist },
 ];
 
 /**

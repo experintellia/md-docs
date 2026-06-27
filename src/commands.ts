@@ -65,13 +65,48 @@ export const toggleChecklist: Command = (view) => {
   const bullet = /^(\s*[-*+] )/.exec(text);
   if (bullet) {
     const pos = line.from + bullet[1].length;
-    view.dispatch({ changes: { from: pos, to: pos, insert: '[ ] ' } });
+    const insert = '[ ] ';
+    // Explicit selection: keep the cursor after the inserted marker, not in
+    // front of it (CM's default left-association would strand it before [ ]).
+    view.dispatch({
+      changes: { from: pos, to: pos, insert },
+      selection: { anchor: pos + insert.length },
+    });
     return true;
   }
 
   const indent = /^(\s*)/.exec(text)![1];
   const pos = line.from + indent.length;
-  view.dispatch({ changes: { from: pos, to: pos, insert: '- [ ] ' } });
+  const insert = '- [ ] ';
+  view.dispatch({
+    changes: { from: pos, to: pos, insert },
+    selection: { anchor: pos + insert.length },
+  });
+  return true;
+};
+
+/**
+ * Toggle a bullet on the current line: a plain line gets "- " (after any
+ * indentation); an existing bullet is removed.
+ *
+ * ponytail: a task item counts as a bullet, so toggling off "- [ ] x" leaves
+ * "[ ] x". Edge case, not worth special-casing for v1.
+ */
+export const toggleBullet: Command = (view) => {
+  const { state } = view;
+  const line = state.doc.lineAt(state.selection.main.head);
+  const bullet = /^(\s*)([-*+] )/.exec(line.text);
+  if (bullet) {
+    const from = line.from + bullet[1].length;
+    view.dispatch({ changes: { from, to: from + bullet[2].length, insert: '' } });
+    return true;
+  }
+  const indent = /^(\s*)/.exec(line.text)![1];
+  const pos = line.from + indent.length;
+  view.dispatch({
+    changes: { from: pos, to: pos, insert: '- ' },
+    selection: { anchor: pos + 2 },
+  });
   return true;
 };
 
@@ -81,5 +116,6 @@ export const markdownKeymap: KeyBinding[] = [
   { key: 'Mod-i', run: toggleItalic },
   { key: 'Mod-e', run: toggleInlineCode },
   { key: 'Mod-Shift-h', run: cycleHeading },
+  { key: 'Mod-Shift-8', run: toggleBullet },
   { key: 'Mod-Shift-c', run: toggleChecklist },
 ];

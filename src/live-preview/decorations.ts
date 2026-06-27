@@ -7,6 +7,7 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from '@codemirror/view';
+import { BulletWidget } from './widgets/bullet';
 import { CheckboxWidget } from './widgets/checkbox';
 
 /**
@@ -90,6 +91,28 @@ function buildDecorations(view: EditorView): DecorationSet {
           ranges.push(
             Decoration.mark({ class: 'md-link' }).range(node.from, node.to),
           );
+          return;
+        }
+
+        // --- List bullets: task items render as just the checkbox (hide the
+        //     bullet); plain bullets show a • glyph, revealing the raw `-` on
+        //     the active line. Ordered lists keep their number.
+        if (name === 'ListMark') {
+          const markText = doc.sliceString(node.from, node.to);
+          if (!/^[-*+]$/.test(markText)) return;
+          let end = node.to;
+          if (doc.sliceString(end, end + 1) === ' ') end++;
+          const after = doc.sliceString(end, doc.lineAt(node.from).to);
+          if (/^\[[ xX]\]/.test(after)) {
+            ranges.push(hidden.range(node.from, end));
+          } else if (!lineHasSelection(state, node.from)) {
+            ranges.push(
+              Decoration.replace({ widget: new BulletWidget() }).range(
+                node.from,
+                end,
+              ),
+            );
+          }
           return;
         }
 
