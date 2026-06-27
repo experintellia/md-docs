@@ -4,8 +4,12 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import {
   faArrowLeft,
   faClockRotateLeft,
+  faCode,
+  faCodeCompare,
+  faEye,
   faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons';
+import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
 import { faSvg } from './icon.ts';
 import { livePreview } from '../live-preview/index.ts';
 import type { Collab } from '../collab.ts';
@@ -23,10 +27,10 @@ import type { HistoryVersion } from '../history.ts';
  * one page, no router or per-open teardown needed.
  */
 type ViewMode = 'rendered' | 'source' | 'diff';
-const MODE_LABELS: Record<ViewMode, string> = {
-  rendered: 'Rendered',
-  source: 'Source',
-  diff: 'Diff',
+const MODE_META: Record<ViewMode, { label: string; icon: IconDefinition }> = {
+  rendered: { label: 'Rendered', icon: faEye },
+  source: { label: 'Source', icon: faCode },
+  diff: { label: 'Diff', icon: faCodeCompare },
 };
 
 let overlay: HistoryOverlay | null = null;
@@ -135,7 +139,9 @@ class HistoryOverlay {
       this.menuEl.hidden = !this.menuEl.hidden;
     });
     this.menuEl.querySelectorAll<HTMLElement>('[data-mode]').forEach((item) => {
-      item.addEventListener('click', () => this.setMode(item.dataset.mode as ViewMode));
+      const mode = item.dataset.mode as ViewMode;
+      item.prepend(faSvg(MODE_META[mode].icon)); // icon before the existing label
+      item.addEventListener('click', () => this.setMode(mode));
     });
     document.addEventListener('click', (e) => {
       if (!this.menuEl.hidden && !this.el.querySelector('.hist-mode')!.contains(e.target as Node)) {
@@ -246,7 +252,8 @@ class HistoryOverlay {
   }
 
   private syncModeButton(): void {
-    this.btn('mode').textContent = `${MODE_LABELS[this.mode]} ▾`;
+    const { label, icon } = MODE_META[this.mode];
+    this.btn('mode').replaceChildren(faSvg(icon), document.createTextNode(` ${label} ▾`));
   }
 
   // Show the selected version per the active mode. Diff uses a plain <pre>; the

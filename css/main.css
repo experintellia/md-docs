@@ -212,7 +212,8 @@ html, body {
 .hist-diff { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .hist-add { color: #1a7f37; }
 .hist-del { color: #cf222e; }
-.hist-restored-ico svg { width: 0.85em; height: 0.85em; vertical-align: -0.1em; color: var(--muted); }
+.hist-restored-ico { color: #e8830c; }
+.hist-restored-ico svg { width: 0.9em; height: 0.9em; vertical-align: -0.12em; }
 .hist-viewer { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .hist-cm { flex: 1 1 auto; min-height: 0; overflow: auto; }
 /* Banner marking a restored version, pinned above the viewer. */
@@ -243,7 +244,9 @@ html, body {
 }
 .hist-menu[hidden] { display: none; }
 .hist-menu button {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 8px 12px;
   border: none;
@@ -254,6 +257,8 @@ html, body {
   cursor: pointer;
 }
 .hist-menu button:hover { background: rgba(127, 127, 127, 0.15); }
+.hist-menu svg { width: 1em; height: 1em; flex: 0 0 auto; }
+.hist-mode > [data-act="mode"] svg { width: 1em; height: 1em; vertical-align: -0.125em; }
 
 /* Diff view: raw text with struck removals + highlighted additions. */
 .hist-diff-pane {
