@@ -10,6 +10,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 import { livePreview } from './live-preview';
 import { markdownKeymap } from './commands';
+import { hidePeerFlagsWhenCovered } from './peer-flags';
 import type { Collab } from './collab';
 
 /**
@@ -24,6 +25,7 @@ export function baseExtensions(collab?: Collab): Extension[] {
     ? [
       yCollab(collab.ytext, collab.awareness, { undoManager: collab.undoManager }),
       keymap.of(yUndoManagerKeymap),
+      hidePeerFlagsWhenCovered, // mobile: keep peer flags off the local cursor
     ]
     : [history(), keymap.of(historyKeymap)];
 
