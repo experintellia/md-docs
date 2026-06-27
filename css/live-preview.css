@@ -48,9 +48,34 @@
   text-align: center;
 }
 
-/* Task checkbox widget */
+/* Task checkbox widget — custom-drawn so it matches the theme in both light
+   and dark mode (the native control renders a stark white box on dark). */
 .md-task-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 1.05em;
+  height: 1.05em;
   margin: 0 0.4em 0 0;
-  vertical-align: middle;
+  vertical-align: -0.15em;
+  border: 1.5px solid var(--muted);
+  border-radius: 4px;
+  background: transparent;
   cursor: pointer;
+}
+.md-task-checkbox:hover { border-color: var(--accent); }
+.md-task-checkbox:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.md-task-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 0.32em;
+  top: 0.12em;
+  width: 0.28em;
+  height: 0.55em;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }

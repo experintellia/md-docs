@@ -19,7 +19,9 @@ const ACTIONS: Action[] = [
   { label: 'B', title: 'Bold', run: toggleBold },
   { label: 'I', title: 'Italic', run: toggleItalic },
   { label: '•', title: 'Bullet list', run: toggleBullet },
-  { label: '☑', title: 'Checklist item', run: toggleChecklist },
+  // ︎ forces monochrome text presentation so the glyph matches the other
+  // toolbar buttons instead of rendering as a colourful emoji.
+  { label: '☑︎', title: 'Checklist item', run: toggleChecklist },
   { label: '⇤', title: 'Outdent list item', run: indentLess },
   { label: '⇥', title: 'Indent list item', run: indentMore },
 ];
@@ -72,7 +74,7 @@ function utilButton(label: string, title: string): HTMLButtonElement {
 function themeButton(): HTMLButtonElement {
   const root = document.documentElement;
   const btn = utilButton('', 'Toggle dark / light theme');
-  const sync = (): void => { btn.textContent = root.classList.contains('dark') ? '☀' : '☾'; };
+  const sync = (): void => { btn.textContent = root.classList.contains('dark') ? '☀︎' : '☾'; };
   btn.addEventListener('click', () => {
     const dark = root.classList.toggle('dark');
     localStorage.setItem('color-schema', dark ? 'dark' : 'light');
