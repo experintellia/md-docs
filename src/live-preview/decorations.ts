@@ -95,29 +95,30 @@ function buildDecorations(view: EditorView): DecorationSet {
         }
 
         // --- List bullets: task items render as just the checkbox (hide the
-        //     bullet); plain bullets show a • glyph, revealing the raw `-` on
-        //     the active line. Ordered lists keep their number.
+        //     bullet); plain bullets show a • glyph. Both reveal the raw marker
+        //     on the active line. Ordered lists keep their number.
         if (name === 'ListMark') {
           const markText = doc.sliceString(node.from, node.to);
           if (!/^[-*+]$/.test(markText)) return;
+          if (lineHasSelection(state, node.from)) return;
           let end = node.to;
           if (doc.sliceString(end, end + 1) === ' ') end++;
           const after = doc.sliceString(end, doc.lineAt(node.from).to);
-          if (/^\[[ xX]\]/.test(after)) {
-            ranges.push(hidden.range(node.from, end));
-          } else if (!lineHasSelection(state, node.from)) {
-            ranges.push(
-              Decoration.replace({ widget: new BulletWidget() }).range(
+          ranges.push(
+            /^\[[ xX]\]/.test(after)
+              ? hidden.range(node.from, end)
+              : Decoration.replace({ widget: new BulletWidget() }).range(
                 node.from,
                 end,
               ),
-            );
-          }
+          );
           return;
         }
 
-        // --- Task list checkbox widget (always rendered, click toggles)
+        // --- Task checkbox widget (click toggles); reveals raw `[ ]` on the
+        //     active line so the whole item reads as markdown when edited.
         if (name === 'TaskMarker') {
+          if (lineHasSelection(state, node.from)) return;
           const text = doc.sliceString(node.from, node.to);
           const checked = /\[[xX]\]/.test(text);
           ranges.push(
