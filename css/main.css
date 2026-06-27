@@ -143,6 +143,53 @@ html, body {
   overflow: auto;
 }
 
+/* History — a full-screen panel: header bar, version list, read-only viewer. */
+#history-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  color: var(--fg);
+}
+#history-overlay[hidden] { display: none; }
+.hist-panel { display: flex; flex-direction: column; height: 100%; }
+.hist-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.hist-header h1 { margin: 0; font-size: 16px; }
+.hist-body { flex: 1 1 auto; min-height: 0; display: flex; }
+.hist-list {
+  flex: 0 0 240px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+.hist-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.hist-row:hover { background: rgba(127, 127, 127, 0.1); }
+.hist-row.selected { background: rgba(127, 127, 127, 0.2); }
+.hist-when { font-size: 13px; }
+.hist-who { font-size: 11px; color: var(--muted); }
+.hist-viewer { flex: 1 1 auto; min-width: 0; overflow: auto; }
+
+/* Stack list above viewer on narrow screens. */
+@media (max-width: 560px) {
+  .hist-body { flex-direction: column; }
+  .hist-list { flex: 0 0 40%; border-right: none; border-bottom: 1px solid var(--border); }
+}
+
 /* Save/sync indicator — unobtrusive bottom-right corner. */
 #status {
   position: fixed;
