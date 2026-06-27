@@ -1,6 +1,7 @@
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import WebxdcProvider from 'y-webxdc';
+import { setupHistory, type History } from './history.ts';
 
 /**
  * The shared collaboration state: a Yjs document synced to chat peers via the
@@ -17,6 +18,7 @@ export interface Collab {
   awareness: Awareness;
   undoManager: Y.UndoManager;
   provider: WebxdcProvider;
+  history: History;
 }
 
 /**
@@ -39,7 +41,10 @@ export function titleFromMarkdown(line: string): string {
 }
 
 export function createCollab(): Collab {
-  const { webxdc } = window;
+  // Wrap webxdc so every update batch carries author + timestamp, and the
+  // version timeline can be rebuilt from the channel's replayed update stream.
+  const history = setupHistory(window.webxdc);
+  const webxdc = history.webxdc;
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText('codemirror');
   // Bound by yCollab to render remote cursors; local cursor state and the
@@ -67,5 +72,5 @@ export function createCollab(): Collab {
     },
   });
 
-  return { ydoc, ytext, awareness, undoManager, provider };
+  return { ydoc, ytext, awareness, undoManager, provider, history };
 }
