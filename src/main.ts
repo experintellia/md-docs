@@ -1,6 +1,7 @@
 import { placeholder } from '@codemirror/view';
 import { createEditor } from './editor';
 import { createCollab } from './collab';
+import { connectRealtime } from './realtime';
 import { mountToolbar } from './ui/toolbar';
 
 // Entry point. Phase 2: a Yjs-backed document synced to chat peers via the
@@ -38,6 +39,10 @@ function main(): void {
     collab,
   );
   if (toolbarEl) mountToolbar(toolbarEl, view);
+
+  // Live typing + remote cursors over the ephemeral realtime channel (no-op in
+  // messengers that don't implement it yet — persistent sync still works).
+  if (collab) connectRealtime(collab.ydoc, collab.awareness);
 
   if (statusEl && collab) {
     collab.provider.on('sync', ({ hasQueued }) => {

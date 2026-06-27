@@ -29,9 +29,6 @@
   color: var(--muted);
 }
 
-/* Hidden markdown syntax markers (revealed when the cursor is on them) */
-.md-hidden { display: none; }
-
 /* Fenced code block lines */
 .cm-line.md-code-block {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

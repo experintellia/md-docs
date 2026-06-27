@@ -7,6 +7,7 @@
   --accent: #2563eb;
   --toolbar-bg: #f6f8fa;
   --code-bg: #f0f1f3;
+  --selection: #b3d4fc;
   --toolbar-height: 44px;
 }
 
@@ -19,6 +20,7 @@ html.dark {
   --accent: #6ea8fe;
   --toolbar-bg: #252526;
   --code-bg: #2a2a2a;
+  --selection: #2c5480;
 }
 
 * { box-sizing: border-box; }
@@ -115,6 +117,7 @@ html, body {
 .help-card table { width: 100%; border-collapse: collapse; }
 .help-card td { padding: 4px 8px 4px 0; vertical-align: top; line-height: 1.4; }
 .help-card td:first-child { white-space: nowrap; }
+.help-card svg { width: 1em; height: 1em; vertical-align: -0.125em; }
 .help-card code {
   padding: 1px 5px;
   background: var(--code-bg);
@@ -157,6 +160,12 @@ html, body {
    default is black, invisible on the dark background — tie it to the theme. */
 .cm-editor .cm-cursor, .cm-editor .cm-dropCursor { border-left-color: var(--fg); }
 .cm-editor .cm-content { caret-color: var(--fg); }
+/* drawSelection() paints .cm-selectionBackground; CM's baseTheme default is a
+   near-invisible grey in dark mode — tie it to the theme. !important beats the
+   baseTheme rule (focused/unfocused both). */
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground,
+.cm-editor ::selection { background: var(--selection) !important; }
 .cm-editor .cm-scroller {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.6;
@@ -164,3 +173,29 @@ html, body {
 }
 .cm-editor .cm-content { max-width: 760px; margin: 0 auto; }
 .cm-editor.cm-focused { outline: none; }
+
+/* Remote-peer name flag: a legible chip regardless of the peer's colour. The
+   default white text sat on the (often bright) peer colour with too little
+   contrast; use a fixed translucent-dark chip instead — the peer colour still
+   shows on the caret + selection. Translucent background (not element opacity)
+   keeps the text fully opaque so it stays readable. */
+.cm-editor .cm-ySelectionInfo {
+  /* !important beats y-codemirror's baseTheme (equal specificity, loaded
+     later); without it the label keeps the inherited bright peer colour. */
+  background-color: rgba(0, 0, 0, 0.82) !important;
+  color: #fff !important;
+  font-size: 0.7em;
+  padding: 0 4px;
+  border-radius: 3px;
+  /* Peer colour as a border so the dark chip still reads as that peer's and
+     ties back to the caret. `inherit` picks up the caret's inline border-color
+     (set to the peer colour by y-codemirror). */
+  border: 1px solid;
+  border-color: inherit !important;
+}
+
+/* On touch there's no hover to reveal the flag, and the caret is a hairline —
+   so show it always. */
+@media (pointer: coarse) {
+  .cm-editor .cm-ySelectionInfo { opacity: 1; }
+}

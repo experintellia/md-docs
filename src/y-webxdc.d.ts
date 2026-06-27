@@ -14,9 +14,7 @@ declare module 'y-webxdc' {
       ydoc: Doc;
       getEditInfo: () => { document: string; summary: string; startinfo: string };
       autosaveInterval: number;
-      resendAllUpdates?: boolean;
     });
-    syncToChatPeers(): void;
     on(event: 'sync', handler: (e: { hasQueued: boolean }) => void): void;
   }
 }
