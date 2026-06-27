@@ -12,10 +12,21 @@ function main(): void {
   const statusEl = document.querySelector<HTMLElement>('#status');
   if (!editorEl) throw new Error('#editor element not found');
 
-  const collab = createCollab();
-  // Content lives in the shared ytext, so the editor starts empty; the ghost
-  // text is a native CM6 placeholder — never written into the shared doc, so no
-  // distributed-seeding race between peers.
+  // webxdc.js is injected by the messenger / webxdc-dev, not by plain vite — so
+  // it's absent when opening the dev server directly (e.g. :3000). Fall back to
+  // a local-only editor in that case; collaboration lights up when the app is
+  // opened in webxdc-dev (:7001/:7002) or a real messenger.
+  const collab = typeof window.webxdc === 'undefined' ? undefined : createCollab();
+  if (!collab) {
+    console.warn(
+      'webxdc.js not found — running locally without sync. Open via webxdc-dev ' +
+        '(npm start, then the :7001/:7002 peer URLs) to collaborate.',
+    );
+  }
+
+  // Content lives in the shared ytext (when collaborating), so the editor starts
+  // empty; the ghost text is a native CM6 placeholder — never written into the
+  // doc, so no distributed-seeding race between peers.
   const view = createEditor(
     editorEl,
     '',
@@ -24,7 +35,7 @@ function main(): void {
   );
   if (toolbarEl) mountToolbar(toolbarEl, view);
 
-  if (statusEl) {
+  if (statusEl && collab) {
     collab.provider.on('sync', ({ hasQueued }) => {
       statusEl.textContent = hasQueued ? 'editing…' : 'saved';
     });
