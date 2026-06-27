@@ -45,6 +45,7 @@ export function historyButton(collab: Collab): HTMLButtonElement {
 class HistoryOverlay {
   private readonly el: HTMLElement;
   private readonly listEl: HTMLElement;
+  private readonly bannerEl: HTMLElement;
   private readonly viewer: EditorView;
   private readonly preview = new Compartment();
   private rendered = true;
@@ -68,7 +69,10 @@ class HistoryOverlay {
         </header>
         <div class="hist-body">
           <ul class="hist-list"></ul>
-          <div class="hist-viewer"></div>
+          <div class="hist-viewer">
+            <div class="hist-banner" hidden></div>
+            <div class="hist-cm"></div>
+          </div>
         </div>
       </div>`;
 
@@ -77,8 +81,9 @@ class HistoryOverlay {
     this.syncToggleIcon();
 
     this.listEl = this.el.querySelector('.hist-list')!;
+    this.bannerEl = this.el.querySelector('.hist-banner')!;
     this.viewer = new EditorView({
-      parent: this.el.querySelector('.hist-viewer')!,
+      parent: this.el.querySelector('.hist-cm')!,
       state: EditorState.create({
         doc: '',
         extensions: [
@@ -122,14 +127,17 @@ class HistoryOverlay {
     this.listEl.replaceChildren();
     // Newest first.
     for (let i = this.rows.length - 1; i >= 0; i--) {
-      const { t, author, added, removed } = this.rows[i];
+      const { t, author, added, removed, restoredFrom } = this.rows[i];
       const li = document.createElement('li');
       li.className = 'hist-row';
       li.setAttribute('role', 'button');
       li.tabIndex = 0;
       if (i === this.selected) li.classList.add('selected');
       const rel = relativeTime(t);
-      li.innerHTML = `<span class="hist-when">${new Date(t).toLocaleTimeString()}${
+      const ico = restoredFrom
+        ? `<span class="hist-restored-ico" title="Restored version">${faSvg(faRotateLeft).outerHTML}</span> `
+        : '';
+      li.innerHTML = `<span class="hist-when">${ico}${new Date(t).toLocaleTimeString()}${
         rel ? ` · ${rel}` : ''}</span>
         <span class="hist-meta">
           <span class="hist-who">${escapeHtml(author)}</span>
@@ -151,8 +159,16 @@ class HistoryOverlay {
 
   private select(index: number): void {
     this.selected = index;
-    const text = this.rows[index]?.text ?? '';
-    this.viewer.dispatch({ changes: { from: 0, to: this.viewer.state.doc.length, insert: text } });
+    const v = this.rows[index];
+    this.viewer.dispatch({
+      changes: { from: 0, to: this.viewer.state.doc.length, insert: v?.text ?? '' },
+    });
+    const from = v?.restoredFrom;
+    this.bannerEl.hidden = !from;
+    if (from) {
+      this.bannerEl.textContent =
+        `Restored from ${new Date(from.t).toLocaleString()} · ${from.author}`;
+    }
     this.listEl.querySelectorAll('.hist-row').forEach((row, i) => {
       // rows are rendered newest-first; map display position back to row index.
       row.classList.toggle('selected', this.rows.length - 1 - i === index);
@@ -177,14 +193,17 @@ class HistoryOverlay {
 
   private restore(): void {
     if (this.selected === null) return;
-    const text = this.rows[this.selected]?.text ?? '';
+    const v = this.rows[this.selected];
+    if (!v) return;
     if (!window.confirm('Restore this version? This replaces the current document for everyone.')) {
       return;
     }
+    // Tag the resulting batch so every peer's timeline marks it as a restore.
+    this.collab.history.markRestore({ t: v.t, author: v.author });
     const { ytext } = this.collab;
     ytext.doc!.transact(() => {
       ytext.delete(0, ytext.length);
-      ytext.insert(0, text);
+      ytext.insert(0, v.text);
     });
     this.close();
   }
