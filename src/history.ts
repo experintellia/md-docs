@@ -14,6 +14,12 @@ import * as Y from 'yjs';
  * the provider and stamp `{ t, author }` onto each outgoing payload — a few extra
  * bytes that then travel with every version, including historical/offline ones.
  */
+/** The earlier version a restore brought back. */
+export interface RestoreSource {
+  t: number;
+  author: string;
+}
+
 export interface HistoryVersion {
   t: number;
   author: string;
@@ -22,6 +28,8 @@ export interface HistoryVersion {
   /** characters added / removed vs the previous shown version */
   added: number;
   removed: number;
+  /** set when this version was produced by restoring an earlier one */
+  restoredFrom?: RestoreSource;
 }
 
 export interface History {
@@ -33,6 +41,12 @@ export interface History {
    * dropped, and per-version char add/remove counts vs the previous shown one.
    */
   versions(): HistoryVersion[];
+  /**
+   * Tag the next outgoing batch as a restore of `from`, so the marker travels to
+   * every peer alongside the doc edit. Call right before writing the restored
+   * text into the doc.
+   */
+  markRestore(from: RestoreSource): void;
   onChange(cb: () => void): void;
 }
 
@@ -40,6 +54,7 @@ interface Record {
   t: number;
   author: string;
   blob: string; // base64 Yjs updateV2, as the provider serializes it
+  restoredFrom?: RestoreSource;
 }
 
 // The provider's payload, plus the metadata our shim injects.
@@ -47,6 +62,7 @@ interface HistPayload {
   serializedYjsUpdate?: string;
   t?: number;
   author?: string;
+  restoredFrom?: RestoreSource;
 }
 
 export function setupHistory(real: typeof window.webxdc): History {
@@ -60,6 +76,8 @@ export function setupHistory(real: typeof window.webxdc): History {
   const emit = (): void => { for (const cb of listeners) cb(); };
 
   const author = real.selfName || 'unknown';
+  // One-shot: set by markRestore(), consumed by the next outgoing batch.
+  let pendingRestore: RestoreSource | null = null;
 
   // setUpdateListener fires for our own sends (echoed back), peers' sends, AND the
   // full startup replay — so it's the single funnel for the whole timeline. We do
@@ -70,6 +88,10 @@ export function setupHistory(real: typeof window.webxdc): History {
         return (update: { payload: HistPayload }, descr: '') => {
           update.payload.t = Date.now();
           update.payload.author = author;
+          if (pendingRestore) {
+            update.payload.restoredFrom = pendingRestore;
+            pendingRestore = null;
+          }
           return (target.sendUpdate as typeof real.sendUpdate)(update as never, descr);
         };
       }
@@ -82,6 +104,7 @@ export function setupHistory(real: typeof window.webxdc): History {
                 t: typeof p.t === 'number' ? p.t : Date.now(),
                 author: typeof p.author === 'string' ? p.author : 'unknown',
                 blob: p.serializedYjsUpdate,
+                restoredFrom: p.restoredFrom,
               });
               emit();
             }
@@ -113,12 +136,13 @@ export function setupHistory(real: typeof window.webxdc): History {
         const text = doc.getText('codemirror').toString();
         if (text === prev) continue; // drop consecutive no-op batches
         const { added, removed } = charDiff(prev, text);
-        out.push({ t: r.t, author: r.author, text, added, removed });
+        out.push({ t: r.t, author: r.author, text, added, removed, restoredFrom: r.restoredFrom });
         prev = text;
       }
       doc.destroy();
       return out;
     },
+    markRestore: (from) => { pendingRestore = from; },
     onChange: (cb) => { listeners.push(cb); },
   };
 }

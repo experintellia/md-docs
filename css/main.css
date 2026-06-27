@@ -192,7 +192,19 @@ html, body {
 .hist-diff { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .hist-add { color: #1a7f37; }
 .hist-del { color: #cf222e; }
-.hist-viewer { flex: 1 1 auto; min-width: 0; overflow: auto; }
+.hist-restored-ico svg { width: 0.85em; height: 0.85em; vertical-align: -0.1em; color: var(--muted); }
+.hist-viewer { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.hist-cm { flex: 1 1 auto; min-height: 0; overflow: auto; }
+/* Banner marking a restored version, pinned above the viewer. */
+.hist-banner {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--code-bg);
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.hist-banner[hidden] { display: none; }
 
 /* Stack list above viewer on narrow screens. */
 @media (max-width: 560px) {
