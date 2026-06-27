@@ -24,12 +24,16 @@ function main(): void {
     );
   }
 
-  // Content lives in the shared ytext (when collaborating), so the editor starts
-  // empty; the ghost text is a native CM6 placeholder — never written into the
-  // doc, so no distributed-seeding race between peers.
+  // Seed the editor with ytext's *current* content: by now the provider has
+  // already replayed any stored peer updates into ytext, and yCollab does NOT
+  // push pre-existing ytext into the editor — it assumes the initial doc
+  // already matches. Passing '' on a second device left CM empty while ytext
+  // held the document, so the next incremental delta applied at an
+  // out-of-range position ("Invalid change range 90 to 90 in doc of length 0").
+  // The ghost text is a native CM6 placeholder, shown only while empty.
   const view = createEditor(
     editorEl,
-    '',
+    collab ? collab.ytext.toString() : '',
     [placeholder('# Start writing…')],
     collab,
   );
