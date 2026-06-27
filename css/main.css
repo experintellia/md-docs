@@ -276,10 +276,14 @@ html, body {
 .hist-diff-pane del { background: rgba(207, 34, 46, 0.15); color: #cf222e; text-decoration: line-through; }
 .hist-diff-pane ins { background: rgba(26, 127, 55, 0.15); color: #1a7f37; text-decoration: none; }
 
-/* Stack list above viewer on narrow screens. */
+/* Narrow screens: one pane at a time. Show the list; a picked row flips the
+   panel to .detail, swapping in the content pane (with its footer). The header
+   back button returns to the list. Keep the breakpoint in sync with isNarrow(). */
 @media (max-width: 560px) {
-  .hist-body { flex-direction: column; }
-  .hist-list { flex: 0 0 40%; border-right: none; border-bottom: 1px solid var(--border); }
+  .hist-list { flex: 1 1 auto; border-right: none; }
+  .hist-viewer { display: none; }
+  .hist-panel.detail .hist-list { display: none; }
+  .hist-panel.detail .hist-viewer { display: flex; }
 }
 
 /* Save/sync indicator — unobtrusive bottom-right corner. */
