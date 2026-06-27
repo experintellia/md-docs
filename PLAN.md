@@ -207,6 +207,36 @@ realtime sends.
 - **Debug:** `ERUDA=1 npm run build` for an on-device console.
 - **Lint:** `npm test` / `npm run check` (eslint), matching the upstream editor's setup.
 
+### Automated tests (CI)
+
+`npm test` runs typecheck → eslint → unit tests, then CI builds. Unit tests use
+Node's built-in runner with native TS type-stripping (`node --test`, Node 24) —
+no test framework dependency. `--test-force-exit` is set because Yjs's
+`Awareness` holds an internal cleanup timer that otherwise keeps the runner
+alive. Coverage by layer:
+
+- **Pure logic** — `titleFromMarkdown` (chat title parsing).
+- **Collaboration (CRDT)** — peer convergence, the late-joiner *seed invariant*
+  (guards the second-device crash), update idempotency across the dual channels.
+- **Toolbar commands** — bold/italic/code, heading cycle, bullet, checklist
+  across all scenarios; tested headlessly via a `{state, dispatch}` stand-in.
+- **Live-preview decorations** — headings/emphasis/links/blockquote classes,
+  checkbox & bullet widgets, and reveal-on-cursor; headless via `buildDecorations`.
+- **Toolbar DOM wiring** — button→command, theme toggle persistence, help
+  overlay open/close, using `happy-dom` for a DOM.
+- **Realtime transport** — frame tag bytes (doc vs awareness), late-joiner
+  catch-up, echo suppression, feature-detect; via a mock `webxdc` channel.
+
+**Deferred — Tier 4 end-to-end (not yet built):** drive the real app with
+Playwright and assert collaborative edits converge across peers. Make it a
+separate, non-blocking job (or nightly), never a PR gate — it's slower and
+flakier than the unit layer. webxdc can be **mocked for Playwright**: the dev
+server already injects a single-peer `webxdc.js` via `@webxdc/vite-plugins`'
+`mockWebxdc()` (see `vite.config.ts`), so Playwright can drive a standalone
+app at `:3000` with no messenger; for multi-peer convergence, mock the realtime
+channel (or run two `webxdc-dev` peers) and assert the second peer receives the
+first's edits.
+
 ## Credits / attribution (we are inspired by, not copying)
 
 `CREDITS.md` will acknowledge `@retronav/ixora` and Atomic Editor (kenforthewin) as
