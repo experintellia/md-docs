@@ -4,8 +4,6 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import {
   faArrowLeft,
   faClockRotateLeft,
-  faCode,
-  faEye,
   faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons';
 import { faSvg } from './icon.ts';
@@ -16,13 +14,21 @@ import type { HistoryVersion } from '../history.ts';
 /**
  * Full-screen document history: a scrollable list of past versions (datetime +
  * author) reconstructed from the synced update stream (see history.ts), and a
- * read-only viewer that renders the selected version — toggleable between the
- * live-preview rendering and raw markdown. Restore writes a version back into
- * the shared doc (behind a confirm, since it changes the document for everyone).
+ * read-only viewer that shows the selected version in one of three modes,
+ * picked from a small menu: rendered markdown, raw source, or a diff against the
+ * previous version. Restore writes a version back into the shared doc (behind a
+ * confirm, since it changes the document for everyone).
  *
  * ponytail: a single lazily-built overlay reused across opens — a webxdc app is
  * one page, no router or per-open teardown needed.
  */
+type ViewMode = 'rendered' | 'source' | 'diff';
+const MODE_LABELS: Record<ViewMode, string> = {
+  rendered: 'Rendered',
+  source: 'Source',
+  diff: 'Diff',
+};
+
 let overlay: HistoryOverlay | null = null;
 
 export function openHistory(collab: Collab): void {
@@ -46,9 +52,12 @@ class HistoryOverlay {
   private readonly el: HTMLElement;
   private readonly listEl: HTMLElement;
   private readonly bannerEl: HTMLElement;
+  private readonly cmEl: HTMLElement;
+  private readonly diffEl: HTMLElement;
+  private readonly menuEl: HTMLElement;
   private readonly viewer: EditorView;
   private readonly preview = new Compartment();
-  private rendered = true;
+  private mode: ViewMode = 'rendered';
   private selected: number | null = null;
   private rows: HistoryVersion[] = [];
   private readonly collab: Collab;
@@ -64,7 +73,14 @@ class HistoryOverlay {
           <button class="md-tool-btn" data-act="back" title="Back to editor" aria-label="Back to editor"></button>
           <h1>History</h1>
           <span class="md-tool-spacer"></span>
-          <button class="md-tool-btn" data-act="toggle" title="Show raw markdown" aria-label="Show raw markdown"></button>
+          <div class="hist-mode">
+            <button class="md-tool-btn" data-act="mode" aria-haspopup="menu" aria-label="View mode"></button>
+            <div class="hist-menu" role="menu" hidden>
+              <button role="menuitem" data-mode="rendered">Rendered</button>
+              <button role="menuitem" data-mode="source">Source</button>
+              <button role="menuitem" data-mode="diff">Diff</button>
+            </div>
+          </div>
           <button class="md-tool-btn" data-act="restore" title="Restore this version" aria-label="Restore this version"></button>
         </header>
         <div class="hist-body">
@@ -72,18 +88,22 @@ class HistoryOverlay {
           <div class="hist-viewer">
             <div class="hist-banner" hidden></div>
             <div class="hist-cm"></div>
+            <pre class="hist-diff-pane" hidden></pre>
           </div>
         </div>
       </div>`;
 
     this.btn('back').appendChild(faSvg(faArrowLeft));
     this.btn('restore').appendChild(faSvg(faRotateLeft));
-    this.syncToggleIcon();
 
     this.listEl = this.el.querySelector('.hist-list')!;
     this.bannerEl = this.el.querySelector('.hist-banner')!;
+    this.cmEl = this.el.querySelector('.hist-cm')!;
+    this.diffEl = this.el.querySelector('.hist-diff-pane')!;
+    this.menuEl = this.el.querySelector('.hist-menu')!;
+    this.syncModeButton();
     this.viewer = new EditorView({
-      parent: this.el.querySelector('.hist-cm')!,
+      parent: this.cmEl,
       state: EditorState.create({
         doc: '',
         extensions: [
@@ -96,10 +116,26 @@ class HistoryOverlay {
     });
 
     this.btn('back').addEventListener('click', () => this.close());
-    this.btn('toggle').addEventListener('click', () => this.togglePreview());
     this.btn('restore').addEventListener('click', () => this.restore());
+
+    // Mode menu: the button toggles it; items pick a mode; outside-click closes.
+    this.btn('mode').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.menuEl.hidden = !this.menuEl.hidden;
+    });
+    this.menuEl.querySelectorAll<HTMLElement>('[data-mode]').forEach((item) => {
+      item.addEventListener('click', () => this.setMode(item.dataset.mode as ViewMode));
+    });
+    document.addEventListener('click', (e) => {
+      if (!this.menuEl.hidden && !this.el.querySelector('.hist-mode')!.contains(e.target as Node)) {
+        this.menuEl.hidden = true;
+      }
+    });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !this.el.hidden) this.close();
+      if (e.key === 'Escape' && !this.el.hidden) {
+        if (!this.menuEl.hidden) this.menuEl.hidden = true;
+        else this.close();
+      }
     });
 
     // Refresh while open if new versions arrive (e.g. a peer edits, or offline
@@ -133,12 +169,10 @@ class HistoryOverlay {
       li.setAttribute('role', 'button');
       li.tabIndex = 0;
       if (i === this.selected) li.classList.add('selected');
-      const rel = relativeTime(t);
       const ico = restoredFrom
         ? `<span class="hist-restored-ico" title="Restored version">${faSvg(faRotateLeft).outerHTML}</span> `
         : '';
-      li.innerHTML = `<span class="hist-when">${ico}${new Date(t).toLocaleTimeString()}${
-        rel ? ` · ${rel}` : ''}</span>
+      li.innerHTML = `<span class="hist-when">${ico}${formatWhen(t)}</span>
         <span class="hist-meta">
           <span class="hist-who">${escapeHtml(author)}</span>
           ${added || removed ? `<span class="hist-diff"
@@ -159,11 +193,7 @@ class HistoryOverlay {
 
   private select(index: number): void {
     this.selected = index;
-    const v = this.rows[index];
-    this.viewer.dispatch({
-      changes: { from: 0, to: this.viewer.state.doc.length, insert: v?.text ?? '' },
-    });
-    const from = v?.restoredFrom;
+    const from = this.rows[index]?.restoredFrom;
     this.bannerEl.hidden = !from;
     if (from) {
       this.bannerEl.textContent =
@@ -173,22 +203,39 @@ class HistoryOverlay {
       // rows are rendered newest-first; map display position back to row index.
       row.classList.toggle('selected', this.rows.length - 1 - i === index);
     });
+    this.renderViewer();
   }
 
-  private togglePreview(): void {
-    this.rendered = !this.rendered;
+  private setMode(mode: ViewMode): void {
+    this.mode = mode;
+    this.menuEl.hidden = true;
+    this.syncModeButton();
+    this.renderViewer();
+  }
+
+  private syncModeButton(): void {
+    this.btn('mode').textContent = `${MODE_LABELS[this.mode]} ▾`;
+  }
+
+  // Show the selected version per the active mode. Diff uses a plain <pre>; the
+  // other two use the read-only CodeMirror with live-preview on (Rendered) or
+  // off (Source).
+  private renderViewer(): void {
+    const v = this.selected === null ? undefined : this.rows[this.selected];
+    const text = v?.text ?? '';
+    if (this.mode === 'diff') {
+      this.cmEl.hidden = true;
+      this.diffEl.hidden = false;
+      const prev = this.selected && this.selected > 0 ? this.rows[this.selected - 1].text : '';
+      this.diffEl.innerHTML = diffHtml(prev, text);
+      return;
+    }
+    this.diffEl.hidden = true;
+    this.cmEl.hidden = false;
     this.viewer.dispatch({
-      effects: this.preview.reconfigure(this.rendered ? livePreview() : []),
+      changes: { from: 0, to: this.viewer.state.doc.length, insert: text },
+      effects: this.preview.reconfigure(this.mode === 'rendered' ? livePreview() : []),
     });
-    this.syncToggleIcon();
-  }
-
-  private syncToggleIcon(): void {
-    const b = this.btn('toggle');
-    b.replaceChildren(faSvg(this.rendered ? faCode : faEye));
-    const label = this.rendered ? 'Show raw markdown' : 'Show rendered preview';
-    b.title = label;
-    b.setAttribute('aria-label', label);
   }
 
   private restore(): void {
@@ -215,12 +262,44 @@ function escapeHtml(s: string): string {
   ));
 }
 
-// Short relative label for timestamps within the last hour; null otherwise (the
-// absolute time already covers older versions). ponytail: no ticking refresh —
-// the list re-renders whenever history changes, which is often enough.
+// Row timestamp label: within the last hour show time + a relative hint; for
+// older versions on a previous day include the date so it isn't time-only.
+function formatWhen(t: number): string {
+  const d = new Date(t);
+  const rel = relativeTime(t);
+  if (rel) return `${d.toLocaleTimeString()} · ${rel}`;
+  return isToday(d) ? d.toLocaleTimeString() : d.toLocaleString();
+}
+
+// Short relative label for timestamps within the last hour; null otherwise.
+// ponytail: no ticking refresh — the list re-renders whenever history changes.
 function relativeTime(t: number): string | null {
   const diff = Date.now() - t;
   if (diff < 0 || diff >= 3_600_000) return null;
   const mins = Math.floor(diff / 60_000);
   return mins < 1 ? 'just now' : `${mins} min ago`;
+}
+
+function isToday(d: Date): boolean {
+  const n = new Date();
+  return d.getFullYear() === n.getFullYear()
+    && d.getMonth() === n.getMonth()
+    && d.getDate() === n.getDate();
+}
+
+// Single-region diff: unchanged prefix/suffix kept, the middle shown as removed
+// (struck) then added. Mirrors history.ts's char-count approximation — exact for
+// one edit region, a coarse single block when a batch touched two far-apart spots.
+function diffHtml(prev: string, next: string): string {
+  let p = 0;
+  const min = Math.min(prev.length, next.length);
+  while (p < min && prev[p] === next[p]) p++;
+  let s = 0;
+  while (s < min - p && prev[prev.length - 1 - s] === next[next.length - 1 - s]) s++;
+  const removed = prev.slice(p, prev.length - s);
+  const added = next.slice(p, next.length - s);
+  return escapeHtml(next.slice(0, p))
+    + (removed ? `<del>${escapeHtml(removed)}</del>` : '')
+    + (added ? `<ins>${escapeHtml(added)}</ins>` : '')
+    + escapeHtml(next.slice(next.length - s));
 }
