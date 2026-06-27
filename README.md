@@ -4,6 +4,8 @@ A collaborative, **Obsidian-style markdown editor** that runs as a
 [webxdc](https://webxdc.org/) app — a single `.xdc` file you send into a chat,
 where everyone in the group can edit the same document together, offline-first.
 
+![MD-Docs editor](./assets/screenshot.png)
+
 Built on **CodeMirror 6** with a custom live-preview layer (raw markdown that
 renders formatting inline as you type), Yjs CRDT collaboration via
 [`y-webxdc`](https://codeberg.org/webxdc/y-webxdc), and a touch-friendly editing
