@@ -78,6 +78,7 @@ html, body {
   cursor: pointer;
   flex: 0 0 auto;
 }
+.md-tool-btn svg { width: 1em; height: 1em; vertical-align: -0.125em; }
 .md-tool-btn:hover { background: rgba(127, 127, 127, 0.15); }
 .md-tool-btn:active { background: rgba(127, 127, 127, 0.3); }
 
