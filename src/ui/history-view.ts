@@ -54,6 +54,7 @@ export function historyButton(collab: Collab): HTMLButtonElement {
 
 class HistoryOverlay {
   private readonly el: HTMLElement;
+  private readonly panelEl: HTMLElement;
   private readonly listEl: HTMLElement;
   private readonly bannerEl: HTMLElement;
   private readonly cmEl: HTMLElement;
@@ -94,18 +95,19 @@ class HistoryOverlay {
             <div class="hist-banner" hidden></div>
             <div class="hist-cm"></div>
             <pre class="hist-diff-pane" hidden></pre>
+            <footer class="hist-footer">
+              <button class="md-tool-btn" data-act="prev" title="Older version" aria-label="Older version">‹</button>
+              <span class="hist-footer-meta"></span>
+              <button class="md-tool-btn" data-act="next" title="Newer version" aria-label="Newer version">›</button>
+            </footer>
           </div>
         </div>
-        <footer class="hist-footer">
-          <button class="md-tool-btn" data-act="prev" title="Older version" aria-label="Older version">‹</button>
-          <span class="hist-footer-meta"></span>
-          <button class="md-tool-btn" data-act="next" title="Newer version" aria-label="Newer version">›</button>
-        </footer>
       </div>`;
 
     this.btn('back').appendChild(faSvg(faArrowLeft));
     this.btn('restore').appendChild(faSvg(faRotateLeft));
 
+    this.panelEl = this.el.querySelector('.hist-panel')!;
     this.listEl = this.el.querySelector('.hist-list')!;
     this.bannerEl = this.el.querySelector('.hist-banner')!;
     this.cmEl = this.el.querySelector('.hist-cm')!;
@@ -128,7 +130,15 @@ class HistoryOverlay {
       }),
     });
 
-    this.btn('back').addEventListener('click', () => this.close());
+    // Back: on a narrow screen showing the detail pane, step back to the list;
+    // otherwise leave the history screen entirely.
+    this.btn('back').addEventListener('click', () => {
+      if (isNarrow() && this.panelEl.classList.contains('detail')) {
+        this.panelEl.classList.remove('detail');
+      } else {
+        this.close();
+      }
+    });
     this.btn('restore').addEventListener('click', () => this.restore());
     this.btn('prev').addEventListener('click', () => this.navigate(-1)); // older
     this.btn('next').addEventListener('click', () => this.navigate(+1)); // newer
@@ -163,6 +173,7 @@ class HistoryOverlay {
   }
 
   open(): void {
+    this.panelEl.classList.remove('detail'); // narrow screens start on the list
     this.renderList();
     this.el.hidden = false;
   }
@@ -195,7 +206,9 @@ class HistoryOverlay {
           ${added || removed ? `<span class="hist-diff"
             ><span class="hist-add">+${added}</span> <span class="hist-del">−${removed}</span></span>` : ''}
         </span>`;
-      const pick = (): void => this.select(i);
+      // Picking a row shows the detail pane (matters only on a narrow screen,
+      // where list and content don't fit side by side).
+      const pick = (): void => { this.select(i); this.panelEl.classList.add('detail'); };
       li.addEventListener('click', pick);
       li.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); }
@@ -317,6 +330,12 @@ function relativeTime(t: number): string | null {
   if (diff < 0 || diff >= 3_600_000) return null;
   const mins = Math.floor(diff / 60_000);
   return mins < 1 ? 'just now' : `${mins} min ago`;
+}
+
+// Narrow screens show one pane at a time (list OR content); keep in sync with
+// the .hist-body breakpoint in css/main.css.
+function isNarrow(): boolean {
+  return window.matchMedia('(max-width: 560px)').matches;
 }
 
 function isToday(d: Date): boolean {
