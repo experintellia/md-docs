@@ -1,7 +1,7 @@
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { type Extension } from '@codemirror/state';
 import { tags } from '@lezer/highlight';
-import { linkClickHandler, livePreviewPlugin } from './decorations';
+import { linkClickHandler, livePreviewPlugin } from './decorations.ts';
 
 // Highlight style for fenced-code-block contents (and other tagged tokens).
 const mdHighlight = HighlightStyle.define([
