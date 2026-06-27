@@ -33,6 +33,7 @@
         "@typescript-eslint/eslint-plugin": "^7.0.0",
         "@typescript-eslint/parser": "^7.0.0",
         "@webxdc/types": "^2.2.0",
+        "@webxdc/vite-plugins": "^2.0.0",
         "concurrently": "^8.2.0",
         "eruda": "^3.0.0",
         "eslint": "^8.57.0",

@@ -79,6 +79,58 @@ html, body {
 .md-tool-btn:hover { background: rgba(127, 127, 127, 0.15); }
 .md-tool-btn:active { background: rgba(127, 127, 127, 0.3); }
 
+/* Pushes the trailing utility buttons (theme, help) to the right edge. */
+.md-tool-spacer { flex: 1 1 auto; }
+
+/* Help overlay — a centered modal card over a dimmed backdrop. */
+#help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+}
+#help-overlay[hidden] { display: none; }
+.help-card {
+  position: relative;
+  max-width: 560px;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 20px 24px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+.help-card h1 { margin: 0 0 8px; font-size: 22px; }
+.help-card h2 { margin: 20px 0 8px; font-size: 15px; color: var(--muted); }
+.help-card p { margin: 8px 0; line-height: 1.5; }
+.help-card table { width: 100%; border-collapse: collapse; }
+.help-card td { padding: 4px 8px 4px 0; vertical-align: top; line-height: 1.4; }
+.help-card td:first-child { white-space: nowrap; }
+.help-card code {
+  padding: 1px 5px;
+  background: var(--code-bg);
+  border-radius: 4px;
+  font-size: 13px;
+}
+.help-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.help-close:hover { color: var(--fg); }
+
 #editor {
   flex: 1 1 auto;
   min-height: 0;
@@ -98,6 +150,10 @@ html, body {
 
 /* CodeMirror fills the editor area. */
 .cm-editor { height: 100%; }
+/* CM6 draws the caret as a bordered element (drawSelection/dropCursor); its
+   default is black, invisible on the dark background — tie it to the theme. */
+.cm-editor .cm-cursor, .cm-editor .cm-dropCursor { border-left-color: var(--fg); }
+.cm-editor .cm-content { caret-color: var(--fg); }
 .cm-editor .cm-scroller {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.6;

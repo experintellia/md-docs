@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig, type PluginOption } from 'vite';
 import zipPack from 'vite-plugin-zip-pack';
+import { mockWebxdc } from '@webxdc/vite-plugins';
 
 // Inject the Eruda mobile console into the bundle when ERUDA=1 is set, so the
 // `.xdc` can be debugged on a real device. See README.
@@ -27,6 +28,10 @@ export default defineConfig({
   },
   plugins: [
     ...(process.env.ERUDA ? [eruda()] : []),
+    // Serve a single-peer mock webxdc.js during `vite` dev (serve:app), so the
+    // app runs standalone in a browser without webxdc-dev. No-op for `build` —
+    // the real webxdc.js comes from the messenger. See @webxdc/vite-plugins.
+    mockWebxdc(),
     zipPack({
       outDir: 'dist-release',
       outFileName: 'md-docs.xdc',

@@ -17,6 +17,25 @@ export interface Collab {
   provider: WebxdcProvider;
 }
 
+/**
+ * Reduce a markdown line to plaintext for use as the chat document title.
+ * Covers the inline syntax the toolbar can produce: headings, emphasis,
+ * inline code, links, and leading list/quote markers. ponytail: deliberately
+ * not a full markdown parser — these are the cases that actually occur in a
+ * one-line title; widen the regexes if other syntax shows up.
+ */
+export function titleFromMarkdown(line: string): string {
+  return line
+    .replace(/^\s*#{1,6}\s+/, '')          // # heading
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '') // - / 1. list marker
+    .replace(/^\s*>\s?/, '')               // > blockquote
+    .replace(/^\s*\[[ xX]\]\s+/, '')       // [ ] checklist marker
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) -> text
+    .replace(/(\*\*|__|\*|_|`)(.+?)\1/g, '$2') // **b** *i* `c` -> inner text
+    .replace(/[*_`]/g, '')                 // stray/unpaired markers
+    .trim();
+}
+
 export function createCollab(): Collab {
   const { webxdc } = window;
   const ydoc = new Y.Doc();
@@ -35,7 +54,10 @@ export function createCollab(): Collab {
     ydoc,
     autosaveInterval: 10_000, // matches the webxdc default sendUpdateInterval
     getEditInfo: () => {
-      const document = (ytext.toString().split('\n', 1)[0] || 'Untitled').slice(0, 60);
+      // First line becomes the webxdc document title (shown in the chat), as
+      // plaintext — markdown syntax would look like noise in the chat list.
+      const firstLine = ytext.toString().split('\n', 1)[0] || '';
+      const document = (titleFromMarkdown(firstLine) || 'Untitled').slice(0, 60);
       return {
         document,
         summary: `Last edit: ${webxdc.selfName}`,
