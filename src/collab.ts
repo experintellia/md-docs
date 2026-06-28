@@ -64,10 +64,15 @@ export function createCollab(): Collab {
       // plaintext — markdown syntax would look like noise in the chat list.
       const firstLine = ytext.toString().split('\n', 1)[0] || '';
       const document = (titleFromMarkdown(firstLine) || 'Untitled').slice(0, 60);
+      // Compact local date+time of this (the latest) edit; getEditInfo runs at
+      // each flush, so `new Date()` is the last-edit moment.
+      const when = new Date().toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
       return {
         document,
-        summary: `Last edit: ${webxdc.selfName}`,
-        startinfo: `${webxdc.selfName} started a document`,
+        summary: `Last edit: ${webxdc.selfName} · ${when}`,
+        // Fired once per peer per session (y-webxdc guards it). Generic wording —
+        // these are ordinary edits, not necessarily a brand-new document.
+        startinfo: `${webxdc.selfName} updated the document`,
       };
     },
   });
