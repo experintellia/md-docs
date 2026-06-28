@@ -177,7 +177,7 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.hist-footer button { font-size: 18px; line-height: 1; }
+.hist-footer button { font-size: 24px; line-height: 1; padding: 4px 12px; }
 .hist-footer button:disabled { opacity: 0.35; cursor: default; }
 /* Read-only viewer: keep the text selectable but with no blinking caret. */
 .hist-cm .cm-cursor { display: none; }
