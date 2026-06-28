@@ -70,16 +70,18 @@ html, body {
     transform-origin: top;
   }
   #editor { order: 1; }
-  #toolbar {
+  /* Status sits in flow as its own row directly above the toolbar — not an
+     overlay — so it can never sit on top of the buttons. */
+  #status {
     order: 2;
+    position: static;
+    align-self: flex-end;
+    padding: 1px 8px;
+  }
+  #toolbar {
+    order: 3;
     border-top: 1px solid var(--border);
     border-bottom: none;
-  }
-  /* Float the status label just above the toolbar (which is now the footer).
-     #app is position:fixed here, so absolute resolves to it. */
-  #status {
-    position: absolute;
-    bottom: calc(var(--toolbar-height) + 6px);
   }
 }
 
