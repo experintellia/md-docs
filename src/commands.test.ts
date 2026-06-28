@@ -83,6 +83,12 @@ test('cycleHeading only touches the line the cursor is on', () => {
   assert.equal(run(cycleHeading, 'one\ntw|o').doc, 'one\n# two');
 });
 
+test('cycleHeading on a blank line parks the cursor after the marker', () => {
+  assert.equal(show(run(cycleHeading, '|')), '# |');          // empty line -> behind "# "
+  assert.equal(show(run(cycleHeading, 'a\n|')), 'a\n# |');    // empty line below text
+  assert.equal(show(run(cycleHeading, 'hi|')), '# hi|');      // non-empty: cursor stays on the text
+});
+
 test('toggleBullet adds and removes a bullet, preserving indent', () => {
   assert.equal(show(run(toggleBullet, 'hi|')), '- |hi'); // cursor parks after the marker
   assert.equal(run(toggleBullet, '- hi|').doc, 'hi');   // existing bullet removed
