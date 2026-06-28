@@ -284,6 +284,9 @@ html, body {
   .hist-viewer { display: none; }
   .hist-panel.detail .hist-list { display: none; }
   .hist-panel.detail .hist-viewer { display: flex; }
+  /* On the list view the content-only controls aren't relevant yet. */
+  .hist-panel:not(.detail) .hist-mode,
+  .hist-panel:not(.detail) [data-act="restore"] { display: none; }
 }
 
 /* Save/sync indicator — unobtrusive bottom-right corner. */
