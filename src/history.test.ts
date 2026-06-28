@@ -73,3 +73,28 @@ test('history reconstructs versions, dedups no-ops, and counts char changes', ()
   assert.equal(last.text, 'hello!', 'restore batch reconstructed');
   assert.deepEqual(last.restoredFrom, { t: 1000, author: 'Alice' }, 'restoredFrom surfaced');
 });
+
+test('shim works over a real-client webxdc (read-only, non-configurable methods)', () => {
+  // The real Delta Chat webxdc exposes setUpdateListener/sendUpdate as
+  // non-writable, non-configurable data properties. A Proxy that returns a
+  // different value for them violates a Proxy invariant and throws on a real
+  // device (the dev mock's props are configurable, so it never showed up here).
+  // This reproduces that shape and asserts the shim wraps it without throwing.
+  let listener: ((u: { payload: Record<string, unknown> }) => void) | undefined;
+  const sent: Array<{ payload: Record<string, unknown> }> = [];
+  const real = {} as unknown as typeof window.webxdc;
+  const lock = { writable: false, configurable: false, enumerable: true };
+  Object.defineProperties(real, {
+    selfName: { ...lock, value: 'Alice' },
+    setUpdateListener: { ...lock, value: (cb: typeof listener) => { listener = cb; } },
+    sendUpdate: { ...lock, value: (u: { payload: Record<string, unknown> }) => { sent.push(u); } },
+  });
+  Object.freeze(real);
+
+  const history = setupHistory(real);
+  // Reading + calling the overridden methods through the shim must not throw.
+  history.webxdc.setUpdateListener(() => {});
+  assert.ok(listener, 'listener registered through shim over a frozen webxdc');
+  history.webxdc.sendUpdate({ payload: { serializedYjsUpdate: 'x' } } as never, '');
+  assert.equal(sent[0].payload.author, 'Alice', 'author injected, delegated to frozen real');
+});

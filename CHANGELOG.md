@@ -3,6 +3,14 @@
 All notable changes to MD-Docs are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-06-28
+
+### Fixed
+- Crash on launch in the real Delta Chat client (`TypeError: 'get' on proxy …`):
+  the webxdc history shim wrapped the native `webxdc` object in a `Proxy`, which
+  is illegal over its read-only, non-configurable methods. Replaced with a plain
+  delegating object.
+
 ## [0.1.1] - 2026-06-28
 
 ### Fixed
