@@ -251,8 +251,11 @@ class HistoryOverlay {
   private updateFooter(): void {
     const v = this.selected === null ? undefined : this.rows[this.selected];
     if (!v) { this.footerEl.textContent = ''; return; }
-    const diff = v.added || v.removed ? ` · +${v.added} −${v.removed}` : '';
-    this.footerEl.textContent = `${new Date(v.t).toLocaleString()} · ${v.author}${diff}`;
+    const diff = v.added || v.removed
+      ? ` · <span class="hist-add">+${v.added}</span> <span class="hist-del">−${v.removed}</span>`
+      : '';
+    this.footerEl.innerHTML =
+      `${new Date(v.t).toLocaleString()} · ${escapeHtml(v.author)}${diff}`;
     (this.btn('prev') as HTMLButtonElement).disabled = this.selected === 0;
     (this.btn('next') as HTMLButtonElement).disabled = this.selected === this.rows.length - 1;
   }
