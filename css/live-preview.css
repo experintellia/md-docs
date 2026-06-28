@@ -51,6 +51,8 @@
   appearance: none;
   -webkit-appearance: none;
   position: relative;
+  /* Box + checkmark are both sized in em, so font-size scales them together. */
+  font-size: 1.15em;
   width: 1.05em;
   height: 1.05em;
   margin: 0 0.4em 0 0;
@@ -75,4 +77,9 @@
   border: solid #fff;
   border-width: 0 2px 2px 0;
   transform: translate(-50%, -50%) rotate(45deg);
+}
+
+/* Touch (mobile): bump the checkbox a bit more — it reads small on iOS. */
+@media (pointer: coarse) {
+  .md-task-checkbox { font-size: 1.35em; }
 }
