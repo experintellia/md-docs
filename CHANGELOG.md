@@ -3,6 +3,13 @@
 All notable changes to MD-Docs are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-06-28
+
+### Fixed
+- Realtime sync could crash (`RangeError`) on large documents: the frame builder
+  spread the update body into `Uint8Array.of(...)`, overflowing the argument-count
+  limit during a full-state catch-up. Build the frame with allocate-and-set.
+
 ## [0.1.2] - 2026-06-28
 
 ### Fixed
