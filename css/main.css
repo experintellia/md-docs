@@ -70,14 +70,9 @@ html, body {
     transform-origin: top;
   }
   #editor { order: 1; }
-  /* Status sits in flow as its own row directly above the toolbar — not an
-     overlay — so it can never sit on top of the buttons. */
-  #status {
-    order: 2;
-    position: static;
-    align-self: flex-end;
-    padding: 1px 8px;
-  }
+  /* #status is laid out as its own row below — placed after the base #status
+     rule so its position:static wins on source order (media queries add no
+     specificity). #toolbar is order 3, so status (order 2) sits above it. */
   #toolbar {
     order: 3;
     border-top: 1px solid var(--border);
@@ -317,6 +312,18 @@ html, body {
   font-size: 11px;
   color: var(--muted);
   pointer-events: none;
+}
+
+/* Mobile: drop it into flow as its own row (order 2) just above the toolbar
+   (order 3) instead of overlaying the bar. Must come after the base #status
+   rule above so position:static wins (equal specificity → later rule wins). */
+@media (pointer: coarse) {
+  #status {
+    order: 2;
+    position: static;
+    align-self: flex-end;
+    padding: 1px 8px;
+  }
 }
 
 /* CodeMirror fills the editor area. */
