@@ -13,10 +13,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 24: `npm test` runs the .ts test files directly via native type
+          # stripping (node --test), which needs Node 24. Match ci.yml.
+          node-version: 24
           cache: npm
       - name: Install
-        run: npm ci
+        # See ci.yml: nested vite@8/rolldown optional wasm32 subtree breaks
+        # `npm ci`; `npm install` resolves from the lock and tolerates it.
+        run: npm install --no-audit --no-fund
       - name: Test
         run: npm test
       - name: Build
