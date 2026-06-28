@@ -139,7 +139,7 @@ class HistoryOverlay {
         this.close();
       }
     });
-    this.btn('restore').addEventListener('click', () => this.restore());
+    this.btn('restore').addEventListener('click', () => void this.restore());
     this.btn('prev').addEventListener('click', () => this.navigate(-1)); // older
     this.btn('next').addEventListener('click', () => this.navigate(+1)); // newer
 
@@ -293,11 +293,14 @@ class HistoryOverlay {
     });
   }
 
-  private restore(): void {
+  private async restore(): Promise<void> {
     if (this.selected === null) return;
     const v = this.rows[this.selected];
     if (!v) return;
-    if (!window.confirm('Restore this version? This replaces the current document for everyone.')) {
+    // In-app dialog, not window.confirm() — the latter is suppressed in the iOS
+    // webview (Delta Chat implements no JS dialogs), so it returned false and the
+    // restore silently never happened.
+    if (!(await confirmDialog('Restore this version? This replaces the current document for everyone.'))) {
       return;
     }
     // Tag the resulting batch so every peer's timeline marks it as a restore.
@@ -309,6 +312,44 @@ class HistoryOverlay {
     });
     this.close();
   }
+}
+
+/**
+ * An in-app replacement for window.confirm() — built as a DOM overlay so it
+ * works in the iOS webview (which silently suppresses native JS dialogs).
+ * Resolves true on Restore, false on Cancel / backdrop / Escape.
+ */
+export function confirmDialog(message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.id = 'confirm-overlay';
+    overlay.innerHTML = `
+      <div class="help-card confirm-card" role="dialog" aria-modal="true">
+        <p class="confirm-msg"></p>
+        <div class="confirm-actions">
+          <button type="button" data-act="cancel">Cancel</button>
+          <button type="button" class="primary" data-act="ok">Restore</button>
+        </div>
+      </div>`;
+    overlay.querySelector('.confirm-msg')!.textContent = message;
+
+    const done = (result: boolean): void => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') done(false);
+      else if (e.key === 'Enter') done(true);
+    };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) done(false); });
+    overlay.querySelector('[data-act="cancel"]')!.addEventListener('click', () => done(false));
+    overlay.querySelector('[data-act="ok"]')!.addEventListener('click', () => done(true));
+    document.addEventListener('keydown', onKey);
+
+    document.body.appendChild(overlay);
+    (overlay.querySelector('[data-act="ok"]') as HTMLButtonElement).focus();
+  });
 }
 
 function escapeHtml(s: string): string {

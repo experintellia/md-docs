@@ -151,6 +151,32 @@ html, body {
 }
 .help-close:hover { color: var(--fg); }
 
+/* In-app confirm dialog (replaces window.confirm, suppressed in the iOS webview).
+   Reuses .help-card for the card chrome. */
+#confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+}
+.confirm-card { max-width: 360px; }
+.confirm-msg { margin: 0 0 16px; line-height: 1.5; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm-actions button {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+.confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
 #editor {
   flex: 1 1 auto;
   min-height: 0;
