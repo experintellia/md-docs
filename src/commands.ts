@@ -50,6 +50,10 @@ export const cycleHeading: Command = (view) => {
   const prefix = next === 0 ? '' : '#'.repeat(next) + ' ';
   view.dispatch({
     changes: { from: line.from, to: line.from + removeLen, insert: prefix },
+    // On an empty line the cursor sits at the insertion point and CM would leave
+    // it before the inserted "# "; park it after the marker to type the heading.
+    // A non-empty line maps the cursor through the change correctly on its own.
+    ...(line.length === 0 ? { selection: { anchor: line.from + prefix.length } } : {}),
   });
   return true;
 };
