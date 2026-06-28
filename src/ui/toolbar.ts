@@ -6,6 +6,7 @@ import {
 } from '@fortawesome/free-regular-svg-icons';
 import {
   faBold,
+  faClockRotateLeft,
   faHeading,
   faIndent,
   faItalic,
@@ -144,6 +145,7 @@ function buildHelp(): HTMLElement {
       </table>
       <h2>Toolbar</h2>
       <p>Use ${ico(faIndent)} / ${ico(faOutdent)} to indent or outdent list items,
+         ${ico(faClockRotateLeft)} to browse and restore past versions,
          ${ico(faMoon)} / ${ico(faSun)} to switch theme, and ${ico(faCircleQuestion)}
          to reopen this help.</p>
     </div>`;
