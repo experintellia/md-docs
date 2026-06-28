@@ -96,3 +96,15 @@ test('toggleChecklist: plain -> task, bullet -> task, then ticks/unticks', () =>
   assert.equal(run(toggleChecklist, '- [x] hi|').doc, '- [ ] hi');  // untick
   assert.equal(run(toggleChecklist, '- [X] hi|').doc, '- [ ] hi');  // capital X unticks
 });
+
+test('toggleBullet on a task item converts it to a plain bullet', () => {
+  assert.equal(run(toggleBullet, '- [ ] hi|').doc, '- hi');     // unchecked box -> bullet
+  assert.equal(run(toggleBullet, '- [x] hi|').doc, '- hi');     // checked box too
+  assert.equal(run(toggleBullet, '  - [ ] hi|').doc, '  - hi'); // indentation kept
+  assert.equal(run(toggleBullet, '* [ ] hi|').doc, '* hi');     // other bullet chars
+});
+
+test('bullet <-> checklist convert into each other (toolbar buttons are inverses)', () => {
+  assert.equal(run(toggleChecklist, '- hi|').doc, '- [ ] hi'); // list -> checkbox
+  assert.equal(run(toggleBullet, '- [ ] hi|').doc, '- hi');    // checkbox -> list
+});

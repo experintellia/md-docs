@@ -99,22 +99,34 @@ export const toggleChecklist: Command = (view) => {
 };
 
 /**
- * Toggle a bullet on the current line: a plain line gets "- " (after any
- * indentation); an existing bullet is removed.
+ * Toggle a bullet on the current line:
+ *  - task item   -> plain bullet (strip the "[ ] " checkbox, keep the marker)
+ *  - bullet item -> remove the marker
+ *  - anything else -> prepend "- " (keeping indentation)
  *
- * ponytail: a task item counts as a bullet, so toggling off "- [ ] x" leaves
- * "[ ] x". Edge case, not worth special-casing for v1.
+ * The task case makes the bullet button the inverse of the checklist button:
+ * checklist turns a bullet into a task, bullet turns a task back into a bullet.
  */
 export const toggleBullet: Command = (view) => {
   const { state } = view;
   const line = state.doc.lineAt(state.selection.main.head);
-  const bullet = /^(\s*)([-*+] )/.exec(line.text);
+  const text = line.text;
+
+  // Task item: drop only the "[ ] " checkbox, leaving a plain bullet.
+  const task = /^(\s*[-*+] )(\[[ xX]\] )/.exec(text);
+  if (task) {
+    const from = line.from + task[1].length;
+    view.dispatch({ changes: { from, to: from + task[2].length, insert: '' } });
+    return true;
+  }
+
+  const bullet = /^(\s*)([-*+] )/.exec(text);
   if (bullet) {
     const from = line.from + bullet[1].length;
     view.dispatch({ changes: { from, to: from + bullet[2].length, insert: '' } });
     return true;
   }
-  const indent = /^(\s*)/.exec(line.text)![1];
+  const indent = /^(\s*)/.exec(text)![1];
   const pos = line.from + indent.length;
   view.dispatch({
     changes: { from: pos, to: pos, insert: '- ' },
