@@ -1,5 +1,6 @@
 import { EditorSelection } from '@codemirror/state';
 import type { Command, KeyBinding } from '@codemirror/view';
+import { insertNewlineContinueMarkupCommand, deleteMarkupBackward } from '@codemirror/lang-markdown';
 
 /**
  * Toggle an inline wrapper (e.g. `**` for bold) around each selection range.
@@ -122,8 +123,16 @@ export const toggleBullet: Command = (view) => {
   return true;
 };
 
-/** Keyboard shortcuts (desktop) mirroring the toolbar actions. */
+/** Keyboard shortcuts mirroring the toolbar actions, plus markdown-aware
+ *  Enter/Backspace. We bind Enter ourselves (lang-markdown's keymap is disabled
+ *  via addKeymap:false in editor.ts) with `nonTightLists: false` so a double
+ *  Enter on an empty list item *exits* the list instead of inserting a blank
+ *  line and turning the list "loose" — which otherwise compounds a blank line
+ *  before every subsequent item. Both commands return false outside markdown
+ *  markup, so the defaultKeymap fallbacks (newline / delete) still apply. */
 export const markdownKeymap: KeyBinding[] = [
+  { key: 'Enter', run: insertNewlineContinueMarkupCommand({ nonTightLists: false }) },
+  { key: 'Backspace', run: deleteMarkupBackward },
   { key: 'Mod-b', run: toggleBold },
   { key: 'Mod-i', run: toggleItalic },
   { key: 'Mod-e', run: toggleInlineCode },

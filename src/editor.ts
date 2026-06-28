@@ -35,7 +35,9 @@ export function baseExtensions(collab?: Collab): Extension[] {
     dropCursor(),
     EditorView.lineWrapping,
     keymap.of([...markdownKeymap, ...defaultKeymap, indentWithTab]),
-    markdown({ base: markdownLanguage, codeLanguages: [] }),
+    // addKeymap:false — our markdownKeymap binds Enter/Backspace instead (with
+    // tight-list continuation); see commands.ts.
+    markdown({ base: markdownLanguage, codeLanguages: [], addKeymap: false }),
     livePreview(),
   ];
 }
