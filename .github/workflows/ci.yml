@@ -15,7 +15,12 @@ jobs:
           node-version: 24
           cache: npm
       - name: Install
-        run: npm ci
+        # Not `npm ci`: a nested vite@8 → rolldown subtree pulls an optional
+        # wasm32 binding whose @emnapi deps are pruned from the lock on x64,
+        # leaving dangling refs that `npm ci` rejects. `npm install` tolerates
+        # it and resolves from the lock all the same.
+        # ponytail: drop this back to `npm ci` once the lock subtree is consistent.
+        run: npm install --no-audit --no-fund
       - name: Test (typecheck + lint + unit)
         run: npm test
       - name: Build
