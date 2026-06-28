@@ -38,7 +38,16 @@ export function connectRealtime(ydoc: Y.Doc, awareness: Awareness): void {
   });
 
   const channel = webxdc.joinRealtimeChannel();
-  const frame = (tag: number, body: Uint8Array): Uint8Array => Uint8Array.of(tag, ...body);
+  // Prefix the tag by allocate-and-set, NOT Uint8Array.of(tag, ...body): spreading
+  // body into call arguments overflows the engine's arg-count limit (~64k) for a
+  // full-state catch-up of a large doc, throwing RangeError. Small dev payloads
+  // never hit it; a real document does.
+  const frame = (tag: number, body: Uint8Array): Uint8Array => {
+    const out = new Uint8Array(body.length + 1);
+    out[0] = tag;
+    out.set(body, 1);
+    return out;
+  };
 
   channel.setListener((data) => {
     const body = data.subarray(1);
