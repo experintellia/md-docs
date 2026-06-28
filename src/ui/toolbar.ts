@@ -74,7 +74,7 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
   container.append(themeButton(), helpButton());
 
   if (isMobile()) {
-    enableKeyboardDocking(container);
+    fitAppToViewport();
   }
 }
 
@@ -166,22 +166,25 @@ function isMobile(): boolean {
 }
 
 /**
- * On mobile, position the toolbar just above the on-screen keyboard. The
- * VisualViewport shrinks when the keyboard opens; we pin the bar to the bottom
- * of the *visual* viewport.
+ * On mobile, size #app to the *visual* viewport so its bottom edge sits exactly
+ * above the on-screen keyboard. The toolbar is the last flex child (CSS), so it
+ * floats just above the keyboard with no position:fixed bar that iOS could drop.
+ * iOS doesn't shrink the layout viewport (or vh/dvh) for the keyboard — only
+ * visualViewport reflects it — so the height has to come from JS.
  */
-function enableKeyboardDocking(container: HTMLElement): void {
+function fitAppToViewport(): void {
   const vv = window.visualViewport;
   if (!vv) return;
-  container.classList.add('docked');
-  document.documentElement.classList.add('toolbar-docked');
+  const app = document.getElementById('app');
+  if (!app) return;
 
-  const reposition = (): void => {
-    const bottom = window.innerHeight - (vv.offsetTop + vv.height);
-    container.style.transform = `translateY(${-bottom}px)`;
+  const fit = (): void => {
+    app.style.height = `${vv.height}px`;
+    // Covers any residual layout-viewport scroll/offset (e.g. pinch-zoom).
+    app.style.transform = `translateY(${vv.offsetTop}px)`;
   };
 
-  vv.addEventListener('resize', reposition);
-  vv.addEventListener('scroll', reposition);
-  reposition();
+  vv.addEventListener('resize', fit);
+  vv.addEventListener('scroll', fit);
+  fit();
 }

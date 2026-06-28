@@ -29,6 +29,9 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  /* Lock the page: only #editor scrolls. Stops the layout viewport scrolling
+     under the iOS keyboard (which used to jitter the docked toolbar). */
+  overflow: hidden;
   background: var(--bg);
   color: var(--fg);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -40,8 +43,9 @@ html, body {
   height: 100%;
 }
 
-/* On desktop the toolbar sits at the top; on mobile it is repositioned above
-   the keyboard by src/ui/toolbar.ts via the VisualViewport API. */
+/* On desktop the toolbar sits at the top; on mobile it becomes a footer below
+   the editor (see the coarse-pointer block), with #app sized to the visual
+   viewport by src/ui/toolbar.ts so it rides above the on-screen keyboard. */
 #toolbar {
   display: flex;
   align-items: center;
@@ -54,16 +58,29 @@ html, body {
   flex: 0 0 auto;
 }
 
-/* Toolbar docked above the on-screen keyboard on mobile. */
-#toolbar.docked {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 10;
-  border-top: 1px solid var(--border);
-  border-bottom: none;
-  will-change: transform;
+/* Mobile: pin #app to the visual viewport (height/transform set in JS) and lay
+   the column out as editor (scrolls) → toolbar → status, so the toolbar floats
+   directly above the keyboard with no position:fixed bar to drop. */
+@media (pointer: coarse) {
+  #app {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    transform-origin: top;
+  }
+  #editor { order: 1; }
+  #toolbar {
+    order: 2;
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+  }
+  /* Float the status label just above the toolbar (which is now the footer).
+     #app is position:fixed here, so absolute resolves to it. */
+  #status {
+    position: absolute;
+    bottom: calc(var(--toolbar-height) + 6px);
+  }
 }
 
 .md-tool-btn {
