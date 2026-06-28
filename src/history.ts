@@ -82,44 +82,48 @@ export function setupHistory(real: typeof window.webxdc): History {
   // setUpdateListener fires for our own sends (echoed back), peers' sends, AND the
   // full startup replay — so it's the single funnel for the whole timeline. We do
   // NOT record in sendUpdate (that would double-count the echo); send only injects.
-  const webxdc = new Proxy(real, {
-    get(target, prop, receiver) {
-      if (prop === 'sendUpdate') {
-        return (update: { payload: HistPayload }, descr: '') => {
-          update.payload.t = Date.now();
-          update.payload.author = author;
-          if (pendingRestore) {
-            update.payload.restoredFrom = pendingRestore;
-            pendingRestore = null;
-          }
-          return (target.sendUpdate as typeof real.sendUpdate)(update as never, descr);
-        };
+  //
+  // A plain delegating object, NOT a Proxy: in the real Delta Chat client the
+  // webxdc methods are read-only, non-configurable properties, and a Proxy `get`
+  // trap that returns a *different* setUpdateListener/sendUpdate violates a Proxy
+  // invariant and throws ("'get' on proxy: property … is a read-only and
+  // non-configurable data property …"). The dev mock's props are configurable, so
+  // the Proxy only blew up on a real device. Object.create(real) lets every other
+  // read — selfName, selfAddr, … — fall straight through to the native object;
+  // defineProperty installs our two overrides as own props (a plain assignment
+  // would throw under strict mode when shadowing real's non-writable methods).
+  const webxdc = Object.create(real) as typeof window.webxdc;
+  Object.defineProperty(webxdc, 'sendUpdate', {
+    configurable: true,
+    value: (update: { payload: HistPayload }, descr: '') => {
+      update.payload.t = Date.now();
+      update.payload.author = author;
+      if (pendingRestore) {
+        update.payload.restoredFrom = pendingRestore;
+        pendingRestore = null;
       }
-      if (prop === 'setUpdateListener') {
-        return (cb: (u: { payload: HistPayload }) => void, serial?: number) => {
-          const wrapped = (u: { payload: HistPayload }): void => {
-            const p = u.payload;
-            if (typeof p?.serializedYjsUpdate === 'string') {
-              records.push({
-                t: typeof p.t === 'number' ? p.t : Date.now(),
-                author: typeof p.author === 'string' ? p.author : 'unknown',
-                blob: p.serializedYjsUpdate,
-                restoredFrom: p.restoredFrom,
-              });
-              emit();
-            }
-            cb(u);
-          };
-          return (target.setUpdateListener as typeof real.setUpdateListener)(
-            wrapped as never,
-            serial,
-          );
-        };
-      }
-      const v = Reflect.get(target, prop, receiver);
-      return typeof v === 'function' ? v.bind(target) : v;
+      return (real.sendUpdate as typeof real.sendUpdate)(update as never, descr);
     },
-  }) as typeof window.webxdc;
+  });
+  Object.defineProperty(webxdc, 'setUpdateListener', {
+    configurable: true,
+    value: (cb: (u: { payload: HistPayload }) => void, serial?: number) => {
+      const wrapped = (u: { payload: HistPayload }): void => {
+        const p = u.payload;
+        if (typeof p?.serializedYjsUpdate === 'string') {
+          records.push({
+            t: typeof p.t === 'number' ? p.t : Date.now(),
+            author: typeof p.author === 'string' ? p.author : 'unknown',
+            blob: p.serializedYjsUpdate,
+            restoredFrom: p.restoredFrom,
+          });
+          emit();
+        }
+        cb(u);
+      };
+      return (real.setUpdateListener as typeof real.setUpdateListener)(wrapped as never, serial);
+    },
+  });
 
   return {
     webxdc,
