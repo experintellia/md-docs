@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import * as Y from 'yjs';
+import { fromUint8Array, toUint8Array } from 'js-base64';
 
 // Tier 3: the CRDT guarantees the app's collaboration relies on. These bind the
 // same Y.Text key the editor uses, so a wiring regression (or a bad yjs bump)
@@ -44,6 +45,31 @@ test('a late joiner sees the existing document — the seed invariant', () => {
   const seed = joiner.getText(KEY).toString();
   assert.equal(seed, '# Notes\n\n- [x] ship it');
   assert.notEqual(seed, '');
+});
+
+test('the localStorage crash-net round-trips edits and is a no-op once synced', () => {
+  // createCollab() mirrors the doc to localStorage as base64 of
+  // encodeStateAsUpdateV2, then re-applies it on the next startup. Guards that
+  // exact path: a draft saved before an iOS suspend is restored, and restoring
+  // when the same edits already arrived via the channel adds nothing back.
+  const edited = new Y.Doc();
+  edited.getText(KEY).insert(0, '# draft never flushed');
+  const draft = fromUint8Array(Y.encodeStateAsUpdateV2(edited)); // what we store
+
+  // Cold start with an empty channel: the draft is fully restored.
+  const restored = new Y.Doc();
+  Y.applyUpdateV2(restored, toUint8Array(draft));
+  assert.equal(restored.getText(KEY).toString(), '# draft never flushed');
+
+  // Cold start where the channel already replayed those edits: re-applying the
+  // draft fires no update (no double-up, nothing re-queued to peers).
+  const synced = new Y.Doc();
+  Y.applyUpdateV2(synced, Y.encodeStateAsUpdateV2(edited));
+  let fired = false;
+  synced.on('updateV2', () => { fired = true; });
+  Y.applyUpdateV2(synced, toUint8Array(draft));
+  assert.equal(synced.getText(KEY).toString(), '# draft never flushed');
+  assert.equal(fired, false);
 });
 
 test('applying the same update twice is idempotent', () => {

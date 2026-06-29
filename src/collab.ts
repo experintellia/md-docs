@@ -1,7 +1,11 @@
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import WebxdcProvider from 'y-webxdc';
+import { fromUint8Array, toUint8Array } from 'js-base64';
 import { setupHistory, type History } from './history.ts';
+
+// localStorage key for the synchronous crash/exit safety net (see below).
+const DRAFT_KEY = 'md-docs-draft';
 
 /**
  * The shared collaboration state: a Yjs document synced to chat peers via the
@@ -75,6 +79,45 @@ export function createCollab(): Collab {
         startinfo: `${webxdc.selfName} updated the document`,
       };
     },
+  });
+
+  // Synchronous local safety net. The provider only persists via the async
+  // webxdc.sendUpdate() (autosave loop + visibilitychange/beforeunload flush).
+  // On iOS the webview is suspended the instant the app backgrounds, before
+  // that async send reaches the messenger, so the un-flushed tail of edits is
+  // lost. localStorage.setItem is synchronous and completes before suspension,
+  // so we mirror the Yjs state to it and re-apply on load. Re-applying is a
+  // no-op once already synced — Yjs is a CRDT, so merge needs no heuristics.
+
+  // Restore first: any local edits that never reached the channel merge back
+  // in (and re-queue, so the next flush re-propagates them to peers).
+  const saved = localStorage.getItem(DRAFT_KEY);
+  if (saved) {
+    try {
+      Y.applyUpdateV2(ydoc, toUint8Array(saved));
+    } catch {
+      // Corrupt/garbage draft — drop it rather than block startup.
+      localStorage.removeItem(DRAFT_KEY);
+    }
+  }
+
+  // ponytail: snapshots the full doc state as base64 on each save — fine for
+  // markdown-sized docs. Switch to an incremental update log only if docs grow
+  // large enough to stall the synchronous write (cf. commit 2f71303).
+  const saveDraft = () =>
+    localStorage.setItem(DRAFT_KEY, fromUint8Array(Y.encodeStateAsUpdateV2(ydoc)));
+
+  // The line that fixes the reported iOS loss: a synchronous write the moment
+  // the app backgrounds, before the webview is frozen.
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveDraft();
+  });
+
+  // Debounced save on edit, to also cover a hard kill with no visibilitychange.
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  ydoc.on('updateV2', () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDraft, 1000);
   });
 
   return { ydoc, ytext, awareness, undoManager, provider, history };
