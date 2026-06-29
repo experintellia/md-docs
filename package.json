@@ -24,6 +24,7 @@
         "@fortawesome/free-regular-svg-icons": "^7.3.0",
         "@fortawesome/free-solid-svg-icons": "^7.3.0",
         "@lezer/highlight": "^1.2.0",
+        "js-base64": "^3.8.0",
         "y-codemirror.next": "^0.3.5",
         "y-protocols": "^1.0.6",
         "y-webxdc": "^1.2.0",
