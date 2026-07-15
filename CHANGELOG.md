@@ -12,6 +12,50 @@ All notable changes to MD-Docs are documented here. This project adheres to
   standalone autolink is itself the visible link, so it now renders as a styled,
   clickable link (bare `www.` links get an `https://` scheme).
 
+## [0.1.9] - 2026-06-29
+
+### Fixed
+- Edits are persisted to `localStorage`, so an abrupt iOS app exit no longer
+  loses unsaved work.
+
+## [0.1.8] - 2026-06-28
+
+### Fixed
+- Restoring a past version used `window.confirm`, which is unreliable in the iOS
+  webxdc runtime. Replaced with an in-app confirmation dialog.
+
+## [0.1.7] - 2026-06-28
+
+### Fixed
+- Making a heading on a blank line now parks the cursor after the marker instead
+  of before it.
+
+## [0.1.6] - 2026-06-28
+
+### Fixed
+- Mobile status line overlaid the toolbar (a CSS source-order bug).
+- Task checkboxes were too small to tap comfortably; enlarged them, more so on
+  touch devices.
+
+## [0.1.5] - 2026-06-28
+
+### Added
+- Bullet button converts a checkbox list item back into a plain bullet.
+
+### Changed
+- Mobile status line is laid out as a row above the toolbar rather than an
+  overlay.
+- Chat summary reads "updated the document" with the last-edit time.
+
+### Fixed
+- List continuation on Enter no longer inserts blank lines (loose lists).
+
+## [0.1.4] - 2026-06-28
+
+### Fixed
+- iOS keyboard no longer hides the mobile toolbar: `#app` is sized to the visual
+  viewport.
+
 ## [0.1.3] - 2026-06-28
 
 ### Fixed
