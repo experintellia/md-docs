@@ -117,6 +117,41 @@ test('link gets md-link with a data-href equal to the URL', () => {
   assert.equal(link!.spec.attributes?.['data-href'], 'http://u', 'data-href');
 });
 
+test('bare autolink is a visible md-link (not hidden) with a data-href', () => {
+  const off = decorate('visit https://example.com now\nbody', 33); // cursor on line 2
+  const link = withClass(off, 'md-link');
+  assert.ok(link, 'md-link mark on the bare URL');
+  assert.equal(link!.spec.attributes?.['data-href'], 'https://example.com');
+  // The URL range must not be blanket-hidden.
+  assert.ok(
+    !hiddenMarkers(off).some((d) => d.from === link!.from && d.to === link!.to),
+    'URL not hidden',
+  );
+});
+
+test('<url> autolink: URL styled as md-link, its <> LinkMarks hidden', () => {
+  const off = decorate('<https://example.com>\nbody', 23);
+  const link = withClass(off, 'md-link');
+  assert.ok(link, 'md-link on the autolink URL');
+  assert.equal(link!.spec.attributes?.['data-href'], 'https://example.com');
+  // The `<` and `>` LinkMarks are still hidden.
+  assert.equal(hiddenMarkers(off).length, 2, 'both <> markers hidden');
+});
+
+test('bare www link gets an https:// scheme in its data-href', () => {
+  const off = decorate('www.example.com\nbody', 17);
+  const link = withClass(off, 'md-link');
+  assert.ok(link, 'md-link on the www URL');
+  assert.equal(link!.spec.attributes?.['data-href'], 'https://www.example.com');
+});
+
+test('image URL stays hidden (not turned into a link)', () => {
+  const off = decorate('![alt](http://img.png)\nbody', 24);
+  assert.ok(!withClass(off, 'md-link'), 'no md-link for an image destination');
+  // The destination URL is still hidden as a redundant marker.
+  assert.ok(hiddenMarkers(off).length > 0, 'image URL hidden');
+});
+
 test('reveal on cursor: heading marker NOT hidden when cursor is on the line', () => {
   const off = decorate('# Title\nbody', 9); // cursor on line 2
   const on = decorate('# Title\nbody', 3); // cursor inside the heading line

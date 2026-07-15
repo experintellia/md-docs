@@ -38,7 +38,6 @@ const HIDDEN_MARKS = new Set([
   'HeaderMark',
   'QuoteMark',
   'LinkMark',
-  'URL',
 ]);
 
 const hidden = Decoration.replace({});
@@ -52,6 +51,12 @@ function headingClass(name: string): string | null {
 function linkUrl(src: string): string | null {
   const m = /\]\(\s*([^)\s]+)/.exec(src);
   return m ? m[1] : null;
+}
+
+// A bare `www.foo` autolink has no scheme; window.open() would treat it as a
+// relative path. Give it https so the click reaches the real site.
+function withScheme(url: string): string {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`;
 }
 
 /**
@@ -117,6 +122,29 @@ export function buildDecorations(view: EditorView): DecorationSet {
           const url = lineHasSelection(state, node.from)
             ? null
             : linkUrl(doc.sliceString(node.from, node.to));
+          ranges.push(
+            Decoration.mark({
+              class: 'md-link',
+              attributes: url ? { 'data-href': url } : undefined,
+            }).range(node.from, node.to),
+          );
+          return;
+        }
+        if (name === 'URL') {
+          // Inside a `[text](url)` link or `![alt](url)` image the URL is the
+          // destination — redundant with the shown text/alt, so hide it (raw on
+          // the active line). A standalone URL (bare autolink or `<url>`) is
+          // itself the visible link, so style it like a link instead of hiding.
+          const parent = node.node.parent?.name;
+          if (parent === 'Link' || parent === 'Image') {
+            if (!lineHasSelection(state, node.from)) {
+              ranges.push(hidden.range(node.from, node.to));
+            }
+            return;
+          }
+          const url = lineHasSelection(state, node.from)
+            ? null
+            : withScheme(doc.sliceString(node.from, node.to));
           ranges.push(
             Decoration.mark({
               class: 'md-link',
