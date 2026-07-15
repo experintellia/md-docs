@@ -3,6 +3,15 @@
 All notable changes to MD-Docs are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] - 2026-07-15
+
+### Fixed
+- Bare and autolinked URLs (`https://…`, `www.…`, `<https://…>`) were hidden in
+  the live preview: the decoration builder blanket-hid every `URL` node, which
+  is only correct for the destination inside `[text](url)` / `![alt](url)`. A
+  standalone autolink is itself the visible link, so it now renders as a styled,
+  clickable link (bare `www.` links get an `https://` scheme).
+
 ## [0.1.3] - 2026-06-28
 
 ### Fixed
