@@ -3,6 +3,18 @@
 All notable changes to MD-Docs are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11] - 2026-07-20
+
+### Fixed
+- The "updated the document" chat notification fired when a peer merely opened
+  the app, not only on real edits. Two paths fed the sync queue with non-edits:
+  the `localStorage` draft was restored *before* the channel replay (so the
+  whole document looked like a fresh local edit on every open), and incoming
+  realtime frames were applied so that each receiver re-published a peer's edits
+  under its own name. The draft restore now waits for the replay to finish, and
+  realtime frames carry the provider's "not a local edit" marker — so the
+  notification fires exactly once per session, only on a genuine edit.
+
 ## [0.1.10] - 2026-07-15
 
 ### Fixed
