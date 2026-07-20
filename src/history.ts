@@ -48,6 +48,12 @@ export interface History {
    */
   markRestore(from: RestoreSource): void;
   onChange(cb: () => void): void;
+  /**
+   * Resolves once the channel's startup replay has been delivered (webxdc's
+   * setUpdateListener promise, which y-webxdc discards). Resolves immediately
+   * on clients whose setUpdateListener returns void.
+   */
+  replayed(): Promise<unknown>;
 }
 
 interface Record {
@@ -76,6 +82,8 @@ export function setupHistory(real: typeof window.webxdc): History {
   const emit = (): void => { for (const cb of listeners) cb(); };
 
   const author = real.selfName || 'unknown';
+  // Captured from setUpdateListener below; read via History.replayed().
+  let replayed: Promise<unknown> = Promise.resolve();
   // One-shot: set by markRestore(), consumed by the next outgoing batch.
   let pendingRestore: RestoreSource | null = null;
 
@@ -121,7 +129,10 @@ export function setupHistory(real: typeof window.webxdc): History {
         }
         cb(u);
       };
-      return (real.setUpdateListener as typeof real.setUpdateListener)(wrapped as never, serial);
+      replayed = Promise.resolve(
+        (real.setUpdateListener as typeof real.setUpdateListener)(wrapped as never, serial),
+      );
+      return replayed as Promise<void>;
     },
   });
 
@@ -148,6 +159,7 @@ export function setupHistory(real: typeof window.webxdc): History {
     },
     markRestore: (from) => { pendingRestore = from; },
     onChange: (cb) => { listeners.push(cb); },
+    replayed: () => replayed,
   };
 }
 
