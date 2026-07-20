@@ -89,23 +89,41 @@ export function createCollab(): Collab {
   // so we mirror the Yjs state to it and re-apply on load. Re-applying is a
   // no-op once already synced — Yjs is a CRDT, so merge needs no heuristics.
 
-  // Restore first: any local edits that never reached the channel merge back
-  // in (and re-queue, so the next flush re-propagates them to peers).
+  // Restore is DEFERRED until the channel replay completes: applying the full
+  // draft before replay made Yjs treat the whole doc as a fresh local edit,
+  // which the provider queued → spurious "updated the document" notification
+  // + full-doc re-send on every plain open. After replay, applying the draft
+  // is a pure diff: fully-synced → no updateV2 fires (see collab.sync.test.ts)
+  // → nothing queued; a genuinely unsent tail still re-queues, so the next
+  // flush re-propagates it to peers — and that one SHOULD notify.
   const saved = localStorage.getItem(DRAFT_KEY);
+  let restored = !saved;
   if (saved) {
-    try {
-      Y.applyUpdateV2(ydoc, toUint8Array(saved));
-    } catch {
-      // Corrupt/garbage draft — drop it rather than block startup.
-      localStorage.removeItem(DRAFT_KEY);
-    }
+    const applyDraft = (): void => {
+      try {
+        Y.applyUpdateV2(ydoc, toUint8Array(saved));
+      } catch {
+        // Corrupt/garbage draft — drop it rather than block startup.
+        localStorage.removeItem(DRAFT_KEY);
+      }
+      restored = true;
+    };
+    // then(f, f) + timeout race: a rejected or never-settling replay promise
+    // (spec violation) must not strand the draft forever — worst case on such
+    // a client is the old apply-before-replay behavior, 10s late.
+    const timeout = new Promise<void>((r) => setTimeout(r, 10_000));
+    Promise.race([history.replayed(), timeout]).then(applyDraft, applyDraft);
   }
 
   // ponytail: snapshots the full doc state as base64 on each save — fine for
   // markdown-sized docs. Switch to an incremental update log only if docs grow
   // large enough to stall the synchronous write (cf. commit 2f71303).
-  const saveDraft = () =>
+  const saveDraft = () => {
+    // Never clobber a draft that hasn't been restored yet — its unsent tail
+    // would be lost if the app backgrounds during the replay window.
+    if (!restored) return;
     localStorage.setItem(DRAFT_KEY, fromUint8Array(Y.encodeStateAsUpdateV2(ydoc)));
+  };
 
   // The line that fixes the reported iOS loss: a synchronous write the moment
   // the app backgrounds, before the webview is frozen.

@@ -72,6 +72,21 @@ test('an incoming DOC frame is applied but not echoed back', () => {
   assert.equal(sent.length, before); // echo suppressed (origin === channel)
 });
 
+test('an incoming DOC frame applies with the provider ignore-origin (ydoc.clientID)', () => {
+  // The persistent y-webxdc provider skips updates whose origin is
+  // ydoc.clientID; anything else it queues and re-publishes to the chat with a
+  // notification. Received realtime frames must carry that sentinel, or every
+  // receiver "notifies" when a peer merely opens the app (catch-up blast).
+  const { ydoc, fire } = setup();
+  const other = new Y.Doc();
+  other.getText('codemirror').insert(0, 'remote');
+  let origin: unknown;
+  ydoc.on('update', (_u: Uint8Array, o: unknown) => { origin = o; });
+
+  fire(Uint8Array.of(0, ...Y.encodeStateAsUpdate(other)));
+  assert.equal(origin, ydoc.clientID);
+});
+
 test('an awareness change is sent as an AWARENESS frame', () => {
   const { awareness, sent } = setup();
   const before = tagCount(sent, 1);
