@@ -16,5 +16,7 @@ declare module 'y-webxdc' {
       autosaveInterval: number;
     });
     on(event: 'sync', handler: (e: { hasQueued: boolean }) => void): void;
+    /** Flush queued updates to the chat now (also runs on autosave/exit). */
+    syncToChatPeers(): void;
   }
 }
