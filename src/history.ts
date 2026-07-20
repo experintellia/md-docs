@@ -53,7 +53,7 @@ export interface History {
    * setUpdateListener promise, which y-webxdc discards). Resolves immediately
    * on clients whose setUpdateListener returns void.
    */
-  replayed(): Promise<unknown>;
+  replayed(): Promise<void>;
 }
 
 interface Record {
@@ -83,7 +83,7 @@ export function setupHistory(real: typeof window.webxdc): History {
 
   const author = real.selfName || 'unknown';
   // Captured from setUpdateListener below; read via History.replayed().
-  let replayed: Promise<unknown> = Promise.resolve();
+  let replayed: Promise<void> = Promise.resolve();
   // One-shot: set by markRestore(), consumed by the next outgoing batch.
   let pendingRestore: RestoreSource | null = null;
 
@@ -132,7 +132,7 @@ export function setupHistory(real: typeof window.webxdc): History {
       replayed = Promise.resolve(
         (real.setUpdateListener as typeof real.setUpdateListener)(wrapped as never, serial),
       );
-      return replayed as Promise<void>;
+      return replayed;
     },
   });
 
