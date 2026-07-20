@@ -108,8 +108,11 @@ export function createCollab(): Collab {
       }
       restored = true;
     };
-    // then(f, f): a rejected replay promise must not strand the draft forever.
-    history.replayed().then(applyDraft, applyDraft);
+    // then(f, f) + timeout race: a rejected or never-settling replay promise
+    // (spec violation) must not strand the draft forever — worst case on such
+    // a client is the old apply-before-replay behavior, 10s late.
+    const timeout = new Promise<void>((r) => setTimeout(r, 10_000));
+    Promise.race([history.replayed(), timeout]).then(applyDraft, applyDraft);
   }
 
   // ponytail: snapshots the full doc state as base64 on each save — fine for
