@@ -51,14 +51,21 @@ export function connectRealtime(ydoc: Y.Doc, awareness: Awareness): void {
 
   channel.setListener((data) => {
     const body = data.subarray(1);
-    // Pass `channel` as the origin so our own update/awareness handlers below
-    // don't echo it straight back out.
-    if (data[0] === DOC) Y.applyUpdate(ydoc, body, channel);
+    // Apply DOC frames with `ydoc.clientID` — y-webxdc's "not a local edit"
+    // sentinel — so received updates neither echo back out (guard below) nor
+    // get queued by the persistent provider, which would re-publish a peer's
+    // edits to the chat under OUR name and fire a spurious "updated the
+    // document" notification the moment a peer opens the app or types.
+    if (data[0] === DOC) Y.applyUpdate(ydoc, body, ydoc.clientID);
     else applyAwarenessUpdate(awareness, body, channel);
   });
 
   ydoc.on('update', (update: Uint8Array, origin: unknown) => {
-    if (origin !== channel) channel.send(frame(DOC, update));
+    // clientID origin = applied from either channel (realtime above, or
+    // y-webxdc's persistent replay). Broadcasting only true local edits also
+    // stops redundantly relaying persistent-channel updates onto realtime —
+    // every peer receives those via its own persistent channel anyway.
+    if (origin !== ydoc.clientID) channel.send(frame(DOC, update));
   });
 
   awareness.on(
