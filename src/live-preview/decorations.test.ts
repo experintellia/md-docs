@@ -186,3 +186,72 @@ test('reveal on cursor: link is plain (no data-href) when cursor is on the line'
   assert.ok(link, 'md-link still classed while editing');
   assert.equal(link!.spec.attributes, undefined, 'no data-href while editing');
 });
+
+// --- Thematic break (`---`) --------------------------------------------
+// A separator renders as an `md-hr` line class with the raw markers hidden.
+// The false-positive cases matter as much as the positive ones: `---` under
+// text is a setext heading, and 1-2 markers / trailing text are not breaks.
+
+function hasRule(decos: Deco[]): boolean {
+  return withClass(decos, 'md-hr') !== undefined;
+}
+
+test('three minuses render a separator and hide the raw markers', () => {
+  const decos = decorate('---\nbody', 5); // cursor on line 2
+  assert.ok(hasRule(decos), 'md-hr line class');
+  assert.ok(
+    hiddenMarkers(decos).some((d) => d.from === 0 && d.to === 3),
+    'the `---` text is hidden',
+  );
+});
+
+test('more than three minuses still render exactly one separator', () => {
+  const decos = decorate('----------\nbody', 12);
+  assert.equal(
+    decos.filter((d) => d.spec.class === 'md-hr').length,
+    1,
+    'one md-hr line class',
+  );
+  assert.ok(
+    hiddenMarkers(decos).some((d) => d.from === 0 && d.to === 10),
+    'all ten minuses hidden',
+  );
+});
+
+test('spaced (`- - -`) and indented (`   ---`) breaks render a separator', () => {
+  assert.ok(hasRule(decorate('- - -\nbody', 7)), 'spaced markers');
+  assert.ok(hasRule(decorate('   ---\nbody', 8)), 'up to 3 leading spaces');
+});
+
+test('`***` and `___` breaks render a separator too', () => {
+  assert.ok(hasRule(decorate('***\nbody', 5)), 'asterisk break');
+  assert.ok(hasRule(decorate('___\nbody', 5)), 'underscore break');
+});
+
+test('false positive: fewer than three minuses is not a separator', () => {
+  assert.ok(!hasRule(decorate('--\nbody', 4)), '`--` is not a break');
+  assert.ok(!hasRule(decorate('-\nbody', 3)), 'a lone `-` is a list bullet');
+});
+
+test('false positive: `---` under text is a setext heading, not a separator', () => {
+  assert.ok(!hasRule(decorate('Title\n---\nbody', 11)), 'setext H2, not a rule');
+});
+
+test('false positive: minuses mid-line or with trailing text are not separators', () => {
+  assert.ok(!hasRule(decorate('a --- b\nbody', 9)), 'inline minuses');
+  assert.ok(!hasRule(decorate('--- text\nbody', 10)), 'trailing text');
+  assert.ok(!hasRule(decorate('- item\nbody', 8)), 'list item');
+});
+
+test('false positive: `---` inside a fenced code block is not a separator', () => {
+  assert.ok(!hasRule(decorate('```\n---\n```\nbody', 13)), 'fenced code content');
+});
+
+test('reveal on cursor: raw `---` stays visible when the cursor is on the line', () => {
+  const on = decorate('---\nbody', 1); // cursor inside the rule line
+  assert.ok(hasRule(on), 'md-hr class persists while editing');
+  assert.ok(
+    !hiddenMarkers(on).some((d) => d.from === 0 && d.to === 3),
+    'markers revealed when the cursor is on the line',
+  );
+});

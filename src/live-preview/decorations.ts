@@ -107,6 +107,19 @@ export function buildDecorations(view: EditorView): DecorationSet {
           return;
         }
 
+        // --- Thematic break (`---`, `***`, `___`, 3+ markers): draw the rule
+        //     with a line class and hide the markers. The parser already
+        //     rejects the near-misses (2 markers, trailing text, `---` under
+        //     text is a setext heading, anything inside a code fence).
+        if (name === 'HorizontalRule') {
+          const line = doc.lineAt(node.from);
+          ranges.push(Decoration.line({ class: 'md-hr' }).range(line.from));
+          if (!lineHasSelection(state, node.from)) {
+            ranges.push(hidden.range(node.from, node.to));
+          }
+          return;
+        }
+
         // --- Inline emphasis / code styling
         const inlineClass = INLINE_MARK_CLASS[name];
         if (inlineClass) {
