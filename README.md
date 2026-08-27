@@ -65,4 +65,7 @@ git push origin v0.1.0
 ```
 
 Every push and pull request also runs CI (`.github/workflows/ci.yml`):
-typecheck, lint and build.
+typecheck, lint and build. Pull requests additionally get a preview comment
+(`.github/workflows/preview.yml`) linking the built `.xdc` and reporting its
+size against the base branch — bundle size is the budget that matters for an
+app that travels through chats.
