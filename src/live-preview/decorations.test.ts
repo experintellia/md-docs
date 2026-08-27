@@ -223,9 +223,12 @@ test('spaced (`- - -`) and indented (`   ---`) breaks render a separator', () =>
   assert.ok(hasRule(decorate('   ---\nbody', 8)), 'up to 3 leading spaces');
 });
 
-test('`***` and `___` breaks render a separator too', () => {
-  assert.ok(hasRule(decorate('***\nbody', 5)), 'asterisk break');
-  assert.ok(hasRule(decorate('___\nbody', 5)), 'underscore break');
+test('false positive: `***` / `___` breaks are minus-only, so no separator', () => {
+  // CommonMark calls these thematic breaks too, but this editor deliberately
+  // only draws a rule for minuses.
+  assert.ok(!hasRule(decorate('***\nbody', 5)), 'asterisk break stays text');
+  assert.ok(!hasRule(decorate('___\nbody', 5)), 'underscore break stays text');
+  assert.ok(!hasRule(decorate('*** \n* * *\nbody', 11)), 'spaced asterisks too');
 });
 
 test('false positive: fewer than three minuses is not a separator', () => {
