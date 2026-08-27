@@ -3,6 +3,19 @@
 All notable changes to MD-Docs are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Syntax highlighting inside fenced code blocks for javascript, typescript,
+  python, c, c++, java, shell, rust, go, yaml and toml (plus the usual aliases:
+  `js`, `ts`, `py`, `bash`, `rs`, `yml`, …). Unlisted languages stay plain text.
+  Token colours are theme-aware in light and dark.
+- A **Copy** button on every fenced code block, copying the block body without
+  the ``` fences.
+- `.github/workflows/preview.yml`: every pull request gets a sticky comment
+  linking the built `.xdc` and reporting how much the bundle grew or shrank
+  against the base branch.
+
 ## [0.1.11] - 2026-07-20
 
 ### Fixed

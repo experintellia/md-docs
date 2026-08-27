@@ -7,6 +7,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { buildDecorations } from './decorations.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { BulletWidget } from './widgets/bullet.ts';
+import { CopyButtonWidget } from './widgets/copy-button.ts';
 
 // Tier 2: live-preview decoration builder. `buildDecorations` reads only
 // `view.state` and `view.visibleRanges`, never the DOM, so a fake view drives
@@ -185,4 +186,23 @@ test('reveal on cursor: link is plain (no data-href) when cursor is on the line'
   const link = withClass(on, 'md-link');
   assert.ok(link, 'md-link still classed while editing');
   assert.equal(link!.spec.attributes, undefined, 'no data-href while editing');
+});
+
+test('fenced code block gets a copy button carrying the body without fences', () => {
+  const decos = decorate('```js\nconst a = 1;\nfoo();\n```\n');
+  const button = decos.find((d) => d.spec.widget instanceof CopyButtonWidget);
+  assert.ok(button, 'expected a copy-button widget');
+  // No trailing newline (CodeText stops before it) — pasting a shell command
+  // into a terminal should not auto-run it.
+  assert.equal(
+    (button.spec.widget as CopyButtonWidget).code,
+    'const a = 1;\nfoo();',
+  );
+  // Pinned to the end of the opening fence line, so it renders top-right.
+  assert.equal(button.from, '```js'.length);
+});
+
+test('an empty code block gets no copy button', () => {
+  const decos = decorate('```\n```\n');
+  assert.equal(decos.some((d) => d.spec.widget instanceof CopyButtonWidget), false);
 });

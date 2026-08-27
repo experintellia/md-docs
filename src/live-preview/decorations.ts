@@ -9,6 +9,7 @@ import {
 } from '@codemirror/view';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
+import { CopyButtonWidget } from './widgets/copy-button.ts';
 
 /**
  * Obsidian-style "reveal on cursor": markdown syntax markers are hidden unless
@@ -94,6 +95,19 @@ export function buildDecorations(view: EditorView): DecorationSet {
           const line = doc.lineAt(node.from);
           ranges.push(Decoration.line({ class: hClass }).range(line.from));
           return;
+        }
+        if (name === 'FencedCode') {
+          // Copy button on the opening fence, carrying the block body only
+          // (CodeText excludes the ``` fences and the info string).
+          const body = node.node.getChild('CodeText');
+          if (body) {
+            ranges.push(
+              Decoration.widget({
+                widget: new CopyButtonWidget(doc.sliceString(body.from, body.to)),
+                side: 1,
+              }).range(doc.lineAt(node.from).to),
+            );
+          }
         }
         if (name === 'Blockquote' || name === 'FencedCode') {
           const cls = name === 'Blockquote' ? 'md-quote' : 'md-code-block';
