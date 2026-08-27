@@ -96,6 +96,13 @@ export function buildDecorations(view: EditorView): DecorationSet {
           return;
         }
         if (name === 'Blockquote' || name === 'FencedCode') {
+          // `- > text` parses as a ListItem directly containing a Blockquote
+          // (valid CommonMark). Styling it as a quote too would double up
+          // with the bullet on the same line, so a quote that *is* a list
+          // item's content renders as plain list-item text instead.
+          if (name === 'Blockquote' && node.node.parent?.name === 'ListItem') {
+            return;
+          }
           const cls = name === 'Blockquote' ? 'md-quote' : 'md-code-block';
           let pos = node.from;
           while (pos <= node.to) {
