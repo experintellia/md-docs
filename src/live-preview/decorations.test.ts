@@ -88,6 +88,15 @@ test('blockquote gets md-quote line class', () => {
   assert.ok(withClass(decorate('> q', 0), 'md-quote'), 'md-quote line class');
 });
 
+test('a list item whose content is a quote (`- > x`) gets no md-quote line class', () => {
+  const decos = decorate('- > später\nbody', 12); // cursor off the list line
+  assert.ok(!withClass(decos, 'md-quote'), 'no md-quote line class');
+  assert.ok(
+    decos.some((d) => d.spec.widget instanceof BulletWidget),
+    'still renders as a list item (bullet widget present)',
+  );
+});
+
 test('unchecked task item produces an unchecked CheckboxWidget', () => {
   const decos = decorate('- [ ] x\nbody', 9); // cursor off the task line
   const box = decos.find((d) => d.spec.widget instanceof CheckboxWidget);
