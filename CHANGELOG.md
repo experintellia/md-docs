@@ -6,6 +6,12 @@ All notable changes to MD-Docs are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Separator lines: three or more minuses on their own line (`---`,
+  `----------`, spaced `- - -`) now render as a horizontal rule, with the raw
+  markers revealed again when the cursor is on the line. Near-misses stay plain
+  text: two minuses, markers with trailing text, minuses mid-line, `---` under
+  a paragraph (that is a setext heading), anything inside a fenced code block,
+  and the `***` / `___` breaks CommonMark also allows.
 - Syntax highlighting inside fenced code blocks for javascript, typescript,
   python, c, c++, java, shell, rust, go, yaml and toml (plus the usual aliases:
   `js`, `ts`, `py`, `bash`, `rs`, `yml`, …). Unlisted languages stay plain text.

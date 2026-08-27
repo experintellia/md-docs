@@ -110,6 +110,13 @@ export function buildDecorations(view: EditorView): DecorationSet {
           }
         }
         if (name === 'Blockquote' || name === 'FencedCode') {
+          // `- > text` parses as a ListItem directly containing a Blockquote
+          // (valid CommonMark). Styling it as a quote too would double up
+          // with the bullet on the same line, so a quote that *is* a list
+          // item's content renders as plain list-item text instead.
+          if (name === 'Blockquote' && node.node.parent?.name === 'ListItem') {
+            return;
+          }
           const cls = name === 'Blockquote' ? 'md-quote' : 'md-code-block';
           let pos = node.from;
           while (pos <= node.to) {
@@ -117,6 +124,21 @@ export function buildDecorations(view: EditorView): DecorationSet {
             ranges.push(Decoration.line({ class: cls }).range(line.from));
             if (line.to + 1 > node.to) break;
             pos = line.to + 1;
+          }
+          return;
+        }
+
+        // --- Thematic break (`---`, any length): draw the rule with a line
+        //     class and hide the markers. The parser already rejects the
+        //     near-misses (2 markers, trailing text, `---` under text is a
+        //     setext heading, anything inside a code fence). It also accepts
+        //     `***` / `___`, which we deliberately leave as plain text.
+        if (name === 'HorizontalRule') {
+          if (!/^[-\s]+$/.test(doc.sliceString(node.from, node.to))) return;
+          const line = doc.lineAt(node.from);
+          ranges.push(Decoration.line({ class: 'md-hr' }).range(line.from));
+          if (!lineHasSelection(state, node.from)) {
+            ranges.push(hidden.range(node.from, node.to));
           }
           return;
         }
