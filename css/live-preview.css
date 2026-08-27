@@ -22,6 +22,13 @@
 }
 .md-link { color: var(--accent); text-decoration: underline; cursor: pointer; }
 
+/* Thematic break (`---`): the markers are hidden, so the line itself is the
+   rule. Kept while the cursor is on the line, where the revealed `---` then
+   simply sits above it. */
+.cm-line.md-hr {
+  border-bottom: 2px solid var(--border);
+}
+
 /* Blockquote */
 .cm-line.md-quote {
   border-left: 3px solid var(--border);
