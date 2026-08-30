@@ -13,6 +13,14 @@ All notable changes to MD-Docs are documented here. This project adheres to
   a paragraph (that is a setext heading), anything inside a fenced code block,
   and the `***` / `___` breaks CommonMark also allows.
 
+### Fixed
+- Selecting text in a code block showed no highlight: the code background was
+  opaque and CodeMirror paints the selection in a layer *behind* the content,
+  so the fenced-block and inline-code backgrounds covered it. Selections that
+  spanned a code block appeared to stop at its edge. The code background is now
+  translucent (same rendered colour over the page background), so the selection
+  shows through in fenced blocks, inline code, and mixed selections alike.
+
 ## [0.1.11] - 2026-07-20
 
 ### Fixed
