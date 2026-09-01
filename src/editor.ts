@@ -9,6 +9,7 @@ import {
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 import { livePreview } from './live-preview';
+import { codeLanguages } from './live-preview/code-languages';
 import { markdownKeymap } from './commands';
 import { hidePeerFlagsWhenCovered } from './peer-flags';
 import type { Collab } from './collab';
@@ -37,7 +38,7 @@ export function baseExtensions(collab?: Collab): Extension[] {
     keymap.of([...markdownKeymap, ...defaultKeymap, indentWithTab]),
     // addKeymap:false — our markdownKeymap binds Enter/Backspace instead (with
     // tight-list continuation); see commands.ts.
-    markdown({ base: markdownLanguage, codeLanguages: [], addKeymap: false }),
+    markdown({ base: markdownLanguage, codeLanguages, addKeymap: false }),
     livePreview(),
   ];
 }

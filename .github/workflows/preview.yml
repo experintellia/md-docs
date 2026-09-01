@@ -1,0 +1,134 @@
+# Per-PR preview: builds the `.xdc` and posts a sticky comment linking the
+# downloadable artifact, plus how much bigger or smaller the bundle got.
+#
+# There is no preview *URL* to give: a webxdc app is a file you send into a
+# chat, not a site. The artifact link is the preview — download it and drop it
+# into a Delta Chat conversation.
+#
+# Size is the thing worth watching on every PR here. The `.xdc` travels through
+# chats, so growth is a real cost; the base branch is rebuilt in a worktree so
+# the diff is measured, not guessed.
+name: Preview
+
+on:
+  pull_request:
+
+# One preview per PR; a new push supersedes the previous build.
+concurrency:
+  group: preview-pr-${{ github.event.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      # `ref` so this builds the PR head itself, not the `refs/pull/N/merge`
+      # commit checkout uses by default -- the comment below reports a head sha,
+      # and a merge build would silently include whatever landed on the base
+      # since. fetch-depth 0 so the base build can reach the merge base.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          # 24: matches ci.yml (native TS type stripping for node --test).
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        # Not `npm ci` — see the note in ci.yml.
+        run: npm install --no-audit --no-fund
+
+      - name: Build the .xdc
+        run: npm run build
+
+      - name: Measure this PR and the base branch
+        id: size
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          head=$(stat -c%s dist-release/md-docs.xdc)
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+
+          # The merge base, not the event's base.sha: that is a snapshot from
+          # when the PR was last updated, so once the base branch moves it makes
+          # the delta include other people's commits. The fork point is the only
+          # comparison that isolates this PR's own cost.
+          base_sha=$(git merge-base HEAD "origin/$BASE_REF")
+
+          # Rebuild the base beside us. A base that does not build is not this
+          # PR's problem, so fall back to "unknown" instead of failing.
+          base=""
+          if git worktree add ../base "$base_sha" \
+            && (cd ../base && npm install --no-audit --no-fund && npm run build); then
+            base=$(stat -c%s ../base/dist-release/md-docs.xdc)
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the .xdc
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: md-docs-pr-${{ github.event.number }}
+          path: dist-release/md-docs.xdc
+          retention-days: 14
+
+      # Fork PRs get a read-only token, so the comment would fail — the artifact
+      # is still on the run page for those.
+      - name: Sticky preview comment
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.number }}
+          URL: ${{ steps.upload.outputs.artifact-url }}
+          HEAD_SIZE: ${{ steps.size.outputs.head }}
+          BASE_SIZE: ${{ steps.size.outputs.base }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          kb() { awk -v b="$1" 'BEGIN { printf "%.1f KB", b / 1024 }'; }
+
+          # printf, not a quoted multi-line string: leading whitespace would
+          # survive into the comment and markdown reads 4+ spaces as code.
+          if [ -n "$BASE_SIZE" ]; then
+            delta=$(awk -v h="$HEAD_SIZE" -v b="$BASE_SIZE" \
+              'BEGIN { d = h - b; printf "%s%.1f KB (%+.1f%%)", (d < 0 ? "-" : "+"), (d < 0 ? -d : d) / 1024, d * 100 / b }')
+            base_rows=$(printf '| `%s` at the merge base | %s |\n| **change** | **%s** |' \
+              "$BASE_REF" "$(kb "$BASE_SIZE")" "$delta")
+          else
+            base_rows=$(printf '| `%s` at the merge base | _build failed — no comparison_ |' "$BASE_REF")
+          fi
+
+          marker='<!-- xdc-preview -->'
+          body=$(printf '%s\n' \
+            "$marker" \
+            '### 📦 `.xdc` preview' \
+            '' \
+            "**[Download md-docs.xdc]($URL)** — send the file into a Delta Chat conversation to run it. Built from \`${SHA:0:7}\`." \
+            '' \
+            '| | bundle |' \
+            '| --- | --- |' \
+            "| this PR | $(kb "$HEAD_SIZE") |" \
+            "$base_rows" \
+            '' \
+            '<sub>This comment updates on every push.</sub>')
+
+          # `first(...)` inside jq rather than `| head -n1`: under pipefail a
+          # head that exits early can SIGPIPE gh and abort the step. Trim to one
+          # line in the shell, since --paginate runs the filter once per page.
+          id=$(gh api --paginate "repos/${{ github.repository }}/issues/$PR/comments" \
+                 --jq "first(.[] | select(.body | contains(\"$marker\")) | .id) // empty")
+          id=${id%%$'\n'*}
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$id" -f body="$body"
+          else
+            gh api -X POST "repos/${{ github.repository }}/issues/$PR/comments" -f body="$body"
+          fi

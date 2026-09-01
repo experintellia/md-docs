@@ -7,6 +7,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { buildDecorations } from './decorations.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { BulletWidget } from './widgets/bullet.ts';
+import { CopyButtonWidget } from './widgets/copy-button.ts';
 
 // Tier 2: live-preview decoration builder. `buildDecorations` reads only
 // `view.state` and `view.visibleRanges`, never the DOM, so a fake view drives
@@ -276,4 +277,90 @@ test('reveal on cursor: raw `---` stays visible when the cursor is on the line',
     !hiddenMarkers(on).some((d) => d.from === 0 && d.to === 3),
     'markers revealed when the cursor is on the line',
   );
+});
+
+test('fenced code block gets a copy button carrying the body without fences', () => {
+  const decos = decorate('```js\nconst a = 1;\nfoo();\n```\n');
+  const button = decos.find((d) => d.spec.widget instanceof CopyButtonWidget);
+  assert.ok(button, 'expected a copy-button widget');
+  // No trailing newline (CodeText stops before it) — pasting a shell command
+  // into a terminal should not auto-run it.
+  assert.equal(
+    (button.spec.widget as CopyButtonWidget).code,
+    'const a = 1;\nfoo();',
+  );
+  // Pinned to the end of the opening fence line, so it renders top-right.
+  assert.equal(button.from, '```js'.length);
+});
+
+test('an empty code block gets no copy button', () => {
+  const decos = decorate('```\n```\n');
+  assert.equal(decos.some((d) => d.spec.widget instanceof CopyButtonWidget), false);
+});
+
+test('only the outer lines of a code block are tagged for rounding', () => {
+  // ```js / body / ``` — three lines, so the middle one must stay square or the
+  // per-line backgrounds would show a notch mid-block.
+  const classes = decorate('```js\nfoo();\n```\nafter')
+    .filter((d) => d.spec.class?.includes('md-code-block'))
+    .map((d) => d.spec.class);
+  assert.deepEqual(classes, [
+    'md-code-block md-code-first',
+    'md-code-block',
+    'md-code-block md-code-last',
+  ]);
+});
+
+test('a one-line code block is both the first and the last line', () => {
+  // An unterminated fence is a FencedCode covering a single line; it still has
+  // to round all four corners.
+  const classes = decorate('```js')
+    .filter((d) => d.spec.class?.includes('md-code-block'))
+    .map((d) => d.spec.class);
+  assert.deepEqual(classes, ['md-code-block md-code-first md-code-last']);
+});
+
+test('a fence inside a blockquote copies its whole body', () => {
+  // In a quote the body is one CodeText per line (QuoteMarks interrupt it), so
+  // reading a single child would silently copy only the first line.
+  const decos = decorate('> ```js\n> const a = 1;\n> foo();\n> ```\n');
+  const button = decos.find((d) => d.spec.widget instanceof CopyButtonWidget);
+  assert.ok(button, 'expected a copy-button widget');
+  assert.equal(
+    (button.spec.widget as CopyButtonWidget).code,
+    'const a = 1;\nfoo();',
+  );
+});
+
+test('a fence inside a list item copies its whole body', () => {
+  const decos = decorate('- item\n  ```js\n  const a = 1;\n  foo();\n  ```\n');
+  const button = decos.find((d) => d.spec.widget instanceof CopyButtonWidget);
+  assert.ok(button, 'expected a copy-button widget');
+  assert.equal(
+    (button.spec.widget as CopyButtonWidget).code,
+    'const a = 1;\nfoo();',
+  );
+});
+
+test('a code block spanning two visible ranges gets one copy button', () => {
+  // CodeMirror splits the viewport around very long lines; the block is then
+  // entered once per range, and two widgets would stack at the same position.
+  const doc = '```js\nconst a = 1;\nfoo();\n```\n';
+  const state = EditorState.create({
+    doc,
+    selection: { anchor: 0 },
+    extensions: [markdown({ base: markdownLanguage })],
+  });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: 10 }, { from: 12, to: doc.length }],
+  } as unknown as EditorView;
+  let count = 0;
+  const iter = buildDecorations(view).iter();
+  while (iter.value) {
+    if (iter.value.spec.widget instanceof CopyButtonWidget) count++;
+    iter.next();
+  }
+  assert.equal(count, 1, 'exactly one copy button');
 });

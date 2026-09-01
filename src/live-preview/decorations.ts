@@ -9,6 +9,7 @@ import {
 } from '@codemirror/view';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
+import { CopyButtonWidget } from './widgets/copy-button.ts';
 
 /**
  * Obsidian-style "reveal on cursor": markdown syntax markers are hidden unless
@@ -78,6 +79,7 @@ export const linkClickHandler = EditorView.domEventHandlers({
 
 export function buildDecorations(view: EditorView): DecorationSet {
   const ranges: Range<Decoration>[] = [];
+  const buttoned = new Set<number>();
   const { state } = view;
   const doc = state.doc;
 
@@ -95,6 +97,33 @@ export function buildDecorations(view: EditorView): DecorationSet {
           ranges.push(Decoration.line({ class: hClass }).range(line.from));
           return;
         }
+        if (name === 'FencedCode') {
+          // Copy button on the opening fence, carrying the block body only
+          // (CodeText excludes the ``` fences and the info string).
+          //
+          // getChildren, not getChild: inside a blockquote or a list item the
+          // body is split into one CodeText per line (the QuoteMarks and the
+          // list indent interrupt it), so the first child alone would copy just
+          // the first line. The pieces already carry their own line breaks, so
+          // concatenating them keeps the body byte-for-byte -- including its
+          // lack of a trailing newline.
+          const body = node.node.getChildren('CodeText');
+          const anchor = doc.lineAt(node.from).to;
+          if (body.length > 0 && !buttoned.has(anchor)) {
+            // A block can be entered once per visible range (CodeMirror splits
+            // the viewport around very long lines), and two widgets at one
+            // position would stack invisibly.
+            buttoned.add(anchor);
+            ranges.push(
+              Decoration.widget({
+                widget: new CopyButtonWidget(
+                  body.map((part) => doc.sliceString(part.from, part.to)).join(''),
+                ),
+                side: 1,
+              }).range(anchor),
+            );
+          }
+        }
         if (name === 'Blockquote' || name === 'FencedCode') {
           // `- > text` parses as a ListItem directly containing a Blockquote
           // (valid CommonMark). Styling it as a quote too would double up
@@ -107,8 +136,15 @@ export function buildDecorations(view: EditorView): DecorationSet {
           let pos = node.from;
           while (pos <= node.to) {
             const line = doc.lineAt(pos);
-            ranges.push(Decoration.line({ class: cls }).range(line.from));
-            if (line.to + 1 > node.to) break;
+            const isLast = line.to + 1 > node.to;
+            // The block's background is painted per line, so the first and last
+            // get tagged for the CSS to round the outer corners. A one-line
+            // block gets both, which is why they set corners and not the
+            // `border-radius` shorthand.
+            const edges = name !== 'FencedCode' ? '' :
+              (pos === node.from ? ' md-code-first' : '') + (isLast ? ' md-code-last' : '');
+            ranges.push(Decoration.line({ class: cls + edges }).range(line.from));
+            if (isLast) break;
             pos = line.to + 1;
           }
           return;
