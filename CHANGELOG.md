@@ -12,9 +12,10 @@ All notable changes to MD-Docs are documented here. This project adheres to
   text: two minuses, markers with trailing text, minuses mid-line, `---` under
   a paragraph (that is a setext heading), anything inside a fenced code block,
   and the `***` / `___` breaks CommonMark also allows.
-- Syntax highlighting inside fenced code blocks for javascript, typescript,
-  python, c, c++, java, shell, rust, go, yaml and toml (plus the usual aliases:
-  `js`, `ts`, `py`, `bash`, `rs`, `yml`, …). Unlisted languages stay plain text.
+- Syntax highlighting inside fenced code blocks for javascript, json,
+  typescript, python, c, c++, java, c#, kotlin, scala, dart, objective-c,
+  shell, rust, go, yaml and toml (plus the usual aliases: `js`, `ts`, `py`,
+  `cs`, `kt`, `bash`, `rs`, `yml`, …). Unlisted languages stay plain text.
   Token colours are theme-aware in light and dark.
 - A **Copy** button on every fenced code block, copying the block body without
   the ``` fences.

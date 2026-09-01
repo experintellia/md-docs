@@ -49,10 +49,18 @@ test('an unlisted language stays plain text', () => {
   assert.deepEqual([...t.keys()].sort(), ['tok-labelName', 'tok-meta']);
 });
 
+test('a json fence marks object keys as properties', () => {
+  // The javascript mode this used to alias tags a quoted key as a plain string.
+  const t = tokens('```json\n{"a": 1}\n```\n');
+  assert.deepEqual(t.get('tok-propertyName'), ['"a"']);
+  assert.deepEqual(t.get('tok-number'), ['1']);
+});
+
 test('every shipped language highlights its own comment syntax', () => {
   const comments: Record<string, string> = {
     js: '// c', ts: '// c', py: '# c', c: '/* c */', 'c++': '// c',
-    java: '// c', bash: '# c', rs: '// c', go: '// c', yml: '# c', toml: '# c',
+    java: '// c', cs: '// c', kt: '// c', scala: '// c', dart: '// c',
+    objc: '// c', bash: '# c', rs: '// c', go: '// c', yml: '# c', toml: '# c',
   };
   for (const [lang, comment] of Object.entries(comments)) {
     const t = tokens('```' + lang + '\n' + comment + '\n```\n');
@@ -64,6 +72,7 @@ test('aliases resolve to their language', () => {
   for (const [alias, expected] of [
     ['js', 'javascript'], ['tsx', 'typescript'], ['py', 'python'],
     ['bash', 'shell'], ['rs', 'rust'], ['yml', 'yaml'], ['c++', 'cpp'],
+    ['cs', 'csharp'], ['kt', 'kotlin'], ['objc', 'objective-c'],
   ]) {
     const found = LanguageDescription.matchLanguageName(codeLanguages, alias, true);
     assert.equal(found?.name, expected, `alias ${alias}`);
