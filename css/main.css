@@ -9,6 +9,19 @@
   --code-bg: #f0f1f3;
   --selection: #b3d4fc;
   --toolbar-height: 44px;
+  /* Code-block token colours, consumed by the CodeMirror highlight style
+     (src/live-preview/index.ts) — CodeMirror only toggles classes, so the
+     theme swap has to happen here. */
+  --tok-keyword: #cf222e;
+  --tok-string: #0a3069;
+  --tok-comment: #6e7781;
+  --tok-number: #0550ae;
+  --tok-function: #8250df;
+  --tok-type: #953800;
+  --tok-property: #0550ae;
+  --tok-operator: #0550ae;
+  --tok-meta: #6e7781;
+  --tok-invalid: #82071e;
 }
 
 html.dark {
@@ -21,6 +34,16 @@ html.dark {
   --toolbar-bg: #252526;
   --code-bg: #2a2a2a;
   --selection: #2c5480;
+  --tok-keyword: #ff7b72;
+  --tok-string: #a5d6ff;
+  --tok-comment: #8b949e;
+  --tok-number: #79c0ff;
+  --tok-function: #d2a8ff;
+  --tok-type: #ffa657;
+  --tok-property: #79c0ff;
+  --tok-operator: #79c0ff;
+  --tok-meta: #9aa0a6;
+  --tok-invalid: #ffa198;
 }
 
 * { box-sizing: border-box; }

@@ -41,6 +41,43 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: var(--code-bg);
   font-size: 0.92em;
+  /* Anchors the copy button, which lives in the opening fence line. */
+  position: relative;
+}
+
+/* Round the block's outer corners only — the background is one rectangle per
+   line, so the middle lines must stay square to keep the run seamless. */
+.cm-line.md-code-first {
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  padding-top: 0.25em;
+}
+
+.cm-line.md-code-last {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  padding-bottom: 0.25em;
+}
+
+/* Copy button on the opening fence. Always visible: this is a touch app, so
+   there is no hover to reveal it on. */
+.md-copy {
+  position: absolute;
+  top: 0.1em;
+  right: 0.4em;
+  padding: 0.1em 0.5em;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85em;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.md-copy:active {
+  background: var(--toolbar-bg);
 }
 
 /* List bullet glyph (replaces the raw -, *, + marker on non-active lines) */
