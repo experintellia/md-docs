@@ -16,7 +16,9 @@ All notable changes to MD-Docs are documented here. This project adheres to
   typescript, python, c, c++, java, c#, kotlin, scala, dart, objective-c,
   shell, rust, go, yaml and toml (plus the usual aliases: `js`, `ts`, `py`,
   `cs`, `kt`, `bash`, `rs`, `yml`, …). Unlisted languages stay plain text.
-  Token colours are theme-aware in light and dark.
+  Token colours are theme-aware in light and dark. The block's outer corners
+  are rounded, and the fence's language reads as a quiet label rather than
+  as the block's first line of content.
 - A **Copy** button on every fenced code block, copying the block body without
   the ``` fences.
 - `.github/workflows/preview.yml`: every pull request gets a sticky comment

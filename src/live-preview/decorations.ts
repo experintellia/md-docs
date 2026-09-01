@@ -121,8 +121,15 @@ export function buildDecorations(view: EditorView): DecorationSet {
           let pos = node.from;
           while (pos <= node.to) {
             const line = doc.lineAt(pos);
-            ranges.push(Decoration.line({ class: cls }).range(line.from));
-            if (line.to + 1 > node.to) break;
+            const isLast = line.to + 1 > node.to;
+            // The block's background is painted per line, so the first and last
+            // get tagged for the CSS to round the outer corners. A one-line
+            // block gets both, which is why they set corners and not the
+            // `border-radius` shorthand.
+            const edges = name !== 'FencedCode' ? '' :
+              (pos === node.from ? ' md-code-first' : '') + (isLast ? ' md-code-last' : '');
+            ranges.push(Decoration.line({ class: cls + edges }).range(line.from));
+            if (isLast) break;
             pos = line.to + 1;
           }
           return;

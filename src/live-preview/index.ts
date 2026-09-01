@@ -21,6 +21,9 @@ const mdHighlight = HighlightStyle.define([
   // `meta` is both a preprocessor/shebang line and the ``` fence itself (shown
   // when the cursor is on that line) — muted keeps the revealed fence quiet.
   { tag: tags.meta, color: 'var(--tok-meta)' },
+  // The fence's info string (the `js` in ```js) labels the block rather than
+  // being part of it — quiet it down to match the Copy button on the same line.
+  { tag: tags.labelName, color: 'var(--tok-meta)', fontSize: '0.85em' },
   { tag: tags.operator, color: 'var(--tok-operator)' },
   { tag: tags.invalid, color: 'var(--tok-invalid)' },
 ]);

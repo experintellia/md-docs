@@ -45,6 +45,20 @@
   position: relative;
 }
 
+/* Round the block's outer corners only — the background is one rectangle per
+   line, so the middle lines must stay square to keep the run seamless. */
+.cm-line.md-code-first {
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  padding-top: 0.25em;
+}
+
+.cm-line.md-code-last {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  padding-bottom: 0.25em;
+}
+
 /* Copy button on the opening fence. Always visible: this is a touch app, so
    there is no hover to reveal it on. */
 .md-copy {

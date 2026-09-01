@@ -297,3 +297,25 @@ test('an empty code block gets no copy button', () => {
   const decos = decorate('```\n```\n');
   assert.equal(decos.some((d) => d.spec.widget instanceof CopyButtonWidget), false);
 });
+
+test('only the outer lines of a code block are tagged for rounding', () => {
+  // ```js / body / ``` — three lines, so the middle one must stay square or the
+  // per-line backgrounds would show a notch mid-block.
+  const classes = decorate('```js\nfoo();\n```\nafter')
+    .filter((d) => d.spec.class?.includes('md-code-block'))
+    .map((d) => d.spec.class);
+  assert.deepEqual(classes, [
+    'md-code-block md-code-first',
+    'md-code-block',
+    'md-code-block md-code-last',
+  ]);
+});
+
+test('a one-line code block is both the first and the last line', () => {
+  // An unterminated fence is a FencedCode covering a single line; it still has
+  // to round all four corners.
+  const classes = decorate('```js')
+    .filter((d) => d.spec.class?.includes('md-code-block'))
+    .map((d) => d.spec.class);
+  assert.deepEqual(classes, ['md-code-block md-code-first md-code-last']);
+});
