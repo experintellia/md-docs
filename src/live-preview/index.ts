@@ -5,7 +5,7 @@ import { linkClickHandler, livePreviewPlugin } from './decorations.ts';
 
 // Highlight style for fenced-code-block contents (and other tagged tokens).
 // Colours come from CSS custom properties so the one style serves both themes
-// (see `--tok-*` in css/live-preview.css) — CodeMirror only toggles classes,
+// (see `--tok-*` in css/main.css) — CodeMirror only toggles classes,
 // it has no idea `html.dark` is on.
 const mdHighlight = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--tok-keyword)' },

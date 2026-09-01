@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 import { EditorState } from '@codemirror/state';
 import { LanguageDescription, ensureSyntaxTree } from '@codemirror/language';
@@ -77,4 +78,15 @@ test('aliases resolve to their language', () => {
     const found = LanguageDescription.matchLanguageName(codeLanguages, alias, true);
     assert.equal(found?.name, expected, `alias ${alias}`);
   }
+});
+
+test('editor.ts passes these languages to markdown()', () => {
+  // Read as text, not imported: editor.ts resolves './live-preview' as a
+  // directory, which Vite does and the node test runner does not. Crude, but it
+  // is the only thing standing between `codeLanguages: []` and every test in
+  // this file still passing while highlighting silently disappears.
+  const src = readFileSync(new URL('../editor.ts', import.meta.url), 'utf8');
+  // `codeLanguages` followed by `,` or `}` -- the shorthand that passes this
+  // module. `codeLanguages: []` must not satisfy it; that is the regression.
+  assert.match(src, /markdown\(\{[^}]*\bcodeLanguages\s*[,}][^}]*\}\)/);
 });

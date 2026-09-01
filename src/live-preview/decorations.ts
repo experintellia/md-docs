@@ -79,6 +79,7 @@ export const linkClickHandler = EditorView.domEventHandlers({
 
 export function buildDecorations(view: EditorView): DecorationSet {
   const ranges: Range<Decoration>[] = [];
+  const buttoned = new Set<number>();
   const { state } = view;
   const doc = state.doc;
 
@@ -99,13 +100,27 @@ export function buildDecorations(view: EditorView): DecorationSet {
         if (name === 'FencedCode') {
           // Copy button on the opening fence, carrying the block body only
           // (CodeText excludes the ``` fences and the info string).
-          const body = node.node.getChild('CodeText');
-          if (body) {
+          //
+          // getChildren, not getChild: inside a blockquote or a list item the
+          // body is split into one CodeText per line (the QuoteMarks and the
+          // list indent interrupt it), so the first child alone would copy just
+          // the first line. The pieces already carry their own line breaks, so
+          // concatenating them keeps the body byte-for-byte -- including its
+          // lack of a trailing newline.
+          const body = node.node.getChildren('CodeText');
+          const anchor = doc.lineAt(node.from).to;
+          if (body.length > 0 && !buttoned.has(anchor)) {
+            // A block can be entered once per visible range (CodeMirror splits
+            // the viewport around very long lines), and two widgets at one
+            // position would stack invisibly.
+            buttoned.add(anchor);
             ranges.push(
               Decoration.widget({
-                widget: new CopyButtonWidget(doc.sliceString(body.from, body.to)),
+                widget: new CopyButtonWidget(
+                  body.map((part) => doc.sliceString(part.from, part.to)).join(''),
+                ),
                 side: 1,
-              }).range(doc.lineAt(node.from).to),
+              }).range(anchor),
             );
           }
         }

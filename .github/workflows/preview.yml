@@ -12,7 +12,6 @@ name: Preview
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
 
 # One preview per PR; a new push supersedes the previous build.
 concurrency:
@@ -27,9 +26,13 @@ jobs:
   preview:
     runs-on: ubuntu-latest
     steps:
-      # fetch-depth 0: the base build below checks out base.sha in a worktree.
+      # `ref` so this builds the PR head itself, not the `refs/pull/N/merge`
+      # commit checkout uses by default -- the comment below reports a head sha,
+      # and a merge build would silently include whatever landed on the base
+      # since. fetch-depth 0 so the base build can reach the merge base.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -48,16 +51,22 @@ jobs:
       - name: Measure this PR and the base branch
         id: size
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
           head=$(stat -c%s dist-release/md-docs.xdc)
           echo "head=$head" >> "$GITHUB_OUTPUT"
 
-          # Rebuild the base branch beside us. A base that does not build is not
-          # this PR's problem, so fall back to "unknown" instead of failing.
+          # The merge base, not the event's base.sha: that is a snapshot from
+          # when the PR was last updated, so once the base branch moves it makes
+          # the delta include other people's commits. The fork point is the only
+          # comparison that isolates this PR's own cost.
+          base_sha=$(git merge-base HEAD "origin/$BASE_REF")
+
+          # Rebuild the base beside us. A base that does not build is not this
+          # PR's problem, so fall back to "unknown" instead of failing.
           base=""
-          if git worktree add ../base "$BASE_SHA" \
+          if git worktree add ../base "$base_sha" \
             && (cd ../base && npm install --no-audit --no-fund && npm run build); then
             base=$(stat -c%s ../base/dist-release/md-docs.xdc)
           fi
@@ -92,10 +101,10 @@ jobs:
           if [ -n "$BASE_SIZE" ]; then
             delta=$(awk -v h="$HEAD_SIZE" -v b="$BASE_SIZE" \
               'BEGIN { d = h - b; printf "%s%.1f KB (%+.1f%%)", (d < 0 ? "-" : "+"), (d < 0 ? -d : d) / 1024, d * 100 / b }')
-            base_rows=$(printf '| `%s` | %s |\n| **change** | **%s** |' \
+            base_rows=$(printf '| `%s` at the merge base | %s |\n| **change** | **%s** |' \
               "$BASE_REF" "$(kb "$BASE_SIZE")" "$delta")
           else
-            base_rows=$(printf '| `%s` | _build failed — no comparison_ |' "$BASE_REF")
+            base_rows=$(printf '| `%s` at the merge base | _build failed — no comparison_ |' "$BASE_REF")
           fi
 
           marker='<!-- xdc-preview -->'
@@ -112,8 +121,12 @@ jobs:
             '' \
             '<sub>This comment updates on every push.</sub>')
 
+          # `first(...)` inside jq rather than `| head -n1`: under pipefail a
+          # head that exits early can SIGPIPE gh and abort the step. Trim to one
+          # line in the shell, since --paginate runs the filter once per page.
           id=$(gh api --paginate "repos/${{ github.repository }}/issues/$PR/comments" \
-                 --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -n1)
+                 --jq "first(.[] | select(.body | contains(\"$marker\")) | .id) // empty")
+          id=${id%%$'\n'*}
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$id" -f body="$body"
           else

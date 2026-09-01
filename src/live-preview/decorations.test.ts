@@ -319,3 +319,48 @@ test('a one-line code block is both the first and the last line', () => {
     .map((d) => d.spec.class);
   assert.deepEqual(classes, ['md-code-block md-code-first md-code-last']);
 });
+
+test('a fence inside a blockquote copies its whole body', () => {
+  // In a quote the body is one CodeText per line (QuoteMarks interrupt it), so
+  // reading a single child would silently copy only the first line.
+  const decos = decorate('> ```js\n> const a = 1;\n> foo();\n> ```\n');
+  const button = decos.find((d) => d.spec.widget instanceof CopyButtonWidget);
+  assert.ok(button, 'expected a copy-button widget');
+  assert.equal(
+    (button.spec.widget as CopyButtonWidget).code,
+    'const a = 1;\nfoo();',
+  );
+});
+
+test('a fence inside a list item copies its whole body', () => {
+  const decos = decorate('- item\n  ```js\n  const a = 1;\n  foo();\n  ```\n');
+  const button = decos.find((d) => d.spec.widget instanceof CopyButtonWidget);
+  assert.ok(button, 'expected a copy-button widget');
+  assert.equal(
+    (button.spec.widget as CopyButtonWidget).code,
+    'const a = 1;\nfoo();',
+  );
+});
+
+test('a code block spanning two visible ranges gets one copy button', () => {
+  // CodeMirror splits the viewport around very long lines; the block is then
+  // entered once per range, and two widgets would stack at the same position.
+  const doc = '```js\nconst a = 1;\nfoo();\n```\n';
+  const state = EditorState.create({
+    doc,
+    selection: { anchor: 0 },
+    extensions: [markdown({ base: markdownLanguage })],
+  });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: 10 }, { from: 12, to: doc.length }],
+  } as unknown as EditorView;
+  let count = 0;
+  const iter = buildDecorations(view).iter();
+  while (iter.value) {
+    if (iter.value.spec.widget instanceof CopyButtonWidget) count++;
+    iter.next();
+  }
+  assert.equal(count, 1, 'exactly one copy button');
+});

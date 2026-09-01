@@ -22,10 +22,14 @@ export class CopyButtonWidget extends WidgetType {
     button.type = 'button';
     button.textContent = 'Copy';
     button.setAttribute('aria-label', 'Copy code block');
-    button.addEventListener('mousedown', (event) => {
-      // The editor is contenteditable: without this the click moves the cursor
-      // into the code block (and blurs nothing, so the copy still runs).
-      event.preventDefault();
+    // The editor is contenteditable, so a press inside it would move the
+    // caret into the code block. CodeMirror already stays out of the way --
+    // WidgetType.ignoreEvent defaults to ignoring everything inside a widget --
+    // and preventDefault stops the browser's own focus/selection shift.
+    button.addEventListener('mousedown', (event) => { event.preventDefault(); });
+    // click, not mousedown: Enter and Space on a focused button fire only click,
+    // and this one is reachable by keyboard on desktop.
+    button.addEventListener('click', () => {
       void copy(this.code).then((ok) => {
         button.textContent = ok ? 'Copied' : 'Failed';
         setTimeout(() => { button.textContent = 'Copy'; }, 1200);
@@ -33,17 +37,15 @@ export class CopyButtonWidget extends WidgetType {
     });
     return button;
   }
-
-  /** Keep clicks away from CodeMirror's own selection handling. */
-  override ignoreEvent(): boolean {
-    return false;
-  }
 }
 
 async function copy(text: string): Promise<boolean> {
   // ponytail: the async clipboard API is missing or permission-blocked in some
   // of the messengers' embedded webviews, so the execCommand path is not
-  // legacy cruft here — it is the only one that works there.
+  // legacy cruft here — it is the only one that works there. Ceiling: when the
+  // API is present but *rejects*, the fallback runs a tick later, outside the
+  // user gesture, and WebKit refuses execCommand there. Try execCommand first
+  // if a real iOS webview turns out to take that branch.
   if (navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text);
