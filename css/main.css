@@ -10,7 +10,7 @@
      at z-index -1, *behind* .cm-content, so any opaque background on a
      .cm-line or inline span hides the selection under it. Keep every
      --code-bg user see-through or code stops highlighting on select.
-     Value renders as the old #f0f1f3 over --bg. */
+     Composites to #eff1f3 over --bg — the old solid #f0f1f3 to the eye. */
   --code-bg: rgba(175, 184, 193, 0.2);
   --selection: #b3d4fc;
   --toolbar-height: 44px;
@@ -24,7 +24,8 @@ html.dark {
   --border: #3a3a3a;
   --accent: #6ea8fe;
   --toolbar-bg: #252526;
-  --code-bg: rgba(255, 255, 255, 0.06); /* see light-mode note */
+  /* See light-mode note; composites to #2c2c2c over --bg (was #2a2a2a). */
+  --code-bg: rgba(255, 255, 255, 0.06);
   --selection: #2c5480;
 }
 
