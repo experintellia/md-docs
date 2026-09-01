@@ -25,6 +25,14 @@ All notable changes to MD-Docs are documented here. This project adheres to
   linking the built `.xdc` and reporting how much the bundle grew or shrank
   against the base branch.
 
+### Fixed
+- Selecting text in a code block showed no highlight: the code background was
+  opaque and CodeMirror paints the selection in a layer *behind* the content,
+  so the fenced-block and inline-code backgrounds covered it. Selections that
+  spanned a code block appeared to stop at its edge. The code background is now
+  translucent (same rendered colour over the page background), so the selection
+  shows through in fenced blocks, inline code, and mixed selections alike.
+
 ## [0.1.11] - 2026-07-20
 
 ### Fixed
