@@ -17,6 +17,13 @@ const ALLOWED = [
   'left: 50%', // centring, paired with a translate(-50%)
   'border-width: 0 2px 2px 0', // the tick's shape; a checkmark does not mirror
   'right: 0.4em', // the copy button; fence lines are always ltr, so right trails
+  // The quote bar. Its side comes from the quote's direction, written out by
+  // decorations.ts as md-quote-ltr / md-quote-rtl — a logical side would
+  // resolve per line, and a quote may hold lines of both directions.
+  'border-left: 3px solid var(--border)',
+  'padding-left: 0.7em',
+  'border-right: 3px solid var(--border)',
+  'padding-right: 0.7em',
 ];
 
 test('live-preview styles take their sides from the text direction', () => {
@@ -37,4 +44,14 @@ test('live-preview styles take their sides from the text direction', () => {
     .filter((decl) => !ALLOWED.includes(decl));
 
   assert.deepEqual(offenders, [], 'use inline-start / inline-end so RTL lines mirror');
+});
+
+test('the quote bar is stated on both side classes', () => {
+  // The class alone fixes nothing: the side has to be in the stylesheet, and
+  // physically, since a logical one resolves against each line's direction.
+  // Reverting the CSS to a logical side used to pass every test.
+  const rule = (selector: string): string =>
+    new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+  assert.match(rule('.cm-line.md-quote-ltr'), /border-left:\s*3px/, 'left bar for an LTR quote');
+  assert.match(rule('.cm-line.md-quote-rtl'), /border-right:\s*3px/, 'right bar for an RTL quote');
 });

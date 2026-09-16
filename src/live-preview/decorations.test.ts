@@ -4,7 +4,7 @@ import { EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-import { buildDecorations } from './decorations.ts';
+import { buildDecorations, lineDirection } from './decorations.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
@@ -45,15 +45,26 @@ function decorate(doc: string, cursor = 0): Deco[] {
   return out;
 }
 
-// A decoration with the given class.
+// A decoration carrying the given class. By token, not by the whole string: a
+// line decoration can hold several (`md-quote md-quote-rtl`), and the tests
+// that assert a class is *absent* rely on this too.
 function withClass(decos: Deco[], cls: string): Deco | undefined {
-  return decos.find((d) => d.spec.class === cls);
+  return decos.find((d) => d.spec.class?.split(' ').includes(cls));
 }
 
 // The plain "hidden" markers are Decoration.replace({}): a replace deco whose
-// spec has neither a widget nor a class.
+// spec has neither a widget nor a class. It must also cover a range — line
+// decorations (the direction marker) are points, and would otherwise count as a
+// hidden marker on every line.
 function hiddenMarkers(decos: Deco[]): Deco[] {
-  return decos.filter((d) => d.spec.widget === undefined && d.spec.class === undefined);
+  return decos.filter(
+    (d) => d.from < d.to && d.spec.widget === undefined && d.spec.class === undefined,
+  );
+}
+
+// The direction marker sitting on the line that starts at `from`.
+function dirAt(decos: Deco[], from: number): string | undefined {
+  return decos.find((d) => d.from === from && d.spec.attributes?.dir)?.spec.attributes?.dir;
 }
 
 test('parse is forced: a heading yields non-empty decorations', () => {
@@ -363,4 +374,211 @@ test('a code block spanning two visible ranges gets one copy button', () => {
     iter.next();
   }
   assert.equal(count, 1, 'exactly one copy button');
+});
+
+test('each line is directed by its own first strong character', () => {
+  const doc = 'Hello world\nمرحبا بالعالم\n- عنصر\n\n12345\n\n> اقتباس';
+  const decos = decorate(doc);
+  const state = EditorState.create({ doc });
+  const dirs = [1, 2, 3, 5, 7].map((n) => dirAt(decos, state.doc.line(n).from));
+  // The digits-only line stands alone here: neutral, inside no block that could
+  // decide for it, so it keeps the editor's own direction and gets no marker at
+  // all rather than a guessed one.
+  assert.deepEqual(dirs, ['ltr', 'rtl', 'rtl', undefined, 'rtl']);
+});
+
+test('a fresh list item takes the list direction before it has any text', () => {
+  // Pressing Enter in an Arabic list inserts `- ` / `2. ` / `- [ ] `, which
+  // carries no letters. Left to the page it would sit at the left edge under a
+  // right-aligned list and jump across on the first keystroke.
+  for (const marker of ['- ', '2. ', '- [ ] ']) {
+    const doc = `- عنصر\n${marker}`;
+    const state = EditorState.create({ doc });
+    assert.equal(
+      dirAt(decorate(doc), state.doc.line(2).from), 'rtl',
+      `a fresh \`${marker}\` item`,
+    );
+  }
+  // And a Latin list is unaffected.
+  assert.equal(dirAt(decorate('- item\n- '), 8), undefined, 'no marker forced on an LTR list');
+});
+
+
+test('code lines are pinned left-to-right, whatever the code says', () => {
+  // `//` is neutral, so the first strong character is Arabic. Left to itself the
+  // line would turn around inside an otherwise LTR block.
+  const doc = '```js\n// مرحبا\n```';
+  const state = EditorState.create({ doc });
+  const decos = decorate(doc);
+  for (let n = 1; n <= 3; n++) {
+    assert.equal(dirAt(decos, state.doc.line(n).from), 'ltr', `code line ${n} stays LTR`);
+  }
+});
+
+test('revealing the markers on the active line does not turn the line around', () => {
+  // The URL is hidden while the cursor is elsewhere and shown once it lands on
+  // the line. Judged by *rendered* text this line would read RTL and then LTR,
+  // flipping sides — and taking the caret with it — on a click. Judged by the
+  // document it is LTR either way: the `h` of `https` is the first strong
+  // character and stays one whether or not it is on screen. Consistency is the
+  // point here, not which of the two directions wins.
+  const doc = '![](https://example.com) مرحبا';
+  const off = dirAt(decorate(doc + '\nx', doc.length + 2), 0); // cursor on line 2
+  const on = dirAt(decorate(doc + '\nx', 2), 0); // cursor inside the line
+  assert.equal(off, on, 'same direction whether the markers are hidden or shown');
+  // Which of the two wins is deliberately not pinned: today the URL decides, and
+  // teaching lineDirection to skip link destinations would be a defensible
+  // change. Flipping sides on a click would not be.
+});
+
+
+
+test('lineDirection leaves a line with no deciding character undecided', () => {
+  assert.equal(lineDirection(''), null, 'blank');
+  assert.equal(lineDirection('  ---  '), null, 'punctuation only');
+  assert.equal(lineDirection('12345'), null, 'digits are neutral');
+  assert.equal(lineDirection('٢٠٢٤ report'), 'ltr', 'Arabic-Indic digits too: \\p{Script=Arabic} alone would say rtl');
+  assert.equal(lineDirection('123 مرحبا'), 'rtl', 'digits do not preempt the letter');
+  assert.equal(lineDirection('**עברית**'), 'rtl', 'markup does not preempt it either');
+});
+
+
+test('an explicit direction mark wins, which is how you override the guess', () => {
+  // RLM / LRM are the standard way to state a line's direction when its first
+  // letter would get it wrong — a brand name opening an Arabic sentence.
+  assert.equal(lineDirection('\u200fGitHub مرحبا'), 'rtl', 'RLM forces right-to-left');
+  assert.equal(lineDirection('\u200eمرحبا'), 'ltr', 'LRM forces left-to-right');
+  assert.equal(lineDirection('\u061cمرحبا'), 'rtl', 'ALM, the Arabic-script variant');
+});
+
+
+test('ticking a task does not turn the item around', () => {
+  // The `x` in `- [x]` is a letter. Taken as content it decides the line before
+  // the Arabic does, so a tap on the checkbox would flip the item to the other
+  // side of the page — and untapping it would flip it back.
+  assert.equal(dirAt(decorate('- [ ] مرحبا'), 0), 'rtl', 'unticked');
+  assert.equal(dirAt(decorate('- [x] مرحبا'), 0), 'rtl', 'ticked');
+  assert.equal(dirAt(decorate('- [X] مرحبا'), 0), 'rtl', 'ticked, capital');
+  assert.equal(dirAt(decorate('1. مرحبا'), 0), 'rtl', 'ordered list marker');
+  assert.equal(dirAt(decorate('- [x] hello'), 0), 'ltr', 'and Latin text still reads LTR');
+});
+
+test('a line inside a quote that decides nothing takes the quote direction', () => {
+  // A bare `>` is how you separate two paragraphs inside one quote. With no
+  // direction of its own it would fall through to the page and swing the quote
+  // bar to the other side for that one line.
+  const doc = '> مرحبا\n>\n> 2024\n> وداعا';
+  const state = EditorState.create({ doc });
+  const decos = decorate(doc);
+  const dirs = [1, 2, 3, 4].map((n) => dirAt(decos, state.doc.line(n).from));
+  assert.deepEqual(dirs, ['rtl', 'rtl', 'rtl', 'rtl']);
+});
+
+
+test('a table reads in one direction, so its columns stay under their headers', () => {
+  // Per line, the mixed row would reverse its pipes and slide its cells one
+  // column over. Nothing styles tables here — the alignment is the pipes.
+  const doc = '| term | ترجمة |\n|---|---|\n| book | كتاب |\n| كتاب | book |';
+  const state = EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  const decos = decorate(doc);
+  const dirs = [1, 2, 3, 4].map((n) => dirAt(decos, state.doc.line(n).from));
+  assert.deepEqual(dirs, ['ltr', 'ltr', 'ltr', 'ltr'], 'the header decides for all of them');
+});
+
+test('an Arabic table reads right-to-left throughout', () => {
+  const doc = '| مصطلح | ترجمة |\n|---|---|\n| كتاب | book |';
+  const state = EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  const decos = decorate(doc);
+  assert.deepEqual(
+    [1, 2, 3].map((n) => dirAt(decos, state.doc.line(n).from)),
+    ['rtl', 'rtl', 'rtl'],
+  );
+});
+
+test('indented code is pinned on every line, not just its first', () => {
+  const doc = 'text\n\n    // مرحبا\n    const a = 1;\n    return a;\n';
+  const state = EditorState.create({ doc });
+  const decos = decorate(doc);
+  assert.deepEqual(
+    [3, 4, 5].map((n) => dirAt(decos, state.doc.line(n).from)),
+    ['ltr', 'ltr', 'ltr'],
+  );
+});
+
+
+test('every right-to-left script in the list is recognised', () => {
+  // A static list, so near-zero upkeep — and the one thing that stops a script
+  // being dropped from the regex unnoticed, which is how Hanifi Rohingya was
+  // missing for this feature's whole life until someone checked by hand.
+  for (const sample of ['مرحبا', 'שלום', '𞤀𞤣', '𐴀𐴌', 'ࡀࡁ', 'ߒߞߏ', 'ࠀࠁ', 'ܐܒ', 'ދިވެހި']) {
+    assert.equal(lineDirection(sample), 'rtl', sample);
+  }
+});
+
+test('a block decides only for lines that decide nothing themselves', () => {
+  // An English line inside an Arabic quote keeps its own direction — the quote
+  // is a fallback, not an override. Same for a list.
+  const quote = '> مرحبا\n> Hello world';
+  const qState = EditorState.create({ doc: quote });
+  assert.equal(dirAt(decorate(quote), qState.doc.line(2).from), 'ltr', 'line in a quote');
+
+  const list = '- عنصر\n- Hello world';
+  const lState = EditorState.create({ doc: list });
+  assert.equal(dirAt(decorate(list), lState.doc.line(2).from), 'ltr', 'item in a list');
+});
+
+test('a block whose first line decides nothing is read further down', () => {
+  // The quote opens with a bare `>`; its direction is on the line below. Taking
+  // only the first line would leave the whole quote undirected.
+  const doc = '>\n> مرحبا';
+  const state = EditorState.create({ doc });
+  const decos = decorate(doc);
+  assert.deepEqual(
+    [1, 2].map((n) => dirAt(decos, state.doc.line(n).from)),
+    ['rtl', 'rtl'],
+  );
+});
+
+test('the quote bar keeps one side for the whole quote', () => {
+  // A quote can hold lines of both directions — an English sentence among
+  // Arabic ones, a code block that is always left-to-right. Placed by each
+  // line's own direction, the bar would cross to the other side mid-quote.
+  const doc = '> مرحبا يا صديقي\n> This line is English.\n> ```\n> const a = 1;\n> ```';
+  const state = EditorState.create({ doc });
+  const decos = decorate(doc);
+  for (let n = 1; n <= state.doc.lines; n++) {
+    const line = state.doc.line(n);
+    const classes = decos
+      .filter((d) => d.from === line.from && d.spec.class)
+      .flatMap((d) => d.spec.class!.split(' '));
+    assert.ok(classes.includes('md-quote-rtl'), `line ${n} takes the quote's side`);
+  }
+  // And each line still reads in its own direction.
+  assert.equal(dirAt(decos, state.doc.line(1).from), 'rtl', 'the Arabic line');
+  assert.equal(dirAt(decos, state.doc.line(2).from), 'ltr', 'the English line');
+  assert.equal(dirAt(decos, state.doc.line(4).from), 'ltr', 'the code line');
+});
+
+test('an English quote keeps its bar on the left', () => {
+  assert.ok(withClass(decorate('> quoted\n> مرحبا', 0), 'md-quote-ltr'), 'ltr quote');
+  assert.ok(!withClass(decorate('> quoted\n> مرحبا', 0), 'md-quote-rtl'), 'and not the other side');
+});
+
+test('a quote takes its side from prose, not from the code above it', () => {
+  // `blockDirection` reads raw lines, and code is pinned left-to-right whatever
+  // it contains — so a quote opening with a fenced block would take its bar
+  // side from `const x = 1` and draw it on the far side of the Arabic below.
+  const doc = '> ```js\n> const x = 1;\n> ```\n> مرحبا';
+  assert.ok(withClass(decorate(doc), 'md-quote-rtl'), 'the prose decides');
+  assert.ok(!withClass(decorate(doc), 'md-quote-ltr'), 'not the code');
+});
+
+test('a quote with no letters at all still gets a side', () => {
+  assert.ok(withClass(decorate('> 123\n> 456'), 'md-quote-ltr'), 'falls back to the page');
+});
+
+test('a quote decides on a later line when its first says nothing', () => {
+  assert.ok(withClass(decorate('>\n> مرحبا'), 'md-quote-rtl'));
 });

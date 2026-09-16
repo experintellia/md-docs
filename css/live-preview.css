@@ -29,11 +29,20 @@
   border-bottom: 2px solid var(--border);
 }
 
-/* Blockquote */
+/* Blockquote. The bar's side is physical on purpose, and stated by the class
+   decorations.ts puts on every line of the quote: a logical side resolves
+   against each *line's* direction, and a quote holding both would draw its bar
+   on the left for some lines and the right for others. */
 .cm-line.md-quote {
-  border-inline-start: 3px solid var(--border);
-  padding-inline-start: 0.7em;
   color: var(--muted);
+}
+.cm-line.md-quote-ltr {
+  border-left: 3px solid var(--border);
+  padding-left: 0.7em;
+}
+.cm-line.md-quote-rtl {
+  border-right: 3px solid var(--border);
+  padding-right: 0.7em;
 }
 
 /* Fenced code block lines */

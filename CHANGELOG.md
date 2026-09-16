@@ -6,6 +6,29 @@ All notable changes to MD-Docs are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Right-to-left text. Each line is laid out in the direction of its own first
+  strong character, so an Arabic or Hebrew paragraph reads from the right while
+  an English one beside it stays on the left, and a note may mix the two freely.
+  Because the direction is known per line rather than assumed for the whole
+  editor, the caret and click-to-position follow the visual order in mixed text
+  instead of the logical one. Applies to the editor and to the rendered mode of
+  the history viewer.
+  - The direction comes from the document text, so revealing a line's markdown
+    markers by putting the cursor on it cannot turn that line around, and
+    neither can ticking a task in an Arabic list — block syntax is not content.
+  - A line with no letters of its own takes the direction of the quote or list
+    it sits in, so a `>` between two paragraphs, or an item you have just
+    opened with Enter, does not start at the far side and jump across on the
+    first keystroke.
+  - Code and tables read one way throughout: fenced and indented code stay
+    left-to-right whatever they contain, and a table follows its header, or a
+    single Arabic row would reverse its pipes and slide its cells under the
+    wrong columns.
+  - A blockquote's bar takes the quote's direction rather than each line's, so
+    it stays on one side even where the quote holds an English sentence among
+    Arabic ones, or a code block, which is always left-to-right.
+  - A selection spanning several lines is still drawn in the editor's own
+    direction — CodeMirror reads one direction for that.
 - Live-preview decorations now take their side from the text rather than from
   the page: the blockquote bar, the bullet's gap and the task checkbox's gap
   use the logical sides (`border-inline-start`, `padding-inline-start`,
