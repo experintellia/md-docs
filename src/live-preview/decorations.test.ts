@@ -45,9 +45,11 @@ function decorate(doc: string, cursor = 0): Deco[] {
   return out;
 }
 
-// A decoration with the given class.
+// A decoration carrying the given class. By token, not by the whole string: a
+// line decoration can hold several (`md-quote md-quote-rtl`), and the tests
+// that assert a class is *absent* rely on this too.
 function withClass(decos: Deco[], cls: string): Deco | undefined {
-  return decos.find((d) => d.spec.class === cls);
+  return decos.find((d) => d.spec.class?.split(' ').includes(cls));
 }
 
 // The plain "hidden" markers are Decoration.replace({}): a replace deco whose
@@ -537,4 +539,29 @@ test('a block whose first line decides nothing is read further down', () => {
     [1, 2].map((n) => dirAt(decos, state.doc.line(n).from)),
     ['rtl', 'rtl'],
   );
+});
+
+test('the quote bar keeps one side for the whole quote', () => {
+  // A quote can hold lines of both directions — an English sentence among
+  // Arabic ones, a code block that is always left-to-right. Placed by each
+  // line's own direction, the bar would cross to the other side mid-quote.
+  const doc = '> مرحبا يا صديقي\n> This line is English.\n> ```\n> const a = 1;\n> ```';
+  const state = EditorState.create({ doc });
+  const decos = decorate(doc);
+  for (let n = 1; n <= state.doc.lines; n++) {
+    const line = state.doc.line(n);
+    const classes = decos
+      .filter((d) => d.from === line.from && d.spec.class)
+      .flatMap((d) => d.spec.class!.split(' '));
+    assert.ok(classes.includes('md-quote-rtl'), `line ${n} takes the quote's side`);
+  }
+  // And each line still reads in its own direction.
+  assert.equal(dirAt(decos, state.doc.line(1).from), 'rtl', 'the Arabic line');
+  assert.equal(dirAt(decos, state.doc.line(2).from), 'ltr', 'the English line');
+  assert.equal(dirAt(decos, state.doc.line(4).from), 'ltr', 'the code line');
+});
+
+test('an English quote keeps its bar on the left', () => {
+  assert.ok(withClass(decorate('> quoted\n> مرحبا', 0), 'md-quote-ltr'), 'ltr quote');
+  assert.ok(!withClass(decorate('> quoted\n> مرحبا', 0), 'md-quote-rtl'), 'and not the other side');
 });

@@ -93,9 +93,9 @@ export function lineDirection(text: string): 'ltr' | 'rtl' | null {
 // `>` between paragraphs, the `- ` of an item just opened — so the line does
 // not sit at the far edge and jump across on the first keystroke.
 //
-// ponytail: a code block inside an RTL quote still holds lines of two
-// directions, and the per-line quote bar crosses sides for them; fixing that
-// means a direction class on the quote, not the line.
+// A code block inside a right-to-left quote therefore holds lines of two
+// directions. The quote bar copes with that — its side comes from the quote,
+// not from the line (see the md-quote-ltr / md-quote-rtl classes above).
 function directionAt(state: EditorState, line: Line): 'ltr' | 'rtl' | null {
   let own = lineDirection(line.text);
   // Resolved at the line's end, not its start: an indented code block begins
@@ -211,7 +211,15 @@ export function buildDecorations(view: EditorView): DecorationSet {
           if (name === 'Blockquote' && node.node.parent?.name === 'ListItem') {
             return;
           }
-          const cls = name === 'Blockquote' ? 'md-quote' : 'md-code-block';
+          // The quote's bar belongs to the quote, not to the line. A quote can
+          // hold lines of both directions — an English sentence among Arabic
+          // ones, a code block that is always left-to-right — and a bar placed
+          // by each line's own direction crosses to the other side in the
+          // middle of the quote. So the side is stated once, from the quote's
+          // direction, and every one of its lines carries it.
+          const cls = name === 'Blockquote'
+            ? `md-quote md-quote-${blockDirection(doc, node.from, node.to) ?? 'ltr'}`
+            : 'md-code-block';
           let pos = node.from;
           while (pos <= node.to) {
             const line = doc.lineAt(pos);

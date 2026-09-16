@@ -24,6 +24,9 @@ All notable changes to MD-Docs are documented here. This project adheres to
     left-to-right whatever they contain, and a table follows its header, or a
     single Arabic row would reverse its pipes and slide its cells under the
     wrong columns.
+  - A blockquote's bar takes the quote's direction rather than each line's, so
+    it stays on one side even where the quote holds an English sentence among
+    Arabic ones, or a code block, which is always left-to-right.
   - A selection spanning several lines is still drawn in the editor's own
     direction — CodeMirror reads one direction for that.
 - Live-preview decorations now take their side from the text rather than from

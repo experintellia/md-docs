@@ -17,6 +17,13 @@ const ALLOWED = [
   'left: 50%', // centring, paired with a translate(-50%)
   'border-width: 0 2px 2px 0', // the tick's shape; a checkmark does not mirror
   'right: 0.4em', // the copy button; fence lines are always ltr, so right trails
+  // The quote bar. Its side comes from the quote's direction, written out by
+  // decorations.ts as md-quote-ltr / md-quote-rtl — a logical side would
+  // resolve per line, and a quote may hold lines of both directions.
+  'border-left: 3px solid var(--border)',
+  'padding-left: 0.7em',
+  'border-right: 3px solid var(--border)',
+  'padding-right: 0.7em',
 ];
 
 test('live-preview styles take their sides from the text direction', () => {
