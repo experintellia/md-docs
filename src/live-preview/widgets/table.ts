@@ -1,4 +1,4 @@
-import { WidgetType } from '@codemirror/view';
+import { type EditorView, WidgetType } from '@codemirror/view';
 
 /** A run of cell text, carrying the class the live preview paints it with. */
 export interface Segment {
@@ -9,6 +9,8 @@ export interface Segment {
 }
 
 export interface TableSpec {
+  /** Where the table starts, so a tap can put the caret in its source. */
+  from: number;
   /** Header cells, then one array of cells per body row. */
   header: Segment[][];
   rows: Segment[][][];
@@ -39,7 +41,7 @@ export class TableWidget extends WidgetType {
     return other.spec.source === this.spec.source && other.spec.dir === this.spec.dir;
   }
 
-  override toDOM(): HTMLElement {
+  override toDOM(view: EditorView): HTMLElement {
     const { header, rows, align, dir } = this.spec;
     // The table is wrapped, and the wrapper carries the direction. A table's
     // own `dir` mirrors its columns but not its box: the box is placed by its
@@ -49,6 +51,15 @@ export class TableWidget extends WidgetType {
     const wrap = document.createElement('div');
     wrap.className = 'md-table-wrap';
     if (dir) wrap.setAttribute('dir', dir);
+    // A widget swallows its events, so a tap would leave the caret where it
+    // was and the table would never open. On a phone there is no arrow key to
+    // fall back on, so put the caret in the source here — except on a link,
+    // which has its own job.
+    wrap.addEventListener('mousedown', (event) => {
+      if ((event.target as Element | null)?.closest('a')) return;
+      event.preventDefault();
+      view.dispatch({ selection: { anchor: this.spec.from } });
+    });
 
     const table = wrap.appendChild(document.createElement('table'));
     table.className = 'md-table';
@@ -80,6 +91,8 @@ function node(segment: Segment): Node {
   el.className = segment.cls ?? '';
   el.textContent = segment.text;
   if (segment.href !== undefined) {
+    // A real href, so the link is focusable and a screen reader announces it.
+    (el as HTMLAnchorElement).href = segment.href;
     // The editor is contenteditable: a press would put the caret in the widget
     // instead of following the link, so open it here as the live preview does
     // for a link in ordinary text.
