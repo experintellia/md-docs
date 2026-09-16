@@ -565,3 +565,20 @@ test('an English quote keeps its bar on the left', () => {
   assert.ok(withClass(decorate('> quoted\n> مرحبا', 0), 'md-quote-ltr'), 'ltr quote');
   assert.ok(!withClass(decorate('> quoted\n> مرحبا', 0), 'md-quote-rtl'), 'and not the other side');
 });
+
+test('a quote takes its side from prose, not from the code above it', () => {
+  // `blockDirection` reads raw lines, and code is pinned left-to-right whatever
+  // it contains — so a quote opening with a fenced block would take its bar
+  // side from `const x = 1` and draw it on the far side of the Arabic below.
+  const doc = '> ```js\n> const x = 1;\n> ```\n> مرحبا';
+  assert.ok(withClass(decorate(doc), 'md-quote-rtl'), 'the prose decides');
+  assert.ok(!withClass(decorate(doc), 'md-quote-ltr'), 'not the code');
+});
+
+test('a quote with no letters at all still gets a side', () => {
+  assert.ok(withClass(decorate('> 123\n> 456'), 'md-quote-ltr'), 'falls back to the page');
+});
+
+test('a quote decides on a later line when its first says nothing', () => {
+  assert.ok(withClass(decorate('>\n> مرحبا'), 'md-quote-rtl'));
+});

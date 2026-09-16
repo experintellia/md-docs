@@ -6,6 +6,7 @@ GlobalRegistrator.register();
 const { EditorState } = await import('@codemirror/state');
 const { EditorView } = await import('@codemirror/view');
 const { livePreview } = await import('./index.ts');
+const { markdown, markdownLanguage } = await import('@codemirror/lang-markdown');
 after(() => GlobalRegistrator.unregister());
 
 // Tier 2: the direction decorations are only half the feature. Without
@@ -21,7 +22,12 @@ after(() => GlobalRegistrator.unregister());
 function editor(doc: string): InstanceType<typeof EditorView> {
   return new EditorView({
     parent: document.body,
-    state: EditorState.create({ doc, extensions: [livePreview()] }),
+    // With the markdown language: without a parser there is no syntax tree,
+    // and everything the preview derives from a block would be invisible here.
+    state: EditorState.create({
+      doc,
+      extensions: [markdown({ base: markdownLanguage }), livePreview()],
+    }),
   });
 }
 

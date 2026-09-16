@@ -45,3 +45,13 @@ test('live-preview styles take their sides from the text direction', () => {
 
   assert.deepEqual(offenders, [], 'use inline-start / inline-end so RTL lines mirror');
 });
+
+test('the quote bar is stated on both side classes', () => {
+  // The class alone fixes nothing: the side has to be in the stylesheet, and
+  // physically, since a logical one resolves against each line's direction.
+  // Reverting the CSS to a logical side used to pass every test.
+  const rule = (selector: string): string =>
+    new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+  assert.match(rule('.cm-line.md-quote-ltr'), /border-left:\s*3px/, 'left bar for an LTR quote');
+  assert.match(rule('.cm-line.md-quote-rtl'), /border-right:\s*3px/, 'right bar for an RTL quote');
+});

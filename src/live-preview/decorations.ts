@@ -1,5 +1,5 @@
 import { syntaxTree } from '@codemirror/language';
-import { type EditorState, type Line, type Range, type Text } from '@codemirror/state';
+import { type EditorState, type Line, type Range } from '@codemirror/state';
 import {
   Decoration,
   type DecorationSet,
@@ -61,19 +61,37 @@ const DECIDES = /[\p{L}\u200e\u200f\u061c]/u;
 const BLOCK_MARKERS = /^[\s>]*(?:[-*+]|\d+[.)])?\s*(?:\[[ xX]\])?\s*/;
 const RTL = /[\u200f\u061c\p{Script=Adlam}\p{Script=Arabic}\p{Script=Hanifi_Rohingya}\p{Script=Hebrew}\p{Script=Mandaic}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Syriac}\p{Script=Thaana}]/u;
 
+// Is this line inside a code block? Code is pinned left-to-right whatever it
+// contains, so it cannot speak for the block around it.
+function isCode(state: EditorState, line: Line): boolean {
+  for (let n = syntaxTree(state).resolveInner(line.to, -1); ; n = n.parent) {
+    if (n.name === 'FencedCode' || n.name === 'CodeBlock') return true;
+    if (!n.parent) return false;
+  }
+}
+
 /**
- * The direction a block reads in: the first of its lines that decides one.
+ * The direction a block reads in: the first of its lines that decides one,
+ * skipping the ones inside code. A quote opening with a fenced block would
+ * otherwise take its direction from `const x = 1`, and draw its bar on the far
+ * side of the Arabic prose below it.
  *
  * Scanned line by line rather than over one slice of the whole block — a table
  * or an indented block thousands of lines long would be copied out and scanned
- * end to end on every rebuild, and rebuilds happen on every caret move. The
- * answer is almost always on the first line.
+ * end to end on every rebuild, and rebuilds happen on every caret move.
+ *
+ * ponytail: it gives up after 200 lines. A block that has said nothing by then
+ * is a wall of digits, and scanning it per undecided line is quadratic; the
+ * answer is on the first line in anything anyone writes.
  */
-function blockDirection(doc: Text, from: number, to: number): 'ltr' | 'rtl' | null {
-  for (let pos = from; pos <= to;) {
+function blockDirection(state: EditorState, from: number, to: number): 'ltr' | 'rtl' | null {
+  const doc = state.doc;
+  for (let pos = from, seen = 0; pos <= to && seen < 200; seen++) {
     const line = doc.lineAt(pos);
-    const dir = lineDirection(line.text);
-    if (dir) return dir;
+    if (!isCode(state, line)) {
+      const dir = lineDirection(line.text);
+      if (dir) return dir;
+    }
     pos = line.to + 1;
   }
   return null;
@@ -102,9 +120,9 @@ function directionAt(state: EditorState, line: Line): 'ltr' | 'rtl' | null {
   // after the indent, so the first column is not inside it.
   for (let n = syntaxTree(state).resolveInner(line.to, -1); ; n = n.parent) {
     if (n.name === 'FencedCode' || n.name === 'CodeBlock') return 'ltr';
-    if (n.name === 'Table') return blockDirection(state.doc, n.from, n.to);
+    if (n.name === 'Table') return blockDirection(state, n.from, n.to);
     if (!own && /^(?:Blockquote|BulletList|OrderedList)$/.test(n.name)) {
-      own = blockDirection(state.doc, n.from, n.to);
+      own = blockDirection(state, n.from, n.to);
     }
     if (!n.parent) return own;
   }
@@ -217,8 +235,12 @@ export function buildDecorations(view: EditorView): DecorationSet {
           // by each line's own direction crosses to the other side in the
           // middle of the quote. So the side is stated once, from the quote's
           // direction, and every one of its lines carries it.
+          //
+          // A quote nested in one of the opposite direction therefore draws
+          // both bars on its lines, which reads as a box around the inner
+          // quote. Fine, and better than a spine that breaks.
           const cls = name === 'Blockquote'
-            ? `md-quote md-quote-${blockDirection(doc, node.from, node.to) ?? 'ltr'}`
+            ? `md-quote md-quote-${blockDirection(state, node.from, node.to) ?? 'ltr'}`
             : 'md-code-block';
           let pos = node.from;
           while (pos <= node.to) {
