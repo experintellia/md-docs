@@ -5,6 +5,8 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-16
+
 ### Added
 - Separator lines: three or more minuses on their own line (`---`,
   `----------`, spaced `- - -`) now render as a horizontal rule, with the raw
