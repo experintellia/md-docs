@@ -69,7 +69,11 @@ export const toggleChecklist: Command = (view) => {
   const line = state.doc.lineAt(state.selection.main.head);
   const text = line.text;
 
-  const task = /^(\s*[-*+] )\[([ xX])\] /.exec(text);
+  // `(?=[ \t]|$)`, not a literal space: an empty task item sits at the end of
+  // the line (`- [ ]`) with no trailing space, and matching only the spaced
+  // form made this insert a second checkbox instead of ticking the first.
+  // A tab after the box is a task item per GFM too.
+  const task = /^(\s*[-*+] )\[([ xX])\](?=[ \t]|$)/.exec(text);
   if (task) {
     const checked = task[2] !== ' ';
     const stateCharPos = line.from + task[1].length + 1; // char inside the [ ]
@@ -117,7 +121,7 @@ export const toggleBullet: Command = (view) => {
   const text = line.text;
 
   // Task item: drop only the "[ ] " checkbox, leaving a plain bullet.
-  const task = /^(\s*[-*+] )(\[[ xX]\] )/.exec(text);
+  const task = /^(\s*[-*+] )(\[[ xX]\](?:[ \t]|$))/.exec(text);
   if (task) {
     const from = line.from + task[1].length;
     view.dispatch({ changes: { from, to: from + task[2].length, insert: '' } });

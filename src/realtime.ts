@@ -56,8 +56,17 @@ export function connectRealtime(ydoc: Y.Doc, awareness: Awareness): void {
     // get queued by the persistent provider, which would re-publish a peer's
     // edits to the chat under OUR name and fire a spurious "updated the
     // document" notification the moment a peer opens the app or types.
-    if (data[0] === DOC) Y.applyUpdate(ydoc, body, ydoc.clientID);
-    else applyAwarenessUpdate(awareness, body, channel);
+    try {
+      if (data[0] === DOC) Y.applyUpdate(ydoc, body, ydoc.clientID);
+      else applyAwarenessUpdate(awareness, body, channel);
+    } catch (err) {
+      // Unauthenticated peer bytes: a truncated or foreign frame throws out of
+      // the decoder. Drop it — the durable persistent channel still carries the
+      // real document, so there is nothing to recover here. Logged, not silent:
+      // a framing bug of our own would otherwise surface only as peer
+      // divergence, which no bug report can explain.
+      console.warn('realtime: dropped an undecodable frame', err);
+    }
   });
 
   ydoc.on('update', (update: Uint8Array, origin: unknown) => {

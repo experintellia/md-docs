@@ -117,6 +117,9 @@ export function setupHistory(real: typeof window.webxdc): History {
     configurable: true,
     value: (cb: (u: { payload: HistPayload }) => void, serial?: number) => {
       const wrapped = (u: { payload: HistPayload }): void => {
+        // The provider first: history is bookkeeping, and a throw from one of
+        // our onChange listeners must not stop the document itself from syncing.
+        cb(u);
         const p = u.payload;
         if (typeof p?.serializedYjsUpdate === 'string') {
           records.push({
@@ -127,7 +130,6 @@ export function setupHistory(real: typeof window.webxdc): History {
           });
           emit();
         }
-        cb(u);
       };
       replayed = Promise.resolve(
         (real.setUpdateListener as typeof real.setUpdateListener)(wrapped as never, serial),
@@ -147,7 +149,15 @@ export function setupHistory(real: typeof window.webxdc): History {
       const out: HistoryVersion[] = [];
       let prev = '';
       for (const r of records) {
-        Y.applyUpdateV2(doc, b64ToBytes(r.blob));
+        try {
+          Y.applyUpdateV2(doc, b64ToBytes(r.blob));
+        } catch {
+          // A batch we cannot decode (truncated, or written by some other
+          // app/format sharing the channel) skips its row rather than throwing
+          // the whole timeline away — versions() is called from the update
+          // listener, so one bad record would otherwise be permanent.
+          continue;
+        }
         const text = doc.getText('codemirror').toString();
         if (text === prev) continue; // drop consecutive no-op batches
         const { added, removed } = charDiff(prev, text);
