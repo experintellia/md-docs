@@ -4,10 +4,11 @@ import { EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-import { buildDecorations, lineDirection } from './decorations.ts';
+import { buildDecorations, buildTables, lineDirection } from './decorations.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
+import { TableWidget } from './widgets/table.ts';
 
 // Tier 2: live-preview decoration builder. `buildDecorations` reads only
 // `view.state` and `view.visibleRanges`, never the DOM, so a fake view drives
@@ -564,6 +565,59 @@ test('the quote bar keeps one side for the whole quote', () => {
 test('an English quote keeps its bar on the left', () => {
   assert.ok(withClass(decorate('> quoted\n> مرحبا', 0), 'md-quote-ltr'), 'ltr quote');
   assert.ok(!withClass(decorate('> quoted\n> مرحبا', 0), 'md-quote-rtl'), 'and not the other side');
+// The rendered table, if one replaced the block. Tables come from a state
+// field rather than the view plugin — CodeMirror only takes block decorations
+// from a field — so they are built from the state alone, with no fake view.
+function tableWidget(doc: string, cursor = 0): TableWidget | undefined {
+  const state = EditorState.create({
+    doc,
+    selection: { anchor: cursor },
+    extensions: [markdown({ base: markdownLanguage })],
+  });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  let found: TableWidget | undefined;
+  buildTables(state).between(0, state.doc.length, (_f, _t, deco) => {
+    const widget = (deco.spec as { widget?: unknown }).widget;
+    if (widget instanceof TableWidget) found = widget;
+  });
+  return found;
+}
+
+const TABLE = '| term | ترجمة |\n|:---|---:|\n| **book** | كتاب |';
+
+test('a table renders while the cursor is elsewhere', () => {
+  const widget = tableWidget(`text\n\n${TABLE}`);
+  assert.ok(widget, 'the block is replaced');
+  assert.deepEqual(widget!.spec.align, ['start', 'end'], 'alignment from the delimiter row');
+  // TableCell excludes the padding around it, so the cells arrive trimmed.
+  assert.equal(widget!.spec.header.map((c) => c.map((s) => s.text).join('')).join('|'), 'term|ترجمة');
+});
+
+test('a table shows its source as soon as the selection touches it', () => {
+  // Same rule the inline markers follow, over a range instead of a line.
+  assert.equal(tableWidget(TABLE, 2), undefined, 'cursor in the header');
+  assert.equal(tableWidget(TABLE, TABLE.length), undefined, 'cursor in the last row');
+  assert.ok(tableWidget(`${TABLE}\n\nafter`, TABLE.length + 3), 'cursor below it');
+});
+
+test('cell contents keep the classes the rest of the preview paints with', () => {
+  const widget = tableWidget(`text\n\n${TABLE}`)!;
+  const cell = widget.spec.rows[0][0];
+  assert.deepEqual(cell, [{ text: 'book', cls: 'md-strong' }], 'the ** markers are gone, the class is not');
+});
+
+test('a link in a cell becomes a link, not its source', () => {
+  const doc = 'x\n\n| a |\n|---|\n| [docs](example.com) |';
+  const widget = tableWidget(doc)!;
+  assert.deepEqual(widget.spec.rows[0][0], [
+    { text: 'docs', cls: 'md-link', href: 'https://example.com' },
+  ]);
+});
+
+test('a table takes its own direction', () => {
+  const rtl = 'x\n\n| مصطلح | ترجمة |\n|---|---|\n| كتاب | book |';
+  assert.equal(tableWidget(rtl)!.spec.dir, 'rtl');
+  assert.equal(tableWidget(`x\n\n${TABLE}`)!.spec.dir, 'ltr');
 });
 
 test('a quote takes its side from prose, not from the code above it', () => {

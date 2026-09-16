@@ -145,3 +145,23 @@
 @media (pointer: coarse) {
   .md-task-checkbox { font-size: 1.35em; }
 }
+
+/* Rendered table. Replaces the source block while the cursor is elsewhere, so
+   the columns line up without the markdown being padded by hand. */
+.md-table {
+  border-collapse: collapse;
+  margin: 0.4em 0;
+  font-size: 0.95em;
+}
+.md-table th,
+.md-table td {
+  border: 1px solid var(--border);
+  /* Asymmetric on purpose: rows read denser than they do square. */
+  padding: 0.25em 0.6em;
+  /* The table carries its own dir, so `start` is its leading edge. */
+  text-align: start;
+}
+.md-table th {
+  background: var(--toolbar-bg);
+  font-weight: 600;
+}

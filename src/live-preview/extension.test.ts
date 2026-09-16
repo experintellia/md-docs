@@ -41,3 +41,36 @@ test('livePreview reads direction per line and puts it on the rendered line', ()
     view.destroy();
   }
 });
+
+test('a table reaches the DOM as a table', () => {
+  // The point of the widget: real rows and cells, so the columns line up
+  // without the markdown being padded by hand, and a screen reader is handed a
+  // table rather than a line of pipes.
+  const view = editor('text\n\n| term | ترجمة |\n|:---|---:|\n| **book** | كتاب |');
+  try {
+    const table = view.contentDOM.querySelector('table.md-table')!;
+    assert.ok(table, 'rendered as a table element');
+    assert.equal(table.getAttribute('dir'), 'ltr', 'the table carries its direction');
+    assert.deepEqual(
+      [...table.querySelectorAll('thead th')].map((c) => c.textContent),
+      ['term', 'ترجمة'],
+    );
+    assert.deepEqual(
+      [...table.querySelectorAll('tbody td')].map((c) => c.textContent),
+      ['book', 'كتاب'],
+    );
+    assert.deepEqual(
+      [...table.querySelectorAll('thead th')].map((c) => (c as HTMLElement).style.textAlign),
+      ['start', 'end'],
+      'alignment comes from the delimiter row, logically so RTL mirrors it',
+    );
+    assert.equal(table.querySelector('tbody .md-strong')?.textContent, 'book', 'bold survives as a class');
+    assert.equal(
+      [...view.contentDOM.querySelectorAll('.cm-line')].filter((l) => l.textContent!.includes('|')).length,
+      0,
+      'the pipes are gone: the block is replaced, not decorated',
+    );
+  } finally {
+    view.destroy();
+  }
+});
