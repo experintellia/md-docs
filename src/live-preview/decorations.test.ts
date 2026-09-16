@@ -669,3 +669,97 @@ test('an escaped pipe shows the pipe, not the backslash', () => {
   const widget = tableWidget('x\n\n| a |\n|---|\n| p \\| q |')!;
   assert.equal(widget.spec.rows[0][0].map((s) => s.text).join(''), 'p | q');
 });
+
+// --- Link destinations ------------------------------------------------------
+// The document is shared over chat, so a link's destination is peer-supplied
+// and ends up in `window.open()` (see linkClickHandler). Only http(s)/mailto
+// may become a clickable data-href.
+
+function dataHref(doc: string, cursor: number): string | undefined {
+  return withClass(decorate(doc, cursor), 'md-link')?.spec.attributes?.['data-href'];
+}
+
+test('a javascript: destination never becomes a clickable data-href', () => {
+  const decos = decorate('[click me](javascript:alert(1))\nbody', 33);
+  const link = withClass(decos, 'md-link');
+  assert.ok(link, 'still styled as a link');
+  assert.equal(link!.spec.attributes, undefined, 'but not openable');
+});
+
+test('a data: destination never becomes a clickable data-href', () => {
+  assert.equal(dataHref('[x](data:text/html,<script>1</script>)\nbody', 42), undefined);
+});
+
+test('a relative / fragment destination is not opened', () => {
+  assert.equal(dataHref('[x](/foo.md)\nbody', 14), undefined);
+  assert.equal(dataHref('[x](#section)\nbody', 15), undefined);
+});
+
+test('http(s) destinations still pass through untouched', () => {
+  assert.equal(dataHref('[x](https://a.example/p?q=1#f)\nbody', 31), 'https://a.example/p?q=1#f');
+  assert.equal(dataHref('[x](http://a.example)\nbody', 23), 'http://a.example');
+});
+
+test('a mailto: autolink keeps its own scheme', () => {
+  // `https://mailto:a@b.com` was the old output — withScheme only recognised
+  // schemes written with `://`.
+  assert.equal(dataHref('<mailto:a@b.com>\nbody', 18), 'mailto:a@b.com');
+  assert.equal(dataHref('[mail me](mailto:a@b.com)\nbody', 27), 'mailto:a@b.com');
+});
+
+test('a bare email autolink is opened as mailto:, not https://', () => {
+  assert.equal(dataHref('write to a@b.com now\nbody', 22), 'mailto:a@b.com');
+});
+
+// --- Other markup -----------------------------------------------------------
+
+test('a link inside a table cell is held to the same scheme allow-list', () => {
+  // The table path is a separate call site, and a riskier one: the cell builds
+  // a real <a href> as well as calling window.open(), so a `javascript:` URL
+  // would be live on plain keyboard activation, not just the click handler.
+  const cellHref = (dest: string): string | undefined =>
+    tableWidget(`x\n\n| a |\n|---|\n| [t](${dest}) |`)!.spec.rows[0][0]
+      .find((seg) => seg.cls === 'md-link')?.href;
+
+  assert.equal(cellHref('https://example.com'), 'https://example.com');
+  assert.equal(cellHref('mailto:a@b.com'), 'mailto:a@b.com');
+  assert.equal(cellHref('javascript:alert(1)'), undefined, 'javascript: is not openable');
+  assert.equal(cellHref('/relative'), undefined, 'a relative path is not openable');
+});
+
+test('an ordered list keeps its number (no bullet widget swallows it)', () => {
+  const decos = decorate('1. one\nbody', 8);
+  assert.ok(
+    !decos.some((d) => d.spec.widget instanceof BulletWidget),
+    'ListMark `1.` is left alone',
+  );
+});
+
+test('strikethrough gets md-strike', () => {
+  assert.ok(withClass(decorate('top\n~~x~~', 0), 'md-strike'), 'md-strike mark');
+});
+
+test('a selection spanning several lines reveals the markup on all of them', () => {
+  // lineHasSelection tests each line against every range, so a drag across two
+  // headings must un-hide both — hiding markup mid-selection shifts the text
+  // out from under the pointer.
+  const state = EditorState.create({
+    doc: '# a\n# b',
+    selection: { anchor: 0, head: 7 },
+    extensions: [markdown({ base: markdownLanguage })],
+  });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: state.doc.length }],
+  } as unknown as EditorView;
+  const out: Deco[] = [];
+  buildDecorations(view).between(0, state.doc.length, (from, to, deco) => {
+    out.push({ from, to, spec: deco.spec as Deco['spec'] });
+  });
+  assert.equal(hiddenMarkers(out).length, 0, 'nothing hidden under the selection');
+});
+
+test('an empty document produces no decorations and does not throw', () => {
+  assert.deepEqual(decorate(''), []);
+});

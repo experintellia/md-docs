@@ -114,3 +114,45 @@ test('bullet <-> checklist convert into each other (toolbar buttons are inverses
   assert.equal(run(toggleChecklist, '- hi|').doc, '- [ ] hi'); // list -> checkbox
   assert.equal(run(toggleBullet, '- [ ] hi|').doc, '- hi');    // checkbox -> list
 });
+
+// --- Edge cases -------------------------------------------------------------
+
+test('an empty task item (no trailing space) ticks instead of doubling the box', () => {
+  // `- [ ]` at the end of a line has no space after the bracket. Requiring one
+  // made toggleChecklist fall through to the "bullet" branch and insert a
+  // SECOND checkbox (`- [ ] [ ]`), and toggleBullet strip the bullet instead
+  // of the box (`[ ]`).
+  assert.equal(run(toggleChecklist, '- [ ]|').doc, '- [x]');
+  assert.equal(run(toggleChecklist, '- [x]|').doc, '- [ ]');
+  assert.equal(run(toggleBullet, '- [ ]|').doc, '- ');
+  assert.equal(run(toggleBullet, '  - [x]|').doc, '  - '); // indent kept
+});
+
+test('a tab after the checkbox is a task marker too (GFM allows it)', () => {
+  assert.equal(run(toggleChecklist, '- [ ]\thi|').doc, '- [x]\thi');
+  assert.equal(run(toggleBullet, '- [ ]\thi|').doc, '- hi'); // box + tab removed
+});
+
+test('`- [ ]x` is not a task marker (needs a space or the line end after it)', () => {
+  assert.equal(run(toggleBullet, '- [ ]x|').doc, '[ ]x'); // plain bullet, box is text
+});
+
+test('toggleWrap at the document edges wraps without reading out of bounds', () => {
+  // range.from - 2 is negative at position 0, range.to + 2 past the end at the
+  // last position; sliceDoc must be allowed to clamp rather than mis-detect.
+  assert.equal(show(run(toggleBold, '|ab')), '**|**ab');
+  assert.equal(show(run(toggleBold, 'ab|')), 'ab**|**');
+  assert.equal(show(run(toggleBold, '«ab»')), '**«ab»**');
+});
+
+test('cycleHeading resets H4-H6 (typed by hand) back to plain text', () => {
+  assert.equal(run(cycleHeading, '#### hi|').doc, 'hi');
+  assert.equal(run(cycleHeading, '###### hi|').doc, 'hi');
+  // Seven hashes is not a heading at all, so it gains one.
+  assert.equal(run(cycleHeading, '####### hi|').doc, '# ####### hi');
+});
+
+test('toggleChecklist keeps indentation when creating a task', () => {
+  assert.equal(show(run(toggleChecklist, '  hi|')), '  - [ ] |hi');
+  assert.equal(show(run(toggleChecklist, '  * hi|')), '  * [ ] |hi');
+});
