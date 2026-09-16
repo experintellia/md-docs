@@ -161,6 +161,11 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
     if (child.from > pos) out.push({ text: doc.sliceString(pos, child.from), cls });
     pos = child.to;
     if (HIDDEN_MARKS.has(child.name) || child.name === 'URL') continue;
+    if (child.name === 'Escape') {
+      // `\|` is the only way to put a pipe in a cell; show the pipe, not both.
+      out.push({ text: doc.sliceString(child.from + 1, child.to), cls });
+      continue;
+    }
     if (child.name === 'Link') {
       const url = linkUrl(doc.sliceString(child.from, child.to));
       const text = cellSegments(child, doc, cls).map((s) => s.text).join('');
@@ -171,6 +176,29 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
   }
   if (pos < cell.to) out.push({ text: doc.sliceString(pos, cell.to), cls });
   return out.filter((s) => s.text !== '' || s.href !== undefined);
+}
+
+// A row's cells, empty ones included. The parser emits a TableCell only where
+// there is content, so `| 1 |   | 3 |` would arrive as two cells and slide `3`
+// under the second column — silent, and invisible in a view that hides the
+// source. The pipes are the truth, so the cells are read between them.
+function rowCells(row: SyntaxNodeLike, doc: Text): Segment[][] {
+  const cells: Segment[][] = [];
+  let openedAt: number | null = null;
+  for (let child = row.firstChild; child; child = child.nextSibling) {
+    if (child.name === 'TableCell') {
+      cells.push(cellSegments(child, doc));
+      openedAt = null;
+      continue;
+    }
+    if (child.name !== 'TableDelimiter') continue;
+    // Two pipes with nothing but space between them: an empty cell.
+    if (openedAt !== null && doc.sliceString(openedAt, child.from).trim() === '') {
+      cells.push([]);
+    }
+    openedAt = child.to;
+  }
+  return cells;
 }
 
 // `|:---|---:|:---:|` -> one alignment per column.
@@ -473,20 +501,27 @@ export function buildTables(state: EditorState): DecorationSet {
           if (row.to - row.from > 1) align = columnAlignment(doc.sliceString(row.from, row.to));
           continue;
         }
-        const cells: Segment[][] = [];
-        for (let cell = row.firstChild; cell; cell = cell.nextSibling) {
-          if (cell.name === 'TableCell') cells.push(cellSegments(cell, doc));
-        }
+        // Only real rows: inside a blockquote the parser hangs a QuoteMark on
+        // the table for every line, and those are not rows.
+        if (row.name !== 'TableHeader' && row.name !== 'TableRow') continue;
+        const cells = rowCells(row, doc);
         if (row.name === 'TableHeader') header = cells;
         else rows.push(cells);
       }
+      // GFM sizes every row by the header: a short row is padded, a long one
+      // is cut. Without that a ragged row would grow a column of its own and
+      // push the table out of shape.
+      const width = header.length;
+      const sized = rows.map((row) => Array.from({ length: width }, (_, i) => row[i] ?? []));
+
       ranges.push(
         Decoration.replace({
           widget: new TableWidget({
+            from: node.from,
             header,
-            rows,
+            rows: sized,
             align,
-            dir: blockDirection(doc, node.from, node.to),
+            dir: blockDirection(state, node.from, node.to),
             source: doc.sliceString(node.from, node.to),
           }),
           block: true,
@@ -501,7 +536,13 @@ export function buildTables(state: EditorState): DecorationSet {
 export const tableField = StateField.define<DecorationSet>({
   create: (state) => buildTables(state),
   update: (value, tr) => (
-    tr.docChanged || tr.selection ? buildTables(tr.state) : value
+    // The tree too: the parser only reaches the first few thousand characters
+    // up front and finishes in the background, and that transaction carries
+    // neither a document change nor a selection. Without this a table further
+    // down stays raw pipes until something else happens to touch the editor.
+    tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState)
+      ? buildTables(tr.state)
+      : value
   ),
   provide: (field) => EditorView.decorations.from(field),
 });
@@ -522,7 +563,11 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
       if (
         update.docChanged ||
         update.viewportChanged ||
-        update.selectionSet
+        update.selectionSet ||
+        // See tableField: the background parse arrives on its own transaction.
+        // Long-standing — bold past the first few thousand characters did not
+        // render either until something else redrew.
+        syntaxTree(update.state) !== syntaxTree(update.startState)
       ) {
         this.decorations = buildDecorations(update.view);
       }

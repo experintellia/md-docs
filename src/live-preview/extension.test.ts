@@ -7,6 +7,8 @@ const { EditorState } = await import('@codemirror/state');
 const { EditorView } = await import('@codemirror/view');
 const { livePreview } = await import('./index.ts');
 const { markdown, markdownLanguage } = await import('@codemirror/lang-markdown');
+const { ensureSyntaxTree } = await import('@codemirror/language');
+const { tableField } = await import('./decorations.ts');
 after(() => GlobalRegistrator.unregister());
 
 // Tier 2: the direction decorations are only half the feature. Without
@@ -87,6 +89,27 @@ test('an Arabic table is placed from the right, not just mirrored inside', () =>
     const wrap = view.contentDOM.querySelector('.md-table-wrap')!;
     assert.equal(wrap.getAttribute('dir'), 'rtl', 'the wrapper is what places it');
     assert.ok(wrap.querySelector('table.md-table'), 'the table sits inside the wrapper');
+  } finally {
+    view.destroy();
+  }
+});
+
+test('a table past the first parse chunk renders without being touched', () => {
+  // CodeMirror parses only the first few thousand characters up front and
+  // finishes in the background. That transaction carries neither a document
+  // change nor a selection, so a field watching only those two would leave a
+  // table further down as raw pipes until something else redrew the editor.
+  const filler = 'Some ordinary paragraph of prose.\n\n'.repeat(120);
+  const view = editor(`${filler}| a | b |\n|---|---|\n| 1 | 2 |`);
+  try {
+    assert.ok(
+      view.state.doc.length > 3000,
+      'the table is past the initial parse window, or this proves nothing',
+    );
+    // Let the background parse land, then look without touching the editor.
+    ensureSyntaxTree(view.state, view.state.doc.length, 5000);
+    view.dispatch({});
+    assert.ok(view.state.field(tableField).size > 0, 'the table is rendered');
   } finally {
     view.destroy();
   }

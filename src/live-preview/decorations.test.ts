@@ -638,3 +638,34 @@ test('a quote with no letters at all still gets a side', () => {
 test('a quote decides on a later line when its first says nothing', () => {
   assert.ok(withClass(decorate('>\n> مرحبا'), 'md-quote-rtl'));
 });
+
+test('an empty cell stays a cell instead of sliding the next one over', () => {
+  // The parser emits a TableCell only where there is content, so reading the
+  // nodes alone would put `3` under the second column — silently, in a view
+  // that hides the source.
+  const widget = tableWidget('x\n\n| a | b | c |\n|---|---|---|\n| 1 |   | 3 |')!;
+  assert.deepEqual(
+    widget.spec.rows[0].map((cell) => cell.map((s) => s.text).join('')),
+    ['1', '', '3'],
+  );
+});
+
+test('a row is sized by the header, short or long', () => {
+  // GFM pads a short row and cuts a long one; otherwise a ragged row grows a
+  // column of its own and the table loses its shape.
+  const widget = tableWidget('x\n\n| a | b |\n|---|---|\n| 1 |\n| 1 | 2 | 3 |')!;
+  assert.deepEqual(widget.spec.rows.map((r) => r.length), [2, 2]);
+});
+
+test('a table in a blockquote has no phantom rows', () => {
+  // Inside a quote the parser hangs a QuoteMark on the table for every line,
+  // and those are not rows.
+  const widget = tableWidget('x\n\n> | a | b |\n> |---|---|\n> | 1 | 2 |')!;
+  assert.deepEqual(widget.spec.rows.map((r) => r.map((c) => c.map((s) => s.text).join(''))), [['1', '2']]);
+});
+
+test('an escaped pipe shows the pipe, not the backslash', () => {
+  // `\\|` is the only way to put a pipe in a cell.
+  const widget = tableWidget('x\n\n| a |\n|---|\n| p \\| q |')!;
+  assert.equal(widget.spec.rows[0][0].map((s) => s.text).join(''), 'p | q');
+});

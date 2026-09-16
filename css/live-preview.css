@@ -151,6 +151,12 @@
    direction reads from — no auto-margin arithmetic to get backwards. */
 .md-table-wrap {
   display: flex;
+  /* A wide table would otherwise overflow into .cm-scroller and pan the whole
+     editor sideways — on a phone, where that is hard to undo. */
+  overflow-x: auto;
+  /* Line up with the text: CodeMirror pads .cm-line, a block widget is on its
+     own. */
+  padding-inline-start: 6px;
 }
 
 /* Rendered table. Replaces the source block while the cursor is elsewhere, so
