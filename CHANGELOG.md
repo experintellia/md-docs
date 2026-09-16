@@ -5,6 +5,8 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-16
+
 ### Added
 - Right-to-left text. Each line is laid out in the direction of its own first
   strong character, so an Arabic or Hebrew paragraph reads from the right while
