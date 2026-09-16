@@ -36,8 +36,8 @@ All notable changes to MD-Docs are documented here. This project adheres to
   `:---`, `:---:` and `---:` set the column's alignment. Cell contents keep the
   formatting the rest of the editor paints — bold, italic, inline code,
   strikethrough — and a link in a cell is a link rather than its source. The
-  table carries its own text direction, so an Arabic table reads from the right
-  with its alignment mirrored. Screen readers are handed a real table instead
+  table carries its own text direction, so an Arabic table is placed at the
+  right and reads from there, with its columns and alignment mirrored. Screen readers are handed a real table instead
   of a row of pipes.
 - Live-preview decorations now take their side from the text rather than from
   the page: the blockquote bar, the bullet's gap and the task checkbox's gap

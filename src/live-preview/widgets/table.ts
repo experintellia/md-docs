@@ -41,15 +41,23 @@ export class TableWidget extends WidgetType {
 
   override toDOM(): HTMLElement {
     const { header, rows, align, dir } = this.spec;
-    const table = document.createElement('table');
+    // The table is wrapped, and the wrapper carries the direction. A table's
+    // own `dir` mirrors its columns but not its box: the box is placed by its
+    // parent, and .cm-content reads left-to-right, so an Arabic table would
+    // hug the left edge with its columns reversed inside. A flex wrapper in
+    // the table's own direction starts it from the edge the table reads from.
+    const wrap = document.createElement('div');
+    wrap.className = 'md-table-wrap';
+    if (dir) wrap.setAttribute('dir', dir);
+
+    const table = wrap.appendChild(document.createElement('table'));
     table.className = 'md-table';
-    if (dir) table.setAttribute('dir', dir);
 
     const head = table.appendChild(document.createElement('thead'));
     head.appendChild(this.row(header, align, 'th'));
     const body = table.appendChild(document.createElement('tbody'));
     for (const row of rows) body.appendChild(this.row(row, align, 'td'));
-    return table;
+    return wrap;
   }
 
   private row(cells: Segment[][], align: TableSpec['align'], tag: 'th' | 'td'): HTMLElement {

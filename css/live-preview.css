@@ -146,6 +146,13 @@
   .md-task-checkbox { font-size: 1.35em; }
 }
 
+/* The wrapper places the table's box; the table itself only mirrors what is
+   inside it. Flex, so the single item starts at the edge the wrapper's own
+   direction reads from — no auto-margin arithmetic to get backwards. */
+.md-table-wrap {
+  display: flex;
+}
+
 /* Rendered table. Replaces the source block while the cursor is elsewhere, so
    the columns line up without the markdown being padded by hand. */
 .md-table {
