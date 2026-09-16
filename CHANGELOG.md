@@ -28,6 +28,11 @@ All notable changes to MD-Docs are documented here. This project adheres to
   against the base branch.
 
 ### Fixed
+- A list item holding a quote (`- > text`) rendered as both at once: the line
+  carried the blockquote bar *and* the bullet. The shape is valid CommonMark — a
+  list item directly containing a blockquote — so the quote styling now stands
+  down when the quote is a list item's own content, and the line reads as the
+  plain list item it is.
 - Selecting text in a code block showed no highlight: the code background was
   opaque and CodeMirror paints the selection in a layer *behind* the content,
   so the fenced-block and inline-code backgrounds covered it. Selections that
