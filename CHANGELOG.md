@@ -29,6 +29,16 @@ All notable changes to MD-Docs are documented here. This project adheres to
     Arabic ones, or a code block, which is always left-to-right.
   - A selection spanning several lines is still drawn in the editor's own
     direction — CodeMirror reads one direction for that.
+- Tables render. A markdown table is drawn as a table while the cursor is
+  elsewhere and turns back into its source as soon as the selection touches it,
+  the same way the inline markers reveal themselves. Columns line up on their
+  own, so the pipes no longer have to be padded by hand to stay readable, and
+  `:---`, `:---:` and `---:` set the column's alignment. Cell contents keep the
+  formatting the rest of the editor paints — bold, italic, inline code,
+  strikethrough — and a link in a cell is a link rather than its source. The
+  table carries its own text direction, so an Arabic table reads from the right
+  with its alignment mirrored. Screen readers are handed a real table instead
+  of a row of pipes.
 - Live-preview decorations now take their side from the text rather than from
   the page: the blockquote bar, the bullet's gap and the task checkbox's gap
   use the logical sides (`border-inline-start`, `padding-inline-start`,
