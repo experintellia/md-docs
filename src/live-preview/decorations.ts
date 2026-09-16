@@ -1,5 +1,5 @@
 import { syntaxTree } from '@codemirror/language';
-import { type EditorState, type Range } from '@codemirror/state';
+import { type EditorState, type Line, type Range, type Text } from '@codemirror/state';
 import {
   Decoration,
   type DecorationSet,
@@ -42,6 +42,85 @@ const HIDDEN_MARKS = new Set([
 ]);
 
 const hidden = Decoration.replace({});
+
+// A character decides a line's direction only if it is a letter or one of the
+// explicit direction marks. Digits and punctuation do not — and `\p{Script=…}`
+// alone would not know that: `\p{Script=Arabic}` also covers the Arabic-Indic
+// digits and the Arabic percent sign, which would turn `٢٠٢٤ report` into an
+// RTL line.
+const DECIDES = /[\p{L}\u200e\u200f\u061c]/u;
+// RLM and ALM state the direction outright; the rest are the RTL scripts a note
+// might plausibly be written in.
+//
+// ponytail: living scripts only. Unicode has two dozen more RTL scripts —
+// Phoenician, Avestan, Old Turkic — and adding them costs a longer regex for
+// text nobody is taking notes in.
+// Leading block syntax is not content. The `x` in `- [x]` is a letter and would
+// decide the line before its text did, so ticking a task in an Arabic list
+// turned the whole item around — and unticking it turned it back.
+const BLOCK_MARKERS = /^[\s>]*(?:[-*+]|\d+[.)])?\s*(?:\[[ xX]\])?\s*/;
+const RTL = /[\u200f\u061c\p{Script=Adlam}\p{Script=Arabic}\p{Script=Hanifi_Rohingya}\p{Script=Hebrew}\p{Script=Mandaic}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Syriac}\p{Script=Thaana}]/u;
+
+/**
+ * The direction a block reads in: the first of its lines that decides one.
+ *
+ * Scanned line by line rather than over one slice of the whole block — a table
+ * or an indented block thousands of lines long would be copied out and scanned
+ * end to end on every rebuild, and rebuilds happen on every caret move. The
+ * answer is almost always on the first line.
+ */
+function blockDirection(doc: Text, from: number, to: number): 'ltr' | 'rtl' | null {
+  for (let pos = from; pos <= to;) {
+    const line = doc.lineAt(pos);
+    const dir = lineDirection(line.text);
+    if (dir) return dir;
+    pos = line.to + 1;
+  }
+  return null;
+}
+
+export function lineDirection(text: string): 'ltr' | 'rtl' | null {
+  for (const ch of text.replace(BLOCK_MARKERS, '')) {
+    if (DECIDES.test(ch)) return RTL.test(ch) ? 'rtl' : 'ltr';
+  }
+  return null;
+}
+
+// Where a block overrules its lines. Code is always left-to-right, or a comment
+// opening in Arabic turns the line around. A table reads one way throughout, or
+// a mixed row reverses its pipes and slides its cells under the wrong headers.
+// A quote or list decides only for a line with no letters of its own — a bare
+// `>` between paragraphs, the `- ` of an item just opened — so the line does
+// not sit at the far edge and jump across on the first keystroke.
+//
+// ponytail: a code block inside an RTL quote still holds lines of two
+// directions, and the per-line quote bar crosses sides for them; fixing that
+// means a direction class on the quote, not the line.
+function directionAt(state: EditorState, line: Line): 'ltr' | 'rtl' | null {
+  let own = lineDirection(line.text);
+  // Resolved at the line's end, not its start: an indented code block begins
+  // after the indent, so the first column is not inside it.
+  for (let n = syntaxTree(state).resolveInner(line.to, -1); ; n = n.parent) {
+    if (n.name === 'FencedCode' || n.name === 'CodeBlock') return 'ltr';
+    if (n.name === 'Table') return blockDirection(state.doc, n.from, n.to);
+    if (!own && /^(?:Blockquote|BulletList|OrderedList)$/.test(n.name)) {
+      own = blockDirection(state.doc, n.from, n.to);
+    }
+    if (!n.parent) return own;
+  }
+  return own;
+}
+
+// One direction per line, not one per document: a note can mix an Arabic
+// paragraph with an English one. It sits on the line, not on the inline spans —
+// per span, a line like `**عربي** text` would be judged in fragments and lay
+// itself out in pieces. CodeMirror only reads direction per line when
+// `perLineTextDirection` is on (see ./index.ts); without that facet the text
+// would look right while the caret still moved as if everything were LTR.
+const dirDeco = {
+  ltr: Decoration.line({ attributes: { dir: 'ltr' } }),
+  rtl: Decoration.line({ attributes: { dir: 'rtl' } }),
+};
 
 function headingClass(name: string): string | null {
   const m = /^ATXHeading(\d)$/.exec(name);
@@ -264,6 +343,18 @@ export function buildDecorations(view: EditorView): DecorationSet {
         }
       },
     });
+  }
+
+  // Direction on every visible line, read off the document text rather than
+  // the rendered line, so revealing a line's markers by putting the cursor on
+  // it cannot turn it around.
+  for (const { from, to } of view.visibleRanges) {
+    for (let pos = from; pos <= to;) {
+      const line = doc.lineAt(pos);
+      const dir = directionAt(state, line);
+      if (dir) ranges.push(dirDeco[dir].range(line.from));
+      pos = line.to + 1;
+    }
   }
 
   // Sort: decorations must be ordered by position (and start side).

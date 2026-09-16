@@ -1,5 +1,6 @@
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { type Extension } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { linkClickHandler, livePreviewPlugin } from './decorations.ts';
 
@@ -33,5 +34,16 @@ const mdHighlight = HighlightStyle.define([
  * editor to render markdown formatting inline while keeping the source text.
  */
 export function livePreview(): Extension {
-  return [livePreviewPlugin, linkClickHandler, syntaxHighlighting(mdHighlight)];
+  return [
+    livePreviewPlugin,
+    linkClickHandler,
+    syntaxHighlighting(mdHighlight),
+    // Read each line's own direction instead of assuming one for the whole
+    // editor. This is what makes the `dir` the plugin puts on every line count
+    // for caret motion, selection drawing and click-to-position — CM6 measures
+    // direction per line only when this facet is on. It lives here rather than
+    // in editor.ts so it travels with the decorations that need it: the history
+    // viewer swaps this whole extension in and out per view mode.
+    EditorView.perLineTextDirection.of(true),
+  ];
 }

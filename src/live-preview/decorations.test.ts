@@ -4,7 +4,7 @@ import { EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-import { buildDecorations } from './decorations.ts';
+import { buildDecorations, lineDirection } from './decorations.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
@@ -51,9 +51,18 @@ function withClass(decos: Deco[], cls: string): Deco | undefined {
 }
 
 // The plain "hidden" markers are Decoration.replace({}): a replace deco whose
-// spec has neither a widget nor a class.
+// spec has neither a widget nor a class. It must also cover a range — line
+// decorations (the direction marker) are points, and would otherwise count as a
+// hidden marker on every line.
 function hiddenMarkers(decos: Deco[]): Deco[] {
-  return decos.filter((d) => d.spec.widget === undefined && d.spec.class === undefined);
+  return decos.filter(
+    (d) => d.from < d.to && d.spec.widget === undefined && d.spec.class === undefined,
+  );
+}
+
+// The direction marker sitting on the line that starts at `from`.
+function dirAt(decos: Deco[], from: number): string | undefined {
+  return decos.find((d) => d.from === from && d.spec.attributes?.dir)?.spec.attributes?.dir;
 }
 
 test('parse is forced: a heading yields non-empty decorations', () => {
@@ -363,4 +372,145 @@ test('a code block spanning two visible ranges gets one copy button', () => {
     iter.next();
   }
   assert.equal(count, 1, 'exactly one copy button');
+});
+
+test('each line is directed by its own first strong character', () => {
+  const doc = 'Hello world\nمرحبا بالعالم\n- عنصر\n\n12345\n\n> اقتباس';
+  const decos = decorate(doc);
+  const state = EditorState.create({ doc });
+  const dirs = [1, 2, 3, 5, 7].map((n) => dirAt(decos, state.doc.line(n).from));
+  // The digits-only line stands alone here: neutral, inside no block that could
+  // decide for it, so it keeps the editor's own direction and gets no marker at
+  // all rather than a guessed one.
+  assert.deepEqual(dirs, ['ltr', 'rtl', 'rtl', undefined, 'rtl']);
+});
+
+test('a fresh list item takes the list direction before it has any text', () => {
+  // Pressing Enter in an Arabic list inserts `- ` / `2. ` / `- [ ] `, which
+  // carries no letters. Left to the page it would sit at the left edge under a
+  // right-aligned list and jump across on the first keystroke.
+  for (const marker of ['- ', '2. ', '- [ ] ']) {
+    const doc = `- عنصر\n${marker}`;
+    const state = EditorState.create({ doc });
+    assert.equal(
+      dirAt(decorate(doc), state.doc.line(2).from), 'rtl',
+      `a fresh \`${marker}\` item`,
+    );
+  }
+  // And a Latin list is unaffected.
+  assert.equal(dirAt(decorate('- item\n- '), 8), undefined, 'no marker forced on an LTR list');
+});
+
+
+test('code lines are pinned left-to-right, whatever the code says', () => {
+  // `//` is neutral, so the first strong character is Arabic. Left to itself the
+  // line would turn around inside an otherwise LTR block.
+  const doc = '```js\n// مرحبا\n```';
+  const state = EditorState.create({ doc });
+  const decos = decorate(doc);
+  for (let n = 1; n <= 3; n++) {
+    assert.equal(dirAt(decos, state.doc.line(n).from), 'ltr', `code line ${n} stays LTR`);
+  }
+});
+
+test('revealing the markers on the active line does not turn the line around', () => {
+  // The URL is hidden while the cursor is elsewhere and shown once it lands on
+  // the line. Judged by *rendered* text this line would read RTL and then LTR,
+  // flipping sides — and taking the caret with it — on a click. Judged by the
+  // document it is LTR either way: the `h` of `https` is the first strong
+  // character and stays one whether or not it is on screen. Consistency is the
+  // point here, not which of the two directions wins.
+  const doc = '![](https://example.com) مرحبا';
+  const off = dirAt(decorate(doc + '\nx', doc.length + 2), 0); // cursor on line 2
+  const on = dirAt(decorate(doc + '\nx', 2), 0); // cursor inside the line
+  assert.equal(off, on, 'same direction whether the markers are hidden or shown');
+  // Which of the two wins is deliberately not pinned: today the URL decides, and
+  // teaching lineDirection to skip link destinations would be a defensible
+  // change. Flipping sides on a click would not be.
+});
+
+
+
+test('lineDirection leaves a line with no deciding character undecided', () => {
+  assert.equal(lineDirection(''), null, 'blank');
+  assert.equal(lineDirection('  ---  '), null, 'punctuation only');
+  assert.equal(lineDirection('12345'), null, 'digits are neutral');
+  assert.equal(lineDirection('٢٠٢٤ report'), 'ltr', 'Arabic-Indic digits too: \\p{Script=Arabic} alone would say rtl');
+  assert.equal(lineDirection('123 مرحبا'), 'rtl', 'digits do not preempt the letter');
+  assert.equal(lineDirection('**עברית**'), 'rtl', 'markup does not preempt it either');
+});
+
+
+test('an explicit direction mark wins, which is how you override the guess', () => {
+  // RLM / LRM are the standard way to state a line's direction when its first
+  // letter would get it wrong — a brand name opening an Arabic sentence.
+  assert.equal(lineDirection('\u200fGitHub مرحبا'), 'rtl', 'RLM forces right-to-left');
+  assert.equal(lineDirection('\u200eمرحبا'), 'ltr', 'LRM forces left-to-right');
+  assert.equal(lineDirection('\u061cمرحبا'), 'rtl', 'ALM, the Arabic-script variant');
+});
+
+
+test('ticking a task does not turn the item around', () => {
+  // The `x` in `- [x]` is a letter. Taken as content it decides the line before
+  // the Arabic does, so a tap on the checkbox would flip the item to the other
+  // side of the page — and untapping it would flip it back.
+  assert.equal(dirAt(decorate('- [ ] مرحبا'), 0), 'rtl', 'unticked');
+  assert.equal(dirAt(decorate('- [x] مرحبا'), 0), 'rtl', 'ticked');
+  assert.equal(dirAt(decorate('- [X] مرحبا'), 0), 'rtl', 'ticked, capital');
+  assert.equal(dirAt(decorate('1. مرحبا'), 0), 'rtl', 'ordered list marker');
+  assert.equal(dirAt(decorate('- [x] hello'), 0), 'ltr', 'and Latin text still reads LTR');
+});
+
+test('a line inside a quote that decides nothing takes the quote direction', () => {
+  // A bare `>` is how you separate two paragraphs inside one quote. With no
+  // direction of its own it would fall through to the page and swing the quote
+  // bar to the other side for that one line.
+  const doc = '> مرحبا\n>\n> 2024\n> وداعا';
+  const state = EditorState.create({ doc });
+  const decos = decorate(doc);
+  const dirs = [1, 2, 3, 4].map((n) => dirAt(decos, state.doc.line(n).from));
+  assert.deepEqual(dirs, ['rtl', 'rtl', 'rtl', 'rtl']);
+});
+
+
+test('a table reads in one direction, so its columns stay under their headers', () => {
+  // Per line, the mixed row would reverse its pipes and slide its cells one
+  // column over. Nothing styles tables here — the alignment is the pipes.
+  const doc = '| term | ترجمة |\n|---|---|\n| book | كتاب |\n| كتاب | book |';
+  const state = EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  const decos = decorate(doc);
+  const dirs = [1, 2, 3, 4].map((n) => dirAt(decos, state.doc.line(n).from));
+  assert.deepEqual(dirs, ['ltr', 'ltr', 'ltr', 'ltr'], 'the header decides for all of them');
+});
+
+test('an Arabic table reads right-to-left throughout', () => {
+  const doc = '| مصطلح | ترجمة |\n|---|---|\n| كتاب | book |';
+  const state = EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  const decos = decorate(doc);
+  assert.deepEqual(
+    [1, 2, 3].map((n) => dirAt(decos, state.doc.line(n).from)),
+    ['rtl', 'rtl', 'rtl'],
+  );
+});
+
+test('indented code is pinned on every line, not just its first', () => {
+  const doc = 'text\n\n    // مرحبا\n    const a = 1;\n    return a;\n';
+  const state = EditorState.create({ doc });
+  const decos = decorate(doc);
+  assert.deepEqual(
+    [3, 4, 5].map((n) => dirAt(decos, state.doc.line(n).from)),
+    ['ltr', 'ltr', 'ltr'],
+  );
+});
+
+
+test('every right-to-left script in the list is recognised', () => {
+  // A static list, so near-zero upkeep — and the one thing that stops a script
+  // being dropped from the regex unnoticed, which is how Hanifi Rohingya was
+  // missing for this feature's whole life until someone checked by hand.
+  for (const sample of ['مرحبا', 'שלום', '𞤀𞤣', '𐴀𐴌', 'ࡀࡁ', 'ߒߞߏ', 'ࠀࠁ', 'ܐܒ', 'ދިވެހި']) {
+    assert.equal(lineDirection(sample), 'rtl', sample);
+  }
 });
