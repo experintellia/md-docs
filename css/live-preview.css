@@ -145,3 +145,36 @@
 @media (pointer: coarse) {
   .md-task-checkbox { font-size: 1.35em; }
 }
+
+/* The wrapper places the table's box; the table itself only mirrors what is
+   inside it. Flex, so the single item starts at the edge the wrapper's own
+   direction reads from — no auto-margin arithmetic to get backwards. */
+.md-table-wrap {
+  display: flex;
+  /* A wide table would otherwise overflow into .cm-scroller and pan the whole
+     editor sideways — on a phone, where that is hard to undo. */
+  overflow-x: auto;
+  /* Line up with the text: CodeMirror pads .cm-line, a block widget is on its
+     own. */
+  padding-inline-start: 6px;
+}
+
+/* Rendered table. Replaces the source block while the cursor is elsewhere, so
+   the columns line up without the markdown being padded by hand. */
+.md-table {
+  border-collapse: collapse;
+  margin: 0.4em 0;
+  font-size: 0.95em;
+}
+.md-table th,
+.md-table td {
+  border: 1px solid var(--border);
+  /* Asymmetric on purpose: rows read denser than they do square. */
+  padding: 0.25em 0.6em;
+  /* The table carries its own dir, so `start` is its leading edge. */
+  text-align: start;
+}
+.md-table th {
+  background: var(--toolbar-bg);
+  font-weight: 600;
+}

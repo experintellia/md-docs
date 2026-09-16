@@ -1,5 +1,5 @@
 import { syntaxTree } from '@codemirror/language';
-import { type EditorState, type Line, type Range } from '@codemirror/state';
+import { type EditorState, type Line, type Range, StateField, type Text } from '@codemirror/state';
 import {
   Decoration,
   type DecorationSet,
@@ -10,6 +10,7 @@ import {
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
+import { type Segment, type TableSpec, TableWidget } from './widgets/table.ts';
 
 /**
  * Obsidian-style "reveal on cursor": markdown syntax markers are hidden unless
@@ -139,6 +140,82 @@ const dirDeco = {
   ltr: Decoration.line({ attributes: { dir: 'ltr' } }),
   rtl: Decoration.line({ attributes: { dir: 'rtl' } }),
 };
+
+// The lezer node type, read off the API instead of imported: `@lezer/common` is
+// a transitive dependency here, not one this package declares.
+type SyntaxNodeLike = ReturnType<ReturnType<typeof syntaxTree>['resolveInner']>;
+
+// Does the selection touch anything between `from` and `to`? Blocks reveal
+// their source on the same rule single lines do, just over a range.
+function rangeHasSelection(state: EditorState, from: number, to: number): boolean {
+  return state.selection.ranges.some((r) => r.from <= to && r.to >= from);
+}
+
+// A cell's text, split where the live preview would paint it differently. The
+// markers that produce the formatting are dropped, the rest keeps the same
+// `md-*` classes the editor uses everywhere else.
+function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] {
+  const out: Segment[] = [];
+  let pos = cell.from;
+  for (let child = cell.firstChild; child; child = child.nextSibling) {
+    if (child.from > pos) out.push({ text: doc.sliceString(pos, child.from), cls });
+    pos = child.to;
+    if (HIDDEN_MARKS.has(child.name) || child.name === 'URL') continue;
+    if (child.name === 'Escape') {
+      // `\|` is the only way to put a pipe in a cell; show the pipe, not both.
+      out.push({ text: doc.sliceString(child.from + 1, child.to), cls });
+      continue;
+    }
+    if (child.name === 'Link') {
+      const url = linkUrl(doc.sliceString(child.from, child.to));
+      const text = cellSegments(child, doc, cls).map((s) => s.text).join('');
+      out.push({ text, cls: 'md-link', href: url === null ? undefined : withScheme(url) });
+      continue;
+    }
+    out.push(...cellSegments(child, doc, INLINE_MARK_CLASS[child.name] ?? cls));
+  }
+  if (pos < cell.to) out.push({ text: doc.sliceString(pos, cell.to), cls });
+  return out.filter((s) => s.text !== '' || s.href !== undefined);
+}
+
+// A row's cells, empty ones included. The parser emits a TableCell only where
+// there is content, so `| 1 |   | 3 |` would arrive as two cells and slide `3`
+// under the second column — silent, and invisible in a view that hides the
+// source. The pipes are the truth, so the cells are read between them.
+function rowCells(row: SyntaxNodeLike, doc: Text): Segment[][] {
+  const cells: Segment[][] = [];
+  let openedAt: number | null = null;
+  for (let child = row.firstChild; child; child = child.nextSibling) {
+    if (child.name === 'TableCell') {
+      cells.push(cellSegments(child, doc));
+      openedAt = null;
+      continue;
+    }
+    if (child.name !== 'TableDelimiter') continue;
+    // Two pipes with nothing but space between them: an empty cell.
+    if (openedAt !== null && doc.sliceString(openedAt, child.from).trim() === '') {
+      cells.push([]);
+    }
+    openedAt = child.to;
+  }
+  return cells;
+}
+
+// `|:---|---:|:---:|` -> one alignment per column.
+function columnAlignment(row: string): TableSpec['align'] {
+  return row
+    .replace(/^\s*\|/, '')
+    .replace(/\|\s*$/, '')
+    .split('|')
+    .map((spec) => {
+      const left = spec.trim().startsWith(':');
+      const right = spec.trim().endsWith(':');
+      if (left && right) return 'center' as const;
+      if (right) return 'end' as const;
+      if (left) return 'start' as const;
+      return null;
+    });
+}
 
 function headingClass(name: string): string | null {
   const m = /^ATXHeading(\d)$/.exec(name);
@@ -392,6 +469,85 @@ export function buildDecorations(view: EditorView): DecorationSet {
 }
 
 /**
+ * Rendered tables, kept apart from the plugin above because CodeMirror only
+ * takes *block* decorations from a state field — they change the height map,
+ * which a view plugin is not allowed to do. That also means no viewport to
+ * narrow the walk to.
+ *
+ * ponytail: rebuilt over the whole document on every edit and every selection
+ * change, since there is no viewport to narrow it to. Measured 0.66 ms for a
+ * document of 200 tables and 0.98 ms for one table of 5000 rows; a document
+ * without tables costs nothing, the tree walk skips it. Past that, map the set
+ * through the changes and rebuild only the table that was touched.
+ */
+export function buildTables(state: EditorState): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  const doc = state.doc;
+  syntaxTree(state).iterate({
+    enter: (node) => {
+      if (node.name !== 'Table') return;
+
+      // Rendered while the cursor is elsewhere, source as soon as the
+      // selection touches it — the same reveal rule the inline markers
+      // follow, over a range instead of a line.
+      if (rangeHasSelection(state, node.from, node.to)) return;
+      const rows: Segment[][][] = [];
+      let header: Segment[][] = [];
+      let align: TableSpec['align'] = [];
+      for (let row = node.node.firstChild; row; row = row.nextSibling) {
+        if (row.name === 'TableDelimiter') {
+          // The `|---|:--:|` row, which is a delimiter spanning the line
+          // rather than one per pipe.
+          if (row.to - row.from > 1) align = columnAlignment(doc.sliceString(row.from, row.to));
+          continue;
+        }
+        // Only real rows: inside a blockquote the parser hangs a QuoteMark on
+        // the table for every line, and those are not rows.
+        if (row.name !== 'TableHeader' && row.name !== 'TableRow') continue;
+        const cells = rowCells(row, doc);
+        if (row.name === 'TableHeader') header = cells;
+        else rows.push(cells);
+      }
+      // GFM sizes every row by the header: a short row is padded, a long one
+      // is cut. Without that a ragged row would grow a column of its own and
+      // push the table out of shape.
+      const width = header.length;
+      const sized = rows.map((row) => Array.from({ length: width }, (_, i) => row[i] ?? []));
+
+      ranges.push(
+        Decoration.replace({
+          widget: new TableWidget({
+            from: node.from,
+            header,
+            rows: sized,
+            align,
+            dir: blockDirection(state, node.from, node.to),
+            source: doc.sliceString(node.from, node.to),
+          }),
+          block: true,
+        }).range(node.from, node.to),
+      );
+      return false;
+    },
+  });
+  return Decoration.set(ranges, true);
+}
+
+export const tableField = StateField.define<DecorationSet>({
+  create: (state) => buildTables(state),
+  update: (value, tr) => (
+    // The tree too: the parser only reaches the first few thousand characters
+    // up front and finishes in the background, and that transaction carries
+    // neither a document change nor a selection. Without this a table further
+    // down stays raw pipes until something else happens to touch the editor.
+    tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState)
+      ? buildTables(tr.state)
+      : value
+  ),
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+/**
  * The live-preview decoration plugin. Rebuilds on document, viewport and
  * selection changes (the last so syntax reveals/hides as the cursor moves).
  */
@@ -407,7 +563,11 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
       if (
         update.docChanged ||
         update.viewportChanged ||
-        update.selectionSet
+        update.selectionSet ||
+        // See tableField: the background parse arrives on its own transaction.
+        // Long-standing — bold past the first few thousand characters did not
+        // render either until something else redrew.
+        syntaxTree(update.state) !== syntaxTree(update.startState)
       ) {
         this.decorations = buildDecorations(update.view);
       }
