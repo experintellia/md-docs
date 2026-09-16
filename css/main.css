@@ -422,6 +422,15 @@ html, body {
   border-color: inherit !important;
 }
 
+/* y-codemirror pins the flag at `left: -1px` of the peer's caret. On a
+   right-to-left line the caret at the start of the line sits at the content's
+   right edge, so the flag hangs off past it — clipped, or panning .cm-scroller
+   sideways by the width of the peer's name. Mirror it with the line. */
+.cm-editor .cm-line[dir="rtl"] .cm-ySelectionInfo {
+  left: auto !important;
+  right: -1px;
+}
+
 /* When the flag is shown, one opacity over the whole chip so the dark fill,
    the coloured border and the white text share the same translucency. Desktop
    reveals it on hover; touch (no hover, hairline caret) shows it always. */
