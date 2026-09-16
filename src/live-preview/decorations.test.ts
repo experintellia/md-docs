@@ -565,6 +565,8 @@ test('the quote bar keeps one side for the whole quote', () => {
 test('an English quote keeps its bar on the left', () => {
   assert.ok(withClass(decorate('> quoted\n> مرحبا', 0), 'md-quote-ltr'), 'ltr quote');
   assert.ok(!withClass(decorate('> quoted\n> مرحبا', 0), 'md-quote-rtl'), 'and not the other side');
+});
+
 // The rendered table, if one replaced the block. Tables come from a state
 // field rather than the view plugin — CodeMirror only takes block decorations
 // from a field — so they are built from the state alone, with no fake view.

@@ -50,7 +50,10 @@ test('a table reaches the DOM as a table', () => {
   try {
     const table = view.contentDOM.querySelector('table.md-table')!;
     assert.ok(table, 'rendered as a table element');
-    assert.equal(table.getAttribute('dir'), 'ltr', 'the table carries its direction');
+    assert.equal(
+      table.parentElement!.getAttribute('dir'), 'ltr',
+      'the wrapper carries the direction, so the box starts at the right edge',
+    );
     assert.deepEqual(
       [...table.querySelectorAll('thead th')].map((c) => c.textContent),
       ['term', 'ترجمة'],
@@ -70,6 +73,20 @@ test('a table reaches the DOM as a table', () => {
       0,
       'the pipes are gone: the block is replaced, not decorated',
     );
+  } finally {
+    view.destroy();
+  }
+});
+
+test('an Arabic table is placed from the right, not just mirrored inside', () => {
+  // A table's own `dir` reorders its columns but does not move its box — the
+  // box is placed by its parent, and .cm-content reads left-to-right. Without
+  // the wrapper an Arabic table hugs the left edge with reversed columns.
+  const view = editor('x\n\n| مصطلح | ترجمة |\n|---|---|\n| كتاب | book |');
+  try {
+    const wrap = view.contentDOM.querySelector('.md-table-wrap')!;
+    assert.equal(wrap.getAttribute('dir'), 'rtl', 'the wrapper is what places it');
+    assert.ok(wrap.querySelector('table.md-table'), 'the table sits inside the wrapper');
   } finally {
     view.destroy();
   }
