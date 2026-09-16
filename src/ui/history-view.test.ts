@@ -32,3 +32,47 @@ test('confirmDialog resolves false on Escape', async () => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   assert.equal(await choice, false);
 });
+
+test('confirmDialog resolves true on Enter and false on a backdrop click', async () => {
+  const byEnter = confirmDialog('Restore this version?');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+  assert.equal(await byEnter, true);
+
+  const byBackdrop = confirmDialog('Restore this version?');
+  const overlay = document.querySelector('#confirm-overlay') as HTMLElement;
+  overlay.dispatchEvent(new MouseEvent('click')); // target === overlay
+  assert.equal(await byBackdrop, false);
+});
+
+test('a click inside the card does not dismiss the dialog', async () => {
+  let settled = false;
+  const choice = confirmDialog('Restore this version?');
+  void choice.then(() => { settled = true; });
+
+  const card = document.querySelector('#confirm-overlay .confirm-card') as HTMLElement;
+  card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await Promise.resolve();
+
+  assert.equal(settled, false, 'still open');
+  assert.ok(document.querySelector('#confirm-overlay'), 'a card click is not a backdrop click');
+  (document.querySelector('#confirm-overlay [data-act="cancel"]') as HTMLButtonElement).click();
+  await choice;
+});
+
+test('a dismissed dialog stops listening for keys', async () => {
+  // done() removes the document keydown handler; a leaked one from an earlier
+  // dialog would resolve the *next* one as soon as any key is pressed.
+  const first = confirmDialog('one');
+  (document.querySelector('#confirm-overlay [data-act="cancel"]') as HTMLButtonElement).click();
+  await first;
+
+  let settled = false;
+  const second = confirmDialog('two');
+  void second.then(() => { settled = true; });
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+  await Promise.resolve();
+  assert.equal(settled, false, 'an unrelated key leaves it open');
+
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  assert.equal(await second, false);
+});

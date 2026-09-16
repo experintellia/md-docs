@@ -17,6 +17,15 @@ test('titleFromMarkdown reduces a markdown line to plaintext', () => {
     ['see [the docs](https://x.y) now', 'see the docs now'],
     ['*emphasis* and __strong__', 'emphasis and strong'],
     ['plain text', 'plain text'],
+    // Edge cases: the first line is whatever the user happens to be typing, and
+    // the result is the document title shown in the chat list.
+    ['![screenshot](shot.png)', 'screenshot'], // image: the `!` is not the title
+    ['# ', ''],                                // heading marker, nothing typed yet
+    ['', ''],
+    ['1. first item', 'first item'],           // ordered list marker
+    ['***bold italic***', 'bold italic'],
+    ['**unclosed bold', 'unclosed bold'],      // stray markers stripped
+    ['# `code` **and** *more*', 'code and more'],
   ];
   for (const [input, want] of cases)
     assert.equal(titleFromMarkdown(input), want, `titleFromMarkdown(${JSON.stringify(input)})`);
@@ -81,4 +90,38 @@ test('an unsent draft tail re-queues and sends exactly one notifying update', as
   assert.ok(sent[0].info, 'the notification travels with the real edit');
   assert.equal(collab.ytext.toString(), 'hello tail');
   localStorage.removeItem(DRAFT_KEY);
+});
+
+test('an empty or marker-only first line still yields a title', () => {
+  // getEditInfo() falls back to "Untitled" and clips at 60 chars; both matter
+  // because this string is the document name every peer sees in their chat.
+  assert.equal(titleFromMarkdown('#  ') || 'Untitled', 'Untitled');
+  assert.equal((titleFromMarkdown('# ' + 'x'.repeat(200)) || 'Untitled').slice(0, 60).length, 60);
+});
+
+test('a draft that is not valid Yjs data is discarded, not fatal on startup', () => {
+  // localStorage is shared with anything else on the origin and survives app
+  // upgrades, so the stored blob can be garbage. It must not block the editor.
+  localStorage.setItem(DRAFT_KEY, 'this is not base64 yjs data');
+  mockWebxdc([]);
+
+  const collab = createCollab();
+  return settle().then(() => {
+    assert.equal(collab.ytext.toString(), '', 'editor starts empty rather than throwing');
+    assert.equal(localStorage.getItem(DRAFT_KEY), null, 'the corrupt draft is dropped');
+  });
+});
+
+test('with no draft stored the editor starts from the channel replay alone', () => {
+  localStorage.removeItem(DRAFT_KEY);
+  const src = new Y.Doc();
+  src.getText(KEY).insert(0, 'from peers');
+  const sent = mockWebxdc([fromUint8Array(Y.encodeStateAsUpdateV2(src))]);
+
+  const collab = createCollab();
+  return settle().then(() => {
+    collab.provider.syncToChatPeers();
+    assert.equal(collab.ytext.toString(), 'from peers');
+    assert.equal(sent.length, 0, 'a plain open queues nothing');
+  });
 });
