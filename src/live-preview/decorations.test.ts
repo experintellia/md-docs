@@ -514,3 +514,27 @@ test('every right-to-left script in the list is recognised', () => {
     assert.equal(lineDirection(sample), 'rtl', sample);
   }
 });
+
+test('a block decides only for lines that decide nothing themselves', () => {
+  // An English line inside an Arabic quote keeps its own direction — the quote
+  // is a fallback, not an override. Same for a list.
+  const quote = '> مرحبا\n> Hello world';
+  const qState = EditorState.create({ doc: quote });
+  assert.equal(dirAt(decorate(quote), qState.doc.line(2).from), 'ltr', 'line in a quote');
+
+  const list = '- عنصر\n- Hello world';
+  const lState = EditorState.create({ doc: list });
+  assert.equal(dirAt(decorate(list), lState.doc.line(2).from), 'ltr', 'item in a list');
+});
+
+test('a block whose first line decides nothing is read further down', () => {
+  // The quote opens with a bare `>`; its direction is on the line below. Taking
+  // only the first line would leave the whole quote undirected.
+  const doc = '>\n> مرحبا';
+  const state = EditorState.create({ doc });
+  const decos = decorate(doc);
+  assert.deepEqual(
+    [1, 2].map((n) => dirAt(decos, state.doc.line(n).from)),
+    ['rtl', 'rtl'],
+  );
+});
