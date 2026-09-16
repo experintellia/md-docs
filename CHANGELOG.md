@@ -5,6 +5,18 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Live-preview decorations now take their side from the text rather than from
+  the page: the blockquote bar, the bullet's gap and the task checkbox's gap
+  use the logical sides (`border-inline-start`, `padding-inline-start`,
+  `margin-inline-end`), so on a right-to-left line each of them sits on the
+  side of the words it belongs to. Two stay physical on purpose: the copy
+  button, which sits on a fence line and fenced code is always laid out
+  left-to-right, and the checkmark inside a checkbox, which is centred and is
+  not a glyph that mirrors. A collaborator's name flag mirrors with the line
+  too — on a right-to-left line it used to hang off the far edge, panning the
+  editor sideways by the width of the name.
+
 ## [0.2.0] - 2026-09-16
 
 ### Added

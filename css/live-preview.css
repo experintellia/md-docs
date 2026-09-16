@@ -31,8 +31,8 @@
 
 /* Blockquote */
 .cm-line.md-quote {
-  border-left: 3px solid var(--border);
-  padding-left: 0.7em;
+  border-inline-start: 3px solid var(--border);
+  padding-inline-start: 0.7em;
   color: var(--muted);
 }
 
@@ -64,6 +64,11 @@
 .md-copy {
   position: absolute;
   top: 0.1em;
+  /* Physical on purpose. The fence line is pinned left-to-right (decorations.ts
+     directs code lines `ltr`), so the right edge *is* its trailing edge, and
+     `inset-inline-end` would buy nothing: it is not in the build target either
+     (vite.config.ts targets safari14; the property needs 14.1, where an older
+     webview would drop it and drop the button back into the line). */
   right: 0.4em;
   padding: 0.1em 0.5em;
   border: 1px solid var(--border);
@@ -84,7 +89,7 @@
 .md-bullet {
   display: inline-block;
   width: 1em;
-  margin-right: 0.3em;
+  margin-inline-end: 0.3em;
   color: var(--muted);
   text-align: center;
 }
@@ -99,7 +104,11 @@
   font-size: 1.15em;
   width: 1.05em;
   height: 1.05em;
-  margin: 0 0.4em 0 0;
+  /* Order is load-bearing: the shorthand writes all four sides, the logical
+     longhands among them, so a `margin: 0` moved below would wipe the gap
+     again. */
+  margin: 0;
+  margin-inline-end: 0.4em;
   vertical-align: -0.15em;
   border: 1.5px solid var(--muted);
   border-radius: 4px;
