@@ -98,3 +98,116 @@ test('shim works over a real-client webxdc (read-only, non-configurable methods)
   history.webxdc.sendUpdate({ payload: { serializedYjsUpdate: 'x' } } as never, '');
   assert.equal(sent[0].payload.author, 'Alice', 'author injected, delegated to frozen real');
 });
+
+// --- Robustness against the wire -------------------------------------------
+// Records come off the webxdc channel, so a batch may be truncated or written
+// by a different app/version sharing it. versions() is re-run on every update
+// and on every render, so one bad record must not become permanent damage.
+
+// Minimal fake webxdc, plus a `fire` that feeds one batch through the shim.
+interface Fake {
+  real: typeof window.webxdc;
+  fire: (payload: Record<string, unknown>) => void;
+}
+
+function fakeWebxdc(): Fake {
+  let listener: ((u: { payload: Record<string, unknown> }) => void) | undefined;
+  const real = {
+    selfName: 'Alice',
+    setUpdateListener: (cb: (u: { payload: Record<string, unknown> }) => void) => {
+      listener = cb;
+      return Promise.resolve();
+    },
+    sendUpdate: () => {},
+  } as unknown as typeof window.webxdc;
+  return { real, fire: (payload) => listener!({ payload }) };
+}
+
+// One updateV2 blob per transaction, base64 as the provider serializes it.
+function blobs(edits: Array<(t: Y.Text) => void>): string[] {
+  const doc = new Y.Doc();
+  const out: string[] = [];
+  doc.on('updateV2', (u: Uint8Array) => out.push(Buffer.from(u).toString('base64')));
+  for (const edit of edits) doc.transact(() => edit(doc.getText('codemirror')));
+  return out;
+}
+
+test('a batch that cannot be decoded is skipped, not fatal for the timeline', () => {
+  const [first, second] = blobs([
+    (t) => t.insert(0, 'hello'),
+    (t) => t.insert(5, ' world'),
+  ]);
+  const { real, fire } = fakeWebxdc();
+  const history = setupHistory(real);
+  history.webxdc.setUpdateListener(() => {});
+
+  fire({ serializedYjsUpdate: first, t: 1, author: 'Alice' });
+  fire({ serializedYjsUpdate: 'not!!valid!!base64', t: 2, author: 'Mallory' }); // atob throws
+  fire({ serializedYjsUpdate: Buffer.from([9, 9, 9, 9]).toString('base64'), t: 3 }); // yjs throws
+  fire({ serializedYjsUpdate: second, t: 4, author: 'Bob' });
+
+  const v = history.versions();
+  assert.deepEqual(v.map((e) => e.text), ['hello', 'hello world'], 'good batches survive');
+  assert.deepEqual(v.map((e) => e.author), ['Alice', 'Bob'], 'bad batches dropped');
+});
+
+test('a throwing onChange listener does not stop the document from syncing', () => {
+  // The history overlay renders from onChange. Notifying before handing the
+  // update to the provider meant a render error swallowed the update entirely,
+  // so the shared document stopped syncing until the app was restarted.
+  const [blob] = blobs([(t) => t.insert(0, 'hi')]);
+  const { real, fire } = fakeWebxdc();
+  const history = setupHistory(real);
+  const received: unknown[] = [];
+  history.webxdc.setUpdateListener((u) => { received.push(u); });
+  history.onChange(() => { throw new Error('render blew up'); });
+
+  assert.throws(() => fire({ serializedYjsUpdate: blob, t: 1, author: 'Alice' }));
+  assert.equal(received.length, 1, 'the provider still got the update');
+  assert.deepEqual(history.versions().map((e) => e.text), ['hi'], 'and it was recorded');
+});
+
+test('metadata missing from a peer batch falls back instead of showing undefined', () => {
+  const [blob] = blobs([(t) => t.insert(0, 'hi')]);
+  const { real, fire } = fakeWebxdc();
+  const history = setupHistory(real);
+  history.webxdc.setUpdateListener(() => {});
+  const before = Date.now();
+  fire({ serializedYjsUpdate: blob }); // a batch from a version that stamped nothing
+
+  const [v] = history.versions();
+  assert.equal(v.author, 'unknown');
+  assert.ok(v.t >= before, 'timestamped on receipt');
+});
+
+test('a non-Yjs payload on the same channel is ignored outright', () => {
+  const { real, fire } = fakeWebxdc();
+  const history = setupHistory(real);
+  history.webxdc.setUpdateListener(() => {});
+  fire({ hello: 'world' });
+  fire({ serializedYjsUpdate: 42 }); // wrong type
+  assert.deepEqual(history.versions(), []);
+});
+
+test('replayed() resolves on a client whose setUpdateListener returns void', () => {
+  // The webxdc spec has it return a promise, but not every implementation does;
+  // the draft restore is gated on this and must not hang.
+  const real = {
+    selfName: 'Alice',
+    setUpdateListener: () => undefined,
+    sendUpdate: () => {},
+  } as unknown as typeof window.webxdc;
+  const history = setupHistory(real);
+  history.webxdc.setUpdateListener(() => {});
+  return history.replayed(); // node:test fails the test if this never settles
+});
+
+test('selfName missing (a client that does not expose it) stamps "unknown"', () => {
+  const sent: Array<{ payload: Record<string, unknown> }> = [];
+  const real = {
+    setUpdateListener: () => Promise.resolve(),
+    sendUpdate: (u: { payload: Record<string, unknown> }) => { sent.push(u); },
+  } as unknown as typeof window.webxdc;
+  setupHistory(real).webxdc.sendUpdate({ payload: {} } as never, '');
+  assert.equal(sent[0].payload.author, 'unknown');
+});

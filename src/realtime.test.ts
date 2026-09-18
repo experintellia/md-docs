@@ -109,3 +109,71 @@ test('without joinRealtimeChannel, connect is a no-op and sends nothing', () => 
   const { sent } = setup(false);
   assert.equal(sent.length, 0);
 });
+
+// --- Malformed frames -------------------------------------------------------
+// The realtime channel is ephemeral and unauthenticated: anything a peer (or a
+// future/older version of the app) puts on it lands in the decoders directly.
+
+test('a truncated or foreign frame is dropped, not thrown out of the listener', () => {
+  const { ydoc, fire } = setup();
+  ydoc.getText('codemirror').insert(0, 'keep me');
+
+  for (const frame of [
+    new Uint8Array(0),          // empty: data[0] is undefined
+    Uint8Array.of(0),           // DOC tag with no body
+    Uint8Array.of(1),           // AWARENESS tag with no body
+    Uint8Array.of(0, 1, 2, 3),  // DOC tag, garbage body
+    Uint8Array.of(7, 1, 2),     // unknown tag
+  ]) {
+    assert.doesNotThrow(() => fire(frame), `frame [${frame}]`);
+  }
+  assert.equal(ydoc.getText('codemirror').toString(), 'keep me', 'document untouched');
+});
+
+test('a valid frame still applies after a malformed one', () => {
+  // The listener must not be left in a broken state by the bad frame above.
+  const { ydoc, fire } = setup();
+  fire(Uint8Array.of(0, 1, 2, 3));
+
+  const other = new Y.Doc();
+  other.getText('codemirror').insert(0, 'remote');
+  fire(Uint8Array.of(0, ...Y.encodeStateAsUpdate(other)));
+  assert.equal(ydoc.getText('codemirror').toString(), 'remote');
+});
+
+test('the catch-up frame carries the existing document, not an empty one', () => {
+  // A late joiner blasts its full state on connect; if that were encoded before
+  // the doc was populated, peers would learn nothing from it.
+  const sent: Uint8Array[] = [];
+  let listener: Listener = () => {};
+  (globalThis as unknown as { window: { webxdc: unknown } }).window = {
+    webxdc: {
+      selfAddr: 'alice@example.com',
+      selfName: 'Alice',
+      joinRealtimeChannel: () => ({
+        setListener: (l: Listener) => { listener = l; },
+        send: (d: Uint8Array) => { sent.push(d); },
+        leave: () => {},
+      }),
+    },
+  };
+  const ydoc = new Y.Doc();
+  ydoc.getText('codemirror').insert(0, 'already here');
+  connectRealtime(ydoc, new Awareness(ydoc));
+  void listener;
+
+  const peer = new Y.Doc();
+  Y.applyUpdate(peer, sent[0].subarray(1));
+  assert.equal(peer.getText('codemirror').toString(), 'already here');
+});
+
+test('each peer gets a stable colour derived from its address', () => {
+  // yCollab renders remote carets from awareness `user.color`; a colour that
+  // changed per session would make peers unrecognisable mid-document.
+  const { awareness } = setup();
+  const user = awareness.getLocalState()!.user as { name: string; color: string; colorLight: string };
+  assert.equal(user.name, 'Alice');
+  assert.match(user.color, /^hsl\(\d+ 70% 50%\)$/);
+  assert.match(user.colorLight, /^hsl\(\d+ 70% 50% \/ 0\.35\)$/);
+  assert.equal(setup().awareness.getLocalState()!.user!.color, user.color, 'same address, same hue');
+});
