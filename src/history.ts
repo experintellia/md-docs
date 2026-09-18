@@ -94,6 +94,13 @@ interface HistPayload {
  * The real fix belongs upstream (yjs bounding the count, or y-webxdc guarding
  * the apply); this keeps one bad batch from being fatal in the meantime.
  *
+ * Caveat worth knowing: this depends on the note reaching disk before the
+ * process dies. Engines commit localStorage out of process (Electron, and
+ * multiprocess Android WebView, keep the browser side alive when a renderer
+ * aborts, so the note survives); a single-process WebView that goes down inside
+ * the commit window may lose it, leaving the guard ineffective there rather
+ * than wrong. Unverified on-device.
+ *
  * ponytail: two synchronous localStorage writes per incoming batch, which on a
  * long startup replay is the whole cost of this guard. Cheap against an
  * unrecoverable failure. If replay latency ever shows up, arm only for batches
@@ -136,7 +143,9 @@ function writePoison(state: PoisonState): void {
 }
 
 // A cheap content id for a batch. Not cryptographic: it only has to tell one
-// batch apart from the others in this document's log.
+// batch apart from the others in this document's log. Changing the format
+// retires every existing `bad` entry, so a poisoned batch would crash the app
+// once more before being re-quarantined — self-healing, but not free.
 function fingerprint(blob: string): string {
   let h = 0;
   for (let i = 0; i < blob.length; i++) h = (Math.imul(h, 31) + blob.charCodeAt(i)) | 0;
@@ -220,9 +229,22 @@ export function setupHistory(real: typeof window.webxdc): History {
         }
         // The provider first: history is bookkeeping, and a throw from one of
         // our onChange listeners must not stop the document itself from syncing.
-        cb(u);
+        try {
+          cb(u);
+        } catch (err) {
+          // A catchable failure is NOT what the note is for. The note exists to
+          // name a batch that ABORTS the process, and an exception here means
+          // the opposite — we are still running, so nothing needs quarantining.
+          // Leaving it to propagate would both strand the note (quarantining a
+          // batch that merely threw, dropping it on this device for good) and
+          // end the host's dispatch, losing the rest of the replayed log.
+          // Observer errors reach here after the doc was already mutated, which
+          // is why the batch is still recorded below.
+          console.error('history: the provider failed on a batch', err);
+        }
         if (blob !== null) {
-          // Survived the decode, so it is not the batch that kills us.
+          // Cleared on both paths: only an abort, which never unwinds, can
+          // leave the note behind.
           poison.pending = null;
           writePoison(poison);
           records.push({

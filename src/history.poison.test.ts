@@ -63,26 +63,39 @@ test('a batch is noted before it is decoded and the note cleared after', () => {
   assert.deepEqual(poison().bad, [], 'nothing quarantined on a clean run');
 });
 
-test('a note surviving a launch means that batch killed us: it is quarantined', () => {
-  const blob = blobOf('poison');
-  // Previous run died mid-decode, so its note was never cleared.
-  const { real, fire } = fakeWebxdc();
-  const first = setupHistory(real);
-  first.webxdc.setUpdateListener(() => { throw new Error('simulated process death'); });
-  assert.throws(() => fire({ serializedYjsUpdate: blob, t: 1, author: 'Alice' }));
-  const stranded = poison().pending;
-  assert.ok(stranded, 'the note outlived the decode');
+// A process abort leaves the note behind because it never unwinds. Nothing in
+// a test can abort the process and keep running, so the stranded note is
+// written directly — that is precisely the state an abort leaves on disk.
+function strand(id: string): void {
+  localStorage.setItem(POISON_KEY, JSON.stringify({ pending: id, bad: [] }));
+}
 
-  // Next launch reads the stranded note.
-  const next = fakeWebxdc();
-  const history = setupHistory(next.real);
-  assert.deepEqual(poison().bad, [stranded], 'quarantined on startup');
+function fingerprintOf(blob: string): string {
+  // Round-trip through the shim: whatever it writes down while decoding is the
+  // id an abort would strand, so the tests never hard-code the hash format.
+  localStorage.clear();
+  const { real, fire } = fakeWebxdc();
+  const history = setupHistory(real);
+  let seen: string | null = null;
+  history.webxdc.setUpdateListener(() => { seen = poison().pending; });
+  fire({ serializedYjsUpdate: blob });
+  localStorage.clear();
+  return seen!;
+}
+
+test('a note surviving a launch means that batch aborted us: it is quarantined', () => {
+  const blob = blobOf('poison');
+  strand(fingerprintOf(blob));
+
+  const { real, fire } = fakeWebxdc();
+  const history = setupHistory(real);
+  assert.deepEqual(poison().bad, [fingerprintOf(blob)], 'quarantined on startup');
   assert.equal(poison().pending, null, 'and the note is consumed');
 
   // The channel replays the same batch; it must not reach a decoder again.
   let decoded = 0;
   history.webxdc.setUpdateListener(() => { decoded++; });
-  next.fire({ serializedYjsUpdate: blob, t: 1, author: 'Alice' });
+  fire({ serializedYjsUpdate: blob, t: 1, author: 'Alice' });
   assert.equal(decoded, 0, 'the poisoned batch is never handed to the provider again');
   assert.deepEqual(history.versions(), [], 'nor recorded in the timeline');
 });
@@ -90,26 +103,47 @@ test('a note surviving a launch means that batch killed us: it is quarantined', 
 test('quarantining one batch does not block the rest of the log', () => {
   const bad = blobOf('poison');
   const good = blobOf('real edit');
-  localStorage.setItem(POISON_KEY, JSON.stringify({ pending: null, bad: [] }));
+  strand(fingerprintOf(bad));
 
-  // Die on the bad batch.
-  const first = fakeWebxdc();
-  const h1 = setupHistory(first.real);
-  h1.webxdc.setUpdateListener(() => { throw new Error('simulated process death'); });
-  assert.throws(() => first.fire({ serializedYjsUpdate: bad }));
-
-  // Relaunch: the log replays both batches, and the good one still applies.
-  const second = fakeWebxdc();
-  const h2 = setupHistory(second.real);
+  const { real, fire } = fakeWebxdc();
+  const history = setupHistory(real);
   const seen: string[] = [];
-  h2.webxdc.setUpdateListener((u) => {
+  history.webxdc.setUpdateListener((u) => {
     seen.push((u.payload as { serializedYjsUpdate: string }).serializedYjsUpdate);
   });
-  second.fire({ serializedYjsUpdate: bad });
-  second.fire({ serializedYjsUpdate: good, t: 2, author: 'Bob' });
+  fire({ serializedYjsUpdate: bad });
+  fire({ serializedYjsUpdate: good, t: 2, author: 'Bob' });
 
   assert.deepEqual(seen, [good], 'only the good batch reaches the provider');
-  assert.deepEqual(h2.versions().map((v) => v.text), ['real edit']);
+  assert.deepEqual(history.versions().map((v) => v.text), ['real edit']);
+});
+
+test('a batch that merely THROWS is not quarantined', () => {
+  // The note names a batch that aborts the process. An exception means the
+  // opposite — we are still running. Quarantining on a throw would drop a
+  // legitimate batch for good on this device: yjs runs observers inside
+  // applyUpdateV2 *after* mutating the doc, so a bug in any downstream
+  // listener (y-codemirror's sync observer, awareness, ...) would strand the
+  // note on a batch that applied perfectly.
+  const blob = blobOf('applied fine');
+  const { real, fire } = fakeWebxdc();
+  const history = setupHistory(real);
+  history.webxdc.setUpdateListener(() => { throw new Error('observer blew up'); });
+
+  assert.doesNotThrow(
+    () => fire({ serializedYjsUpdate: blob, t: 1, author: 'Alice' }),
+    'the throw is contained, so the rest of the replayed log still arrives',
+  );
+  assert.equal(poison().pending, null, 'no note left behind');
+  assert.deepEqual(poison().bad, [], 'and nothing quarantined');
+
+  // The decisive part: the next launch must still accept that batch.
+  const next = fakeWebxdc();
+  const after = setupHistory(next.real);
+  let decoded = 0;
+  after.webxdc.setUpdateListener(() => { decoded++; });
+  next.fire({ serializedYjsUpdate: blob, t: 1, author: 'Alice' });
+  assert.equal(decoded, 1, 'the batch is still delivered on the next launch');
 });
 
 test('the guard degrades to off when localStorage is unavailable', () => {
