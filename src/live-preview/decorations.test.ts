@@ -713,6 +713,30 @@ test('a bare email autolink is opened as mailto:, not https://', () => {
 
 // --- Other markup -----------------------------------------------------------
 
+test('a bare URL in a table cell renders, and is clickable', () => {
+  // The URL child was skipped wholesale so the cell came out EMPTY, while the
+  // source plainly had a link in it — invisible in a view that hides markup.
+  const cell = tableWidget('x\n\n| a |\n|---|\n| https://bare.example |')!.spec.rows[0][0];
+  assert.equal(cell.map((seg) => seg.text).join(''), 'https://bare.example');
+  assert.equal(cell.find((seg) => seg.cls === 'md-link')?.href, 'https://bare.example');
+});
+
+test('a bare www / email autolink in a cell gets the scheme it implies', () => {
+  const cellOf = (src: string): { text: string; href?: string } => {
+    const segs = tableWidget(`x\n\n| a |\n|---|\n| ${src} |`)!.spec.rows[0][0];
+    const link = segs.find((seg) => seg.cls === 'md-link');
+    return { text: segs.map((seg) => seg.text).join(''), href: link?.href };
+  };
+  assert.deepEqual(cellOf('www.example.com'), { text: 'www.example.com', href: 'https://www.example.com' });
+  assert.deepEqual(cellOf('a@b.com'), { text: 'a@b.com', href: 'mailto:a@b.com' });
+});
+
+test('a link destination inside a cell is still dropped, not duplicated', () => {
+  // The fix must not start showing the `url` of `[text](url)` next to the text.
+  const cell = tableWidget('x\n\n| a |\n|---|\n| [text](https://u.example) |')!.spec.rows[0][0];
+  assert.equal(cell.map((seg) => seg.text).join(''), 'text');
+});
+
 test('a link inside a table cell is held to the same scheme allow-list', () => {
   // The table path is a separate call site, and a riskier one: the cell builds
   // a real <a href> as well as calling window.open(), so a `javascript:` URL

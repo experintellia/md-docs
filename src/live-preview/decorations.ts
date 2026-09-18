@@ -160,7 +160,18 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
   for (let child = cell.firstChild; child; child = child.nextSibling) {
     if (child.from > pos) out.push({ text: doc.sliceString(pos, child.from), cls });
     pos = child.to;
-    if (HIDDEN_MARKS.has(child.name) || child.name === 'URL') continue;
+    if (HIDDEN_MARKS.has(child.name)) continue;
+    if (child.name === 'URL') {
+      // Inside `[text](url)` / `![alt](url)` the destination is redundant with
+      // the text we already emit, so it stays dropped. A *bare* autolink has no
+      // such text — it IS the visible link, and skipping it rendered the whole
+      // cell empty while the source clearly had content in it.
+      const parent = child.parent?.name;
+      if (parent === 'Link' || parent === 'Image') continue;
+      const text = doc.sliceString(child.from, child.to);
+      out.push({ text, cls: 'md-link', href: safeHref(text) ?? undefined });
+      continue;
+    }
     if (child.name === 'Escape') {
       // `\|` is the only way to put a pipe in a cell; show the pipe, not both.
       out.push({ text: doc.sliceString(child.from + 1, child.to), cls });
