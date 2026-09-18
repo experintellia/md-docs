@@ -713,6 +713,67 @@ test('a bare email autolink is opened as mailto:, not https://', () => {
 
 // --- Other markup -----------------------------------------------------------
 
+test('a bare URL in a table cell renders, and is clickable', () => {
+  // The URL child was skipped wholesale so the cell came out EMPTY, while the
+  // source plainly had a link in it — invisible in a view that hides markup.
+  const cell = tableWidget('x\n\n| a |\n|---|\n| https://bare.example |')!.spec.rows[0][0];
+  assert.equal(cell.map((seg) => seg.text).join(''), 'https://bare.example');
+  assert.equal(cell.find((seg) => seg.cls === 'md-link')?.href, 'https://bare.example');
+});
+
+test('a bare www / email autolink in a cell gets the scheme it implies', () => {
+  const cellOf = (src: string): { text: string; href?: string } => {
+    const segs = tableWidget(`x\n\n| a |\n|---|\n| ${src} |`)!.spec.rows[0][0];
+    const link = segs.find((seg) => seg.cls === 'md-link');
+    return { text: segs.map((seg) => seg.text).join(''), href: link?.href };
+  };
+  assert.deepEqual(cellOf('www.example.com'), { text: 'www.example.com', href: 'https://www.example.com' });
+  assert.deepEqual(cellOf('a@b.com'), { text: 'a@b.com', href: 'mailto:a@b.com' });
+});
+
+test('a link destination inside a cell is still dropped, not duplicated', () => {
+  // The fix must not start showing the `url` of `[text](url)` next to the text.
+  const cell = tableWidget('x\n\n| a |\n|---|\n| [text](https://u.example) |')!.spec.rows[0][0];
+  assert.equal(cell.map((seg) => seg.text).join(''), 'text');
+});
+
+test('a link whose TEXT looks like a URL still shows its text', () => {
+  // GFM parses autolink-shaped link text into a URL node of its own, so
+  // `[www.a.com](https://b.com)` holds two. Hiding both as "the destination"
+  // left nothing to render: an empty cell, and inline the link vanished.
+  const cell = tableWidget('x\n\n| a |\n|---|\n| [www.a.com](https://b.com) |')!.spec.rows[0][0];
+  assert.equal(cell.map((seg) => seg.text).join(''), 'www.a.com');
+  assert.equal(cell.find((seg) => seg.cls === 'md-link')?.href, 'https://b.com', 'href is the destination');
+
+  const email = tableWidget('x\n\n| a |\n|---|\n| [a@b.com](https://b.com) |')!.spec.rows[0][0];
+  assert.equal(email.map((seg) => seg.text).join(''), 'a@b.com');
+});
+
+test('inline: URL-shaped link text is not hidden, and the href stays the destination', () => {
+  const decos = decorate('[www.a.com](https://b.com)\nbody', 28); // cursor on line 2
+  // The text `www.a.com` spans 1..10 — it must not be among the hidden ranges.
+  assert.ok(
+    !hiddenMarkers(decos).some((d) => d.from === 1 && d.to === 10),
+    'the link text survives',
+  );
+  // The destination 12..25 is still hidden as redundant.
+  assert.ok(
+    hiddenMarkers(decos).some((d) => d.from === 12 && d.to === 25),
+    'the destination is still hidden',
+  );
+  // Exactly one href, and it points at the destination — not at the link text.
+  const hrefs = decos
+    .map((d) => d.spec.attributes?.['data-href'])
+    .filter((h): h is string => h !== undefined);
+  assert.deepEqual(hrefs, ['https://b.com']);
+});
+
+test('an image whose alt text looks like a URL keeps its alt', () => {
+  const cell = tableWidget('x\n\n| a |\n|---|\n| ![www.a.com](https://b.com) |')!.spec.rows[0][0];
+  assert.equal(cell.map((seg) => seg.text).join(''), 'www.a.com');
+  assert.equal(cell.find((seg) => seg.href !== undefined), undefined, 'an image is not a link');
+});
+
 test('a link inside a table cell is held to the same scheme allow-list', () => {
   // The table path is a separate call site, and a riskier one: the cell builds
   // a real <a href> as well as calling window.open(), so a `javascript:` URL

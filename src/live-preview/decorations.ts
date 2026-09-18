@@ -151,6 +151,19 @@ function rangeHasSelection(state: EditorState, from: number, to: number): boolea
   return state.selection.ranges.some((r) => r.from <= to && r.to >= from);
 }
 
+// Which URL node is a link's *destination*? Not simply "a URL inside a Link":
+// GFM parses autolink-shaped link TEXT into a URL node too, so
+// `[www.a.com](https://b.com)` contains two of them. Treating both as the
+// destination hid the text as well and the link vanished from the preview
+// entirely — blank in a table cell, invisible inline. The destination is the
+// one introduced by the `](`.
+function isLinkDestination(node: SyntaxNodeLike, doc: Text): boolean {
+  const parent = node.parent?.name;
+  if (parent !== 'Link' && parent !== 'Image') return false;
+  const prev = node.prevSibling;
+  return prev?.name === 'LinkMark' && doc.sliceString(prev.from, prev.to) === '(';
+}
+
 // A cell's text, split where the live preview would paint it differently. The
 // markers that produce the formatting are dropped, the rest keeps the same
 // `md-*` classes the editor uses everywhere else.
@@ -160,7 +173,22 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
   for (let child = cell.firstChild; child; child = child.nextSibling) {
     if (child.from > pos) out.push({ text: doc.sliceString(pos, child.from), cls });
     pos = child.to;
-    if (HIDDEN_MARKS.has(child.name) || child.name === 'URL') continue;
+    if (HIDDEN_MARKS.has(child.name)) continue;
+    if (child.name === 'URL') {
+      const text = doc.sliceString(child.from, child.to);
+      if (child.parent?.name === 'Link' || child.parent?.name === 'Image') {
+        // The destination is redundant with the link text we already emit, so
+        // it stays dropped; autolink-shaped link *text* is that text and has to
+        // survive. The enclosing Link supplies the href either way.
+        if (isLinkDestination(child, doc)) continue;
+        out.push({ text, cls });
+        continue;
+      }
+      // A bare autolink has no link text — it IS the visible link. Skipping it
+      // rendered the whole cell empty while the source clearly had content.
+      out.push({ text, cls: 'md-link', href: safeHref(text) ?? undefined });
+      continue;
+    }
     if (child.name === 'Escape') {
       // `\|` is the only way to put a pipe in a cell; show the pipe, not both.
       out.push({ text: doc.sliceString(child.from + 1, child.to), cls });
@@ -389,7 +417,11 @@ export function buildDecorations(view: EditorView): DecorationSet {
           // itself the visible link, so style it like a link instead of hiding.
           const parent = node.node.parent?.name;
           if (parent === 'Link' || parent === 'Image') {
-            if (!lineHasSelection(state, node.from)) {
+            // Only the destination is redundant. Autolink-shaped link text is
+            // left alone: the enclosing Link already carries the class and the
+            // data-href, so marking it again here would point a click at the
+            // text instead of the real destination.
+            if (isLinkDestination(node.node, doc) && !lineHasSelection(state, node.from)) {
               ranges.push(hidden.range(node.from, node.to));
             }
             return;
