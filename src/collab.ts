@@ -38,7 +38,7 @@ export function titleFromMarkdown(line: string): string {
     .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '') // - / 1. list marker
     .replace(/^\s*>\s?/, '')               // > blockquote
     .replace(/^\s*\[[ xX]\]\s+/, '')       // [ ] checklist marker
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) -> text
+    .replace(/!?\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) / ![alt](url) -> inner
     .replace(/(\*\*|__|\*|_|`)(.+?)\1/g, '$2') // **b** *i* `c` -> inner text
     .replace(/[*_`]/g, '')                 // stray/unpaired markers
     .trim();

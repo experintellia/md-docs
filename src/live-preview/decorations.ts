@@ -169,7 +169,7 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
     if (child.name === 'Link') {
       const url = linkUrl(doc.sliceString(child.from, child.to));
       const text = cellSegments(child, doc, cls).map((s) => s.text).join('');
-      out.push({ text, cls: 'md-link', href: url === null ? undefined : withScheme(url) });
+      out.push({ text, cls: 'md-link', href: safeHref(url ?? '') ?? undefined });
       continue;
     }
     out.push(...cellSegments(child, doc, INLINE_MARK_CLASS[child.name] ?? cls));
@@ -228,10 +228,18 @@ function linkUrl(src: string): string | null {
   return m ? m[1] : null;
 }
 
-// A bare `www.foo` autolink has no scheme; window.open() would treat it as a
-// relative path. Give it https so the click reaches the real site.
-function withScheme(url: string): string {
-  return /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`;
+// Turn a link destination into an href we are willing to hand to window.open,
+// or null to leave it unclickable. The document is shared over chat, so the
+// destination is peer-controlled: a `[click me](javascript:...)` planted by
+// another peer must never reach window.open. Only http(s) and mailto pass.
+// A scheme-less autolink gets the scheme it implies — `www.foo` is a host,
+// `a@b.com` is an email (`https://mailto:a@b.com` was the old bug).
+function safeHref(url: string): string | null {
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(url);
+  if (scheme) return /^(https?|mailto)$/i.test(scheme[1]) ? url : null;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(url)) return `mailto:${url}`;
+  // Anything else scheme-less (`/foo`, `#anchor`, '') is not openable here.
+  return /^[\w-]+(\.[\w-]+)+/.test(url) ? `https://${url}` : null;
 }
 
 /**
@@ -365,7 +373,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
           // leave it as plain styled text so the raw `[text](url)` stays editable.
           const url = lineHasSelection(state, node.from)
             ? null
-            : linkUrl(doc.sliceString(node.from, node.to));
+            : safeHref(linkUrl(doc.sliceString(node.from, node.to)) ?? '');
           ranges.push(
             Decoration.mark({
               class: 'md-link',
@@ -388,7 +396,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
           }
           const url = lineHasSelection(state, node.from)
             ? null
-            : withScheme(doc.sliceString(node.from, node.to));
+            : safeHref(doc.sliceString(node.from, node.to));
           ranges.push(
             Decoration.mark({
               class: 'md-link',
