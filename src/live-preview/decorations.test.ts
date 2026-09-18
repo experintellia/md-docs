@@ -737,6 +737,43 @@ test('a link destination inside a cell is still dropped, not duplicated', () => 
   assert.equal(cell.map((seg) => seg.text).join(''), 'text');
 });
 
+test('a link whose TEXT looks like a URL still shows its text', () => {
+  // GFM parses autolink-shaped link text into a URL node of its own, so
+  // `[www.a.com](https://b.com)` holds two. Hiding both as "the destination"
+  // left nothing to render: an empty cell, and inline the link vanished.
+  const cell = tableWidget('x\n\n| a |\n|---|\n| [www.a.com](https://b.com) |')!.spec.rows[0][0];
+  assert.equal(cell.map((seg) => seg.text).join(''), 'www.a.com');
+  assert.equal(cell.find((seg) => seg.cls === 'md-link')?.href, 'https://b.com', 'href is the destination');
+
+  const email = tableWidget('x\n\n| a |\n|---|\n| [a@b.com](https://b.com) |')!.spec.rows[0][0];
+  assert.equal(email.map((seg) => seg.text).join(''), 'a@b.com');
+});
+
+test('inline: URL-shaped link text is not hidden, and the href stays the destination', () => {
+  const decos = decorate('[www.a.com](https://b.com)\nbody', 28); // cursor on line 2
+  // The text `www.a.com` spans 1..10 — it must not be among the hidden ranges.
+  assert.ok(
+    !hiddenMarkers(decos).some((d) => d.from === 1 && d.to === 10),
+    'the link text survives',
+  );
+  // The destination 12..25 is still hidden as redundant.
+  assert.ok(
+    hiddenMarkers(decos).some((d) => d.from === 12 && d.to === 25),
+    'the destination is still hidden',
+  );
+  // Exactly one href, and it points at the destination — not at the link text.
+  const hrefs = decos
+    .map((d) => d.spec.attributes?.['data-href'])
+    .filter((h): h is string => h !== undefined);
+  assert.deepEqual(hrefs, ['https://b.com']);
+});
+
+test('an image whose alt text looks like a URL keeps its alt', () => {
+  const cell = tableWidget('x\n\n| a |\n|---|\n| ![www.a.com](https://b.com) |')!.spec.rows[0][0];
+  assert.equal(cell.map((seg) => seg.text).join(''), 'www.a.com');
+  assert.equal(cell.find((seg) => seg.href !== undefined), undefined, 'an image is not a link');
+});
+
 test('a link inside a table cell is held to the same scheme allow-list', () => {
   // The table path is a separate call site, and a riskier one: the cell builds
   // a real <a href> as well as calling window.open(), so a `javascript:` URL
