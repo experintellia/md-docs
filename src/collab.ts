@@ -23,6 +23,13 @@ export interface Collab {
   undoManager: Y.UndoManager;
   provider: WebxdcProvider;
   history: History;
+  /**
+   * True once a local draft save has failed and has not since succeeded. The
+   * document still syncs to chat peers — only the on-device crash net is
+   * affected — but it is worth surfacing, because the whole point of that net
+   * is the case where the app goes away without warning.
+   */
+  draftSaveFailed: () => boolean;
 }
 
 /**
@@ -118,11 +125,23 @@ export function createCollab(): Collab {
   // ponytail: snapshots the full doc state as base64 on each save — fine for
   // markdown-sized docs. Switch to an incremental update log only if docs grow
   // large enough to stall the synchronous write (cf. commit 2f71303).
+  let saveFailed = false;
   const saveDraft = () => {
     // Never clobber a draft that hasn't been restored yet — its unsent tail
     // would be lost if the app backgrounds during the replay window.
     if (!restored) return;
-    localStorage.setItem(DRAFT_KEY, fromUint8Array(Y.encodeStateAsUpdateV2(ydoc)));
+    try {
+      localStorage.setItem(DRAFT_KEY, fromUint8Array(Y.encodeStateAsUpdateV2(ydoc)));
+      saveFailed = false;
+    } catch (err) {
+      // Quota exhausted, or storage blocked entirely. This runs from a
+      // visibilitychange handler and from a timer, so an uncaught throw here
+      // went nowhere and the crash net just stopped working in silence — the
+      // one failure it exists to prevent. A failed setItem leaves the PREVIOUS
+      // value intact, so we fall back to an older snapshot, not to nothing.
+      saveFailed = true;
+      console.warn('collab: could not save the local draft', err);
+    }
   };
 
   // The line that fixes the reported iOS loss: a synchronous write the moment
@@ -138,5 +157,8 @@ export function createCollab(): Collab {
     saveTimer = setTimeout(saveDraft, 1000);
   });
 
-  return { ydoc, ytext, awareness, undoManager, provider, history };
+  return {
+    ydoc, ytext, awareness, undoManager, provider, history,
+    draftSaveFailed: () => saveFailed,
+  };
 }

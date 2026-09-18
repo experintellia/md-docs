@@ -46,7 +46,12 @@ function main(): void {
 
   if (statusEl && collab) {
     collab.provider.on('sync', ({ hasQueued }) => {
-      statusEl.textContent = hasQueued ? 'editing…' : 'saved';
+      // A failed on-device draft save outranks the sync state: edits still
+      // reach peers, but the net that survives an abrupt close is gone, and
+      // that is worth saying out loud rather than only in the console.
+      statusEl.textContent = collab.draftSaveFailed()
+        ? 'no device backup'
+        : hasQueued ? 'editing…' : 'saved';
     });
   }
 }
