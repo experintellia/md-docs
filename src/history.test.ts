@@ -151,19 +151,24 @@ test('a batch that cannot be decoded is skipped, not fatal for the timeline', ()
   assert.deepEqual(v.map((e) => e.author), ['Alice', 'Bob'], 'bad batches dropped');
 });
 
-test('a throwing onChange listener does not stop the document from syncing', () => {
+test('a throwing onChange listener is contained and the rest still run', () => {
   // The history overlay renders from onChange. Notifying before handing the
   // update to the provider meant a render error swallowed the update entirely,
-  // so the shared document stopped syncing until the app was restarted.
+  // so the shared document stopped syncing until the app was restarted. The
+  // provider now goes first, AND a failing listener no longer escapes into the
+  // webxdc host's dispatch loop or skips the listeners queued behind it.
   const [blob] = blobs([(t) => t.insert(0, 'hi')]);
   const { real, fire } = fakeWebxdc();
   const history = setupHistory(real);
   const received: unknown[] = [];
   history.webxdc.setUpdateListener((u) => { received.push(u); });
+  let reachedSecond = false;
   history.onChange(() => { throw new Error('render blew up'); });
+  history.onChange(() => { reachedSecond = true; });
 
-  assert.throws(() => fire({ serializedYjsUpdate: blob, t: 1, author: 'Alice' }));
+  assert.doesNotThrow(() => fire({ serializedYjsUpdate: blob, t: 1, author: 'Alice' }));
   assert.equal(received.length, 1, 'the provider still got the update');
+  assert.equal(reachedSecond, true, 'a later listener is not skipped by the failing one');
   assert.deepEqual(history.versions().map((e) => e.text), ['hi'], 'and it was recorded');
 });
 

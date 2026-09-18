@@ -71,6 +71,78 @@ interface HistPayload {
   restoredFrom?: RestoreSource;
 }
 
+/**
+ * Poison-batch guard.
+ *
+ * Applying a batch can abort the whole process rather than throw. yjs reads a
+ * struct count straight off the wire — `new Array(numberOfStructs)` in
+ * `readClientsStructRefs`, from an unvalidated varuint — so a corrupt or
+ * hostile value there makes V8 die with "FATAL ERROR: Allocation failed -
+ * JavaScript heap out of memory". That is not a catchable exception, so no
+ * try/catch around the decode can help, and y-webxdc applies the same bytes
+ * unguarded before we ever see them. The guard therefore has to sit in front of
+ * both, and it cannot work by inspecting the batch: telling a poisoned batch
+ * from a good one means decoding it, which is the thing that kills us.
+ *
+ * What makes this worth guarding at all is that the channel replays its whole
+ * log on every launch. One such batch kills the app on open, every time, on
+ * every peer's device — a permanently unusable document, with no way back from
+ * inside the app. So instead of validating: write down the batch we are about
+ * to apply, and if that note is still there on the next launch, that batch is
+ * what killed us. Quarantine it and never hand it to the decoder again.
+ *
+ * The real fix belongs upstream (yjs bounding the count, or y-webxdc guarding
+ * the apply); this keeps one bad batch from being fatal in the meantime.
+ *
+ * ponytail: two synchronous localStorage writes per incoming batch, which on a
+ * long startup replay is the whole cost of this guard. Cheap against an
+ * unrecoverable failure. If replay latency ever shows up, arm only for batches
+ * not already seen rather than dropping the guard.
+ */
+const POISON_KEY = 'md-docs-poison-batches';
+
+interface PoisonState {
+  /** the batch currently being decoded — set before, cleared after */
+  pending: string | null;
+  /** batches a previous run died on */
+  bad: string[];
+}
+
+function readPoison(): PoisonState {
+  try {
+    const raw = JSON.parse(localStorage.getItem(POISON_KEY) ?? '{}') as {
+      pending?: unknown;
+      bad?: unknown;
+    };
+    return {
+      pending: typeof raw?.pending === 'string' ? raw.pending : null,
+      bad: Array.isArray(raw?.bad)
+        ? raw.bad.filter((x: unknown): x is string => typeof x === 'string')
+        : [],
+    };
+  } catch {
+    // No storage (webview private mode), or a corrupt note: the guard degrades
+    // to off rather than taking startup down with it.
+    return { pending: null, bad: [] };
+  }
+}
+
+function writePoison(state: PoisonState): void {
+  try {
+    localStorage.setItem(POISON_KEY, JSON.stringify(state));
+  } catch {
+    // As above — an unavailable store disables the guard, nothing more.
+  }
+}
+
+// A cheap content id for a batch. Not cryptographic: it only has to tell one
+// batch apart from the others in this document's log.
+function fingerprint(blob: string): string {
+  let h = 0;
+  for (let i = 0; i < blob.length; i++) h = (Math.imul(h, 31) + blob.charCodeAt(i)) | 0;
+  return `${blob.length}:${(h >>> 0).toString(36)}`;
+}
+
 export function setupHistory(real: typeof window.webxdc): History {
   // Receipt order, NOT sorted by `t`: the channel delivers updates in a causally
   // consistent serial order, and Yjs needs each prefix to be causally complete to
@@ -79,9 +151,27 @@ export function setupHistory(real: typeof window.webxdc): History {
   // version is always exact. Good enough for a timeline; revisit only if it bites.
   const records: Record[] = [];
   const listeners: Array<() => void> = [];
-  const emit = (): void => { for (const cb of listeners) cb(); };
+  const emit = (): void => {
+    for (const cb of listeners) {
+      try {
+        cb();
+      } catch (err) {
+        // One failing listener must not skip the others, nor escape into the
+        // webxdc host's dispatch loop on its way out.
+        console.error('history: an onChange listener failed', err);
+      }
+    }
+  };
 
   const author = real.selfName || 'unknown';
+  // A note left behind by the previous run means we never reached the line that
+  // clears it: that batch killed the process mid-decode. Quarantine it.
+  const poison = readPoison();
+  if (poison.pending !== null) {
+    if (!poison.bad.includes(poison.pending)) poison.bad.push(poison.pending);
+    poison.pending = null;
+    writePoison(poison);
+  }
   // Captured from setUpdateListener below; read via History.replayed().
   let replayed: Promise<void> = Promise.resolve();
   // One-shot: set by markRestore(), consumed by the next outgoing batch.
@@ -117,15 +207,28 @@ export function setupHistory(real: typeof window.webxdc): History {
     configurable: true,
     value: (cb: (u: { payload: HistPayload }) => void, serial?: number) => {
       const wrapped = (u: { payload: HistPayload }): void => {
+        const p = u.payload;
+        const blob = typeof p?.serializedYjsUpdate === 'string' ? p.serializedYjsUpdate : null;
+        let id: string | null = null;
+        if (blob !== null) {
+          id = fingerprint(blob);
+          // Known to have killed a previous run: it never reaches a decoder
+          // again, ours or the provider's.
+          if (poison.bad.includes(id)) return;
+          poison.pending = id;
+          writePoison(poison);
+        }
         // The provider first: history is bookkeeping, and a throw from one of
         // our onChange listeners must not stop the document itself from syncing.
         cb(u);
-        const p = u.payload;
-        if (typeof p?.serializedYjsUpdate === 'string') {
+        if (blob !== null) {
+          // Survived the decode, so it is not the batch that kills us.
+          poison.pending = null;
+          writePoison(poison);
           records.push({
             t: typeof p.t === 'number' ? p.t : Date.now(),
             author: typeof p.author === 'string' ? p.author : 'unknown',
-            blob: p.serializedYjsUpdate,
+            blob,
             restoredFrom: p.restoredFrom,
           });
           emit();
