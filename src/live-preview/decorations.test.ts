@@ -893,6 +893,30 @@ test('a link-reference definition keeps its colon', () => {
   );
 });
 
+test('a definition line with a title is left intact, title included', () => {
+  // Scoping the exemption to the `:` alone fixed the colon and then ate the
+  // title instead — the same silent rewriting of a line one node over.
+  const src = '[a]: https://r.example "the title"';
+  const decos = decorate(src + '\nbody', src.length + 2);
+  assert.deepEqual(hiddenMarkers(decos), [], 'nothing in a definition is hidden');
+});
+
+test('an image reference hides its label too', () => {
+  // `![a][ref]` is the image form of `[a][ref]`; its LinkLabel hangs off an
+  // Image, so a Link-only predicate left `a[ref]` on screen.
+  const decos = decorate('![a][ref]\nbody', 11);
+  assert.ok(
+    hiddenMarkers(decos).some((d) => d.from === 4 && d.to === 9),
+    'the `[ref]` label is hidden inline',
+  );
+  assert.equal(
+    tableWidget('x\n\n| a |\n|---|\n| ![a][ref] |')!.spec.rows[0][0]
+      .map((g) => g.text).join(''),
+    'a',
+    'and in a table cell',
+  );
+});
+
 test('ordinary links, autolinks and images are unaffected', () => {
   assert.equal(dataHref('[text](https://b.com)\nbody', 23), 'https://b.com');
   assert.equal(dataHref('<https://x.com>\nbody', 17), 'https://x.com');

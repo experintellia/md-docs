@@ -168,18 +168,23 @@ function isLinkDestination(node: SyntaxNodeLike, doc: Text): boolean {
 }
 
 // `[a][ref]` carries its reference in a LinkLabel, which is syntax and should
-// not be read out. The same node also names a definition line (`[a]: url`),
-// where it IS the content, so only the one inside a Link is hidden.
+// not be read out. Images take the same form (`![a][ref]`). The node also names
+// a definition line (`[a]: url`), where it IS the content, so the one directly
+// under a LinkReference stays visible.
 function isReferenceLabel(node: SyntaxNodeLike): boolean {
-  return node.name === 'LinkLabel' && node.parent?.name === 'Link';
+  if (node.name !== 'LinkLabel') return false;
+  const parent = node.parent?.name;
+  return parent === 'Link' || parent === 'Image';
 }
 
-// The `:` of a link-reference definition (`[a]: url`) is a LinkMark like any
-// other, but hiding it turns the line into `[a] url` — silently changing what
-// it appears to say. A definition is metadata with no rendered form, so it is
-// left readable as source instead.
-function isDefinitionColon(node: SyntaxNodeLike): boolean {
-  return node.name === 'LinkMark' && node.parent?.name === 'LinkReference';
+// A link-reference definition (`[a]: url "title"`) has no rendered form, so it
+// is left readable as source — nothing inside one is decoration. Hiding by node
+// name alone ate the `:` (leaving `[a] url`) and then the title, each time
+// silently changing what the line appears to say. Scoping by parent covers the
+// whole line at once: LinkReference's children are exactly LinkLabel,
+// LinkMark(:), URL and an optional LinkTitle.
+function inDefinition(node: SyntaxNodeLike): boolean {
+  return node.parent?.name === 'LinkReference';
 }
 
 // A cell's text, split where the live preview would paint it differently. The
@@ -191,7 +196,7 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
   for (let child = cell.firstChild; child; child = child.nextSibling) {
     if (child.from > pos) out.push({ text: doc.sliceString(pos, child.from), cls });
     pos = child.to;
-    if (HIDDEN_MARKS.has(child.name) && !isDefinitionColon(child)) continue;
+    if (HIDDEN_MARKS.has(child.name) && !inDefinition(child)) continue;
     if (isReferenceLabel(child)) continue;
     if (child.name === 'URL') {
       const text = doc.sliceString(child.from, child.to);
@@ -511,7 +516,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
         }
 
         // --- Hide syntax markers, revealing them on the active line
-        if (HIDDEN_MARKS.has(name) && !isDefinitionColon(node.node)) {
+        if (HIDDEN_MARKS.has(name) && !inDefinition(node.node)) {
           if (lineHasSelection(state, node.from)) return;
           let end = node.to;
           // For heading markers, also swallow the trailing space(s).
