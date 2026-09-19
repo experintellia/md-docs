@@ -40,6 +40,9 @@ const HIDDEN_MARKS = new Set([
   'HeaderMark',
   'QuoteMark',
   'LinkMark',
+  // `[text](url "the title")` — the title belongs to the destination, so it is
+  // hidden with it rather than leaking into the rendered text.
+  'LinkTitle',
 ]);
 
 const hidden = Decoration.replace({});
@@ -164,6 +167,26 @@ function isLinkDestination(node: SyntaxNodeLike, doc: Text): boolean {
   return prev?.name === 'LinkMark' && doc.sliceString(prev.from, prev.to) === '(';
 }
 
+// `[a][ref]` carries its reference in a LinkLabel, which is syntax and should
+// not be read out. Images take the same form (`![a][ref]`). The node also names
+// a definition line (`[a]: url`), where it IS the content, so the one directly
+// under a LinkReference stays visible.
+function isReferenceLabel(node: SyntaxNodeLike): boolean {
+  if (node.name !== 'LinkLabel') return false;
+  const parent = node.parent?.name;
+  return parent === 'Link' || parent === 'Image';
+}
+
+// A link-reference definition (`[a]: url "title"`) has no rendered form, so it
+// is left readable as source — nothing inside one is decoration. Hiding by node
+// name alone ate the `:` (leaving `[a] url`) and then the title, each time
+// silently changing what the line appears to say. Scoping by parent covers the
+// whole line at once: LinkReference's children are exactly LinkLabel,
+// LinkMark(:), URL and an optional LinkTitle.
+function inDefinition(node: SyntaxNodeLike): boolean {
+  return node.parent?.name === 'LinkReference';
+}
+
 // A cell's text, split where the live preview would paint it differently. The
 // markers that produce the formatting are dropped, the rest keeps the same
 // `md-*` classes the editor uses everywhere else.
@@ -173,7 +196,8 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
   for (let child = cell.firstChild; child; child = child.nextSibling) {
     if (child.from > pos) out.push({ text: doc.sliceString(pos, child.from), cls });
     pos = child.to;
-    if (HIDDEN_MARKS.has(child.name)) continue;
+    if (HIDDEN_MARKS.has(child.name) && !inDefinition(child)) continue;
+    if (isReferenceLabel(child)) continue;
     if (child.name === 'URL') {
       const text = doc.sliceString(child.from, child.to);
       if (child.parent?.name === 'Link' || child.parent?.name === 'Image') {
@@ -195,7 +219,7 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
       continue;
     }
     if (child.name === 'Link') {
-      const url = linkUrl(doc.sliceString(child.from, child.to));
+      const url = linkDestination(child, doc);
       const text = cellSegments(child, doc, cls).map((s) => s.text).join('');
       out.push({ text, cls: 'md-link', href: safeHref(url ?? '') ?? undefined });
       continue;
@@ -251,9 +275,20 @@ function headingClass(name: string): string | null {
 }
 
 // Pull the destination out of a `[text](url)` / `[text](url "title")` source.
-function linkUrl(src: string): string | null {
-  const m = /\]\(\s*([^)\s]+)/.exec(src);
-  return m ? m[1] : null;
+function linkDestination(link: SyntaxNodeLike, doc: Text): string | null {
+  // Direct children only: in `[![alt](img)](href)` the image's own URL is a
+  // grandchild, so it is skipped for free. Reading the first `](` out of the
+  // source text instead is what made a badge link resolve to its badge image.
+  for (let child = link.firstChild; child; child = child.nextSibling) {
+    if (child.name === 'URL' && isLinkDestination(child, doc)) {
+      const url = doc.sliceString(child.from, child.to);
+      // `[text](<url>)` — the angle brackets delimit the destination (the only
+      // way to write one containing spaces) and are not part of it. Left on,
+      // `<` is not a scheme, so safeHref rejected it and the link went dead.
+      return url.startsWith('<') && url.endsWith('>') ? url.slice(1, -1) : url;
+    }
+  }
+  return null;
 }
 
 // Turn a link destination into an href we are willing to hand to window.open,
@@ -401,7 +436,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
           // leave it as plain styled text so the raw `[text](url)` stays editable.
           const url = lineHasSelection(state, node.from)
             ? null
-            : safeHref(linkUrl(doc.sliceString(node.from, node.to)) ?? '');
+            : safeHref(linkDestination(node.node, doc) ?? '');
           ranges.push(
             Decoration.mark({
               class: 'md-link',
@@ -473,8 +508,15 @@ export function buildDecorations(view: EditorView): DecorationSet {
           return;
         }
 
+        if (isReferenceLabel(node.node)) {
+          if (!lineHasSelection(state, node.from)) {
+            ranges.push(hidden.range(node.from, node.to));
+          }
+          return;
+        }
+
         // --- Hide syntax markers, revealing them on the active line
-        if (HIDDEN_MARKS.has(name)) {
+        if (HIDDEN_MARKS.has(name) && !inDefinition(node.node)) {
           if (lineHasSelection(state, node.from)) return;
           let end = node.to;
           // For heading markers, also swallow the trailing space(s).

@@ -824,3 +824,103 @@ test('a selection spanning several lines reveals the markup on all of them', () 
 test('an empty document produces no decorations and does not throw', () => {
   assert.deepEqual(decorate(''), []);
 });
+
+// --- Link structure read from the tree (issues #20, #21) -------------------
+// The destination used to be regexed out of the source text, which picked the
+// FIRST `](` — the nested image's, in a badge link.
+
+test('a badge link resolves to the link, not to the image inside it', () => {
+  const src = '[![Build](https://img.example/b.svg)](https://ci.example/job)';
+  assert.equal(dataHref(src + '\nbody', src.length + 2), 'https://ci.example/job');
+
+  const cellSegs = tableWidget(`x\n\n| a |\n|---|\n| ${src} |`)!.spec.rows[0][0];
+  assert.equal(cellSegs.map((g) => g.text).join(''), 'Build');
+  assert.equal(cellSegs.find((g) => g.href)?.href, 'https://ci.example/job');
+});
+
+test('an angle-bracketed destination is unwrapped, not left unclickable', () => {
+  // `<` is not a scheme, so safeHref rejected `<https://b.com>` and the link
+  // silently went dead. The brackets delimit the destination, they are not in it.
+  const src = '[text](<https://b.com>)';
+  assert.equal(dataHref(src + '\nbody', src.length + 2), 'https://b.com');
+  assert.equal(
+    tableWidget(`x\n\n| a |\n|---|\n| ${src} |`)!.spec.rows[0][0].find((g) => g.href)?.href,
+    'https://b.com',
+  );
+});
+
+test('a link title is hidden instead of leaking into the text', () => {
+  const src = '[text](https://b.com "the title")';
+  const decos = decorate(src + '\nbody', src.length + 2);
+  assert.ok(
+    hiddenMarkers(decos).some((d) => d.from === 21 && d.to === 32),
+    'the "the title" range is hidden',
+  );
+  assert.equal(withClass(decos, 'md-link')?.spec.attributes?.['data-href'], 'https://b.com');
+  // The cell path drops it too (a trailing space survives; it collapses in HTML).
+  assert.equal(
+    tableWidget(`x\n\n| a |\n|---|\n| ${src} |`)!.spec.rows[0][0]
+      .map((g) => g.text).join('').trim(),
+    'text',
+  );
+});
+
+test('a reference link shows its text, not its label', () => {
+  const decos = decorate('[a][ref]\nbody', 10);
+  assert.ok(
+    hiddenMarkers(decos).some((d) => d.from === 3 && d.to === 8),
+    'the `[ref]` label is hidden',
+  );
+  assert.equal(
+    tableWidget('x\n\n| a |\n|---|\n| [a][ref] |')!.spec.rows[0][0]
+      .map((g) => g.text).join(''),
+    'a',
+  );
+});
+
+test('a link-reference definition keeps its colon', () => {
+  // `:` is a LinkMark, so hiding all of them rendered `[a] https://r.example`
+  // — silently changing what the line appears to say. A definition has no
+  // rendered form, so it stays readable as source.
+  const decos = decorate('[a]: https://r.example\nbody', 24);
+  assert.ok(
+    !hiddenMarkers(decos).some((d) => d.from === 3 && d.to === 4),
+    'the `:` is not hidden',
+  );
+  assert.ok(
+    !hiddenMarkers(decos).some((d) => d.from === 0 && d.to === 3),
+    'and neither is the `[a]` label, which is this line\'s content',
+  );
+});
+
+test('a definition line with a title is left intact, title included', () => {
+  // Scoping the exemption to the `:` alone fixed the colon and then ate the
+  // title instead — the same silent rewriting of a line one node over.
+  const src = '[a]: https://r.example "the title"';
+  const decos = decorate(src + '\nbody', src.length + 2);
+  assert.deepEqual(hiddenMarkers(decos), [], 'nothing in a definition is hidden');
+});
+
+test('an image reference hides its label too', () => {
+  // `![a][ref]` is the image form of `[a][ref]`; its LinkLabel hangs off an
+  // Image, so a Link-only predicate left `a[ref]` on screen.
+  const decos = decorate('![a][ref]\nbody', 11);
+  assert.ok(
+    hiddenMarkers(decos).some((d) => d.from === 4 && d.to === 9),
+    'the `[ref]` label is hidden inline',
+  );
+  assert.equal(
+    tableWidget('x\n\n| a |\n|---|\n| ![a][ref] |')!.spec.rows[0][0]
+      .map((g) => g.text).join(''),
+    'a',
+    'and in a table cell',
+  );
+});
+
+test('ordinary links, autolinks and images are unaffected', () => {
+  assert.equal(dataHref('[text](https://b.com)\nbody', 23), 'https://b.com');
+  assert.equal(dataHref('<https://x.com>\nbody', 17), 'https://x.com');
+  assert.equal(dataHref('visit https://bare.example now\nbody', 33), 'https://bare.example');
+  // An image is still not a link, and its destination stays hidden.
+  assert.equal(withClass(decorate('![alt](http://img.png)\nbody', 24), 'md-link'), undefined);
+});
