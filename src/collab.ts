@@ -23,13 +23,6 @@ export interface Collab {
   undoManager: Y.UndoManager;
   provider: WebxdcProvider;
   history: History;
-  /**
-   * True once a local draft save has failed and has not since succeeded. The
-   * document still syncs to chat peers — only the on-device crash net is
-   * affected — but it is worth surfacing, because the whole point of that net
-   * is the case where the app goes away without warning.
-   */
-  draftSaveFailed: () => boolean;
 }
 
 /**
@@ -51,7 +44,15 @@ export function titleFromMarkdown(line: string): string {
     .trim();
 }
 
-export function createCollab(): Collab {
+/**
+ * @param onDraftSave notified after every attempt to write the on-device crash
+ *   net, so a failure reaches the UI when it happens. A polled getter could not:
+ *   the status line is repainted from provider `sync` events, and the flush that
+ *   fires one during backgrounding runs BEFORE our visibilitychange handler — so
+ *   the very failure this exists to report would have been painted a flush late,
+ *   or not at all if the user never came back.
+ */
+export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
   // Wrap webxdc so every update batch carries author + timestamp, and the
   // version timeline can be rebuilt from the channel's replayed update stream.
   const history = setupHistory(window.webxdc);
@@ -103,7 +104,16 @@ export function createCollab(): Collab {
   // is a pure diff: fully-synced → no updateV2 fires (see collab.sync.test.ts)
   // → nothing queued; a genuinely unsent tail still re-queues, so the next
   // flush re-propagates it to peers — and that one SHOULD notify.
-  const saved = localStorage.getItem(DRAFT_KEY);
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(DRAFT_KEY);
+  } catch (err) {
+    // Some engines throw on EVERY storage access, not only when full (Firefox
+    // with cookies disabled, a third-party-blocked Chromium iframe). Reading
+    // the draft must not be able to stop the editor from starting.
+    console.warn('collab: local storage unavailable', err);
+    onDraftSave?.(false);
+  }
   let restored = !saved;
   if (saved) {
     const applyDraft = (): void => {
@@ -111,9 +121,17 @@ export function createCollab(): Collab {
         Y.applyUpdateV2(ydoc, toUint8Array(saved));
       } catch {
         // Corrupt/garbage draft — drop it rather than block startup.
-        localStorage.removeItem(DRAFT_KEY);
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch {
+          // Blocked or read-only store; the save path reports it.
+        }
+      } finally {
+        // Has to run even when dropping the draft failed. Otherwise every later
+        // save early-returns on `!restored` and the net is off for the rest of
+        // the session — while the status line still reads "saved".
+        restored = true;
       }
-      restored = true;
     };
     // then(f, f) + timeout race: a rejected or never-settling replay promise
     // (spec violation) must not strand the draft forever — worst case on such
@@ -125,22 +143,21 @@ export function createCollab(): Collab {
   // ponytail: snapshots the full doc state as base64 on each save — fine for
   // markdown-sized docs. Switch to an incremental update log only if docs grow
   // large enough to stall the synchronous write (cf. commit 2f71303).
-  let saveFailed = false;
   const saveDraft = () => {
     // Never clobber a draft that hasn't been restored yet — its unsent tail
     // would be lost if the app backgrounds during the replay window.
     if (!restored) return;
     try {
       localStorage.setItem(DRAFT_KEY, fromUint8Array(Y.encodeStateAsUpdateV2(ydoc)));
-      saveFailed = false;
+      onDraftSave?.(true);
     } catch (err) {
       // Quota exhausted, or storage blocked entirely. This runs from a
       // visibilitychange handler and from a timer, so an uncaught throw here
       // went nowhere and the crash net just stopped working in silence — the
       // one failure it exists to prevent. A failed setItem leaves the PREVIOUS
       // value intact, so we fall back to an older snapshot, not to nothing.
-      saveFailed = true;
       console.warn('collab: could not save the local draft', err);
+      onDraftSave?.(false);
     }
   };
 
@@ -157,8 +174,5 @@ export function createCollab(): Collab {
     saveTimer = setTimeout(saveDraft, 1000);
   });
 
-  return {
-    ydoc, ytext, awareness, undoManager, provider, history,
-    draftSaveFailed: () => saveFailed,
-  };
+  return { ydoc, ytext, awareness, undoManager, provider, history };
 }

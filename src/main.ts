@@ -17,7 +17,22 @@ function main(): void {
   // it's absent when opening the dev server directly (e.g. :3000). Fall back to
   // a local-only editor in that case; collaboration lights up when the app is
   // opened in webxdc-dev (:7001/:7002) or a real messenger.
-  const collab = typeof window.webxdc === 'undefined' ? undefined : createCollab();
+  // The status line has two independent inputs: whether edits are still queued
+  // for peers, and whether the on-device crash net is working. Repaint from
+  // both, so a failed draft save shows the moment it happens rather than
+  // waiting for the next provider flush.
+  let queued = false;
+  let draftOk = true;
+  const paintStatus = (): void => {
+    if (!statusEl) return;
+    // A broken net outranks the sync state: edits still reach peers, so this
+    // does not claim lost work, only that an abrupt close is no longer covered.
+    statusEl.textContent = !draftOk ? 'no device backup' : queued ? 'editing…' : 'saved';
+  };
+
+  const collab = typeof window.webxdc === 'undefined'
+    ? undefined
+    : createCollab((ok) => { draftOk = ok; paintStatus(); });
   if (!collab) {
     console.warn(
       'webxdc.js not found — running locally without sync. Open via webxdc-dev ' +
@@ -46,12 +61,8 @@ function main(): void {
 
   if (statusEl && collab) {
     collab.provider.on('sync', ({ hasQueued }) => {
-      // A failed on-device draft save outranks the sync state: edits still
-      // reach peers, but the net that survives an abrupt close is gone, and
-      // that is worth saying out loud rather than only in the console.
-      statusEl.textContent = collab.draftSaveFailed()
-        ? 'no device backup'
-        : hasQueued ? 'editing…' : 'saved';
+      queued = hasQueued;
+      paintStatus();
     });
   }
 }

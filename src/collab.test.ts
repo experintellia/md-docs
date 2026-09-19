@@ -132,17 +132,24 @@ test('with no draft stored the editor starts from the channel replay alone', () 
 // places where an uncaught throw goes nowhere and the crash net silently
 // stops working, which is the exact failure it exists to prevent.
 
-// Make writes fail while leaving reads working, and return a restore function.
-// The whole accessor is replaced: happy-dom's localStorage is a Proxy, so
-// assigning to `setItem` (on the instance or on Storage.prototype) is silently
-// dropped rather than taking effect.
-function failSetItem(thrower: () => never): () => void {
+// Make selected localStorage methods throw, and return a restore function. The
+// WHOLE accessor is replaced: happy-dom's localStorage is a Proxy, so assigning
+// to `setItem` (on the instance or on Storage.prototype) is silently dropped
+// and a test written that way passes without exercising anything.
+function failStorage(
+  fail: { getItem?: boolean; setItem?: boolean; removeItem?: boolean },
+): () => void {
   const original = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
   const real = window.localStorage;
+  const boom = (): never => {
+    const err = new Error('QuotaExceededError');
+    err.name = 'QuotaExceededError';
+    throw err;
+  };
   const stub = {
-    getItem: (k: string) => real.getItem(k),
-    setItem: thrower,
-    removeItem: (k: string) => real.removeItem(k),
+    getItem: (k: string) => (fail.getItem ? boom() : real.getItem(k)),
+    setItem: (k: string, v: string) => (fail.setItem ? boom() : real.setItem(k, v)),
+    removeItem: (k: string) => (fail.removeItem ? boom() : real.removeItem(k)),
     clear: () => real.clear(),
   };
   Object.defineProperty(window, 'localStorage', { configurable: true, get: () => stub });
@@ -159,54 +166,74 @@ function background(): void {
 test('a draft save that exceeds quota is contained and reported', async () => {
   localStorage.removeItem(DRAFT_KEY);
   mockWebxdc([]);
-  const collab = createCollab();
+  const saves: boolean[] = [];
+  const collab = createCollab((ok) => saves.push(ok));
   await settle();
   collab.ytext.insert(0, 'some work worth keeping');
 
-  // A good save first, so there is a previous draft to fall back to.
   background();
-  const previous = localStorage.getItem(DRAFT_KEY);
-  assert.ok(previous, 'the draft was written while storage was healthy');
-  assert.equal(collab.draftSaveFailed(), false);
+  assert.ok(localStorage.getItem(DRAFT_KEY), 'the draft was written while storage was healthy');
+  assert.deepEqual(saves, [true]);
 
-  const restore = failSetItem(() => {
-    const err = new Error('QuotaExceededError');
-    err.name = 'QuotaExceededError';
-    throw err;
-  });
+  const restore = failStorage({ setItem: true });
   try {
     collab.ytext.insert(0, 'more work');
     assert.doesNotThrow(background, 'the throw does not escape the visibilitychange handler');
-    assert.equal(collab.draftSaveFailed(), true, 'and it is reported rather than silent');
+    assert.deepEqual(saves, [true, false], 'the failure is reported as it happens');
   } finally {
     restore();
   }
 
-  assert.equal(
-    localStorage.getItem(DRAFT_KEY), previous,
-    'the earlier draft survives, so the net falls back to an older snapshot',
-  );
-
-  // Recovering (storage freed) clears the flag again.
+  // Recovering clears it again, and the report is what drives the UI.
   background();
-  assert.equal(collab.draftSaveFailed(), false);
-  assert.notEqual(localStorage.getItem(DRAFT_KEY), previous, 'and saving resumes');
+  assert.deepEqual(saves, [true, false, true]);
   localStorage.removeItem(DRAFT_KEY);
 });
 
 test('storage blocked outright does not stop the editor from starting', async () => {
-  // Some webviews throw on every storage access, not just when full.
+  // Some engines throw on EVERY access, not just writes — including the
+  // getItem that reads the draft during createCollab(). An earlier version of
+  // this test only made setItem throw, so it asserted coverage it did not have
+  // and passed while startup was still able to die here.
   localStorage.removeItem(DRAFT_KEY);
   mockWebxdc([]);
-  const restore = failSetItem(() => { throw new Error('storage disabled'); });
+  const restore = failStorage({ getItem: true, setItem: true, removeItem: true });
   try {
-    const collab = createCollab();
+    const saves: boolean[] = [];
+    let collab: ReturnType<typeof createCollab> | undefined;
+    assert.doesNotThrow(() => { collab = createCollab((ok) => saves.push(ok)); },
+      'createCollab survives a store that throws on read');
     await settle();
-    collab.ytext.insert(0, 'typed anyway');
+    collab!.ytext.insert(0, 'typed anyway');
     assert.doesNotThrow(background);
-    assert.equal(collab.ytext.toString(), 'typed anyway', 'editing still works');
-    assert.equal(collab.draftSaveFailed(), true);
+    assert.equal(collab!.ytext.toString(), 'typed anyway', 'editing still works');
+    assert.ok(saves.includes(false), 'and the broken net is reported');
   } finally {
     restore();
   }
+});
+
+test('a corrupt draft that cannot be removed still leaves saving enabled', async () => {
+  // applyDraft drops an undecodable draft. If that removeItem throws, an
+  // earlier version never reached `restored = true`, so every later save
+  // early-returned: nothing was ever written again and, because the early
+  // return happens before the try, nothing was reported either — the status
+  // line kept saying "saved" for the rest of the session.
+  localStorage.setItem(DRAFT_KEY, 'not valid yjs data');
+  mockWebxdc([]);
+  const restore = failStorage({ removeItem: true });
+  let collab: ReturnType<typeof createCollab>;
+  const saves: boolean[] = [];
+  try {
+    collab = createCollab((ok) => saves.push(ok));
+    await settle();
+  } finally {
+    restore();
+  }
+
+  collab!.ytext.insert(0, 'work after a corrupt draft');
+  background();
+  assert.deepEqual(saves, [true], 'saving is still enabled and still reports');
+  assert.ok(localStorage.getItem(DRAFT_KEY), 'and the new draft was written');
+  localStorage.removeItem(DRAFT_KEY);
 });
