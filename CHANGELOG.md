@@ -5,6 +5,45 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-19
+
+### Fixed
+- A link destination is peer-controlled, and `[click me](javascript:…)` was
+  clickable. Only `http(s):` and `mailto:` links open now; anything else is
+  left unclickable. `<mailto:a@b.com>` and bare email autolinks resolve to
+  `mailto:` instead of a dead `https://mailto:…` link. (#14)
+- Links in `[![alt](img)](href)` badge form clicked through to the image, not
+  the href; `[text](<url>)` produced no link; a link's `"title"` and a
+  reference link's `[label]` leaked into the preview as text; the `:` of a
+  `[a]: url` definition was hidden. Link parts are now read from the syntax
+  tree rather than the source text, in both the inline and table-cell paths.
+  (#25)
+- A bare URL as a table cell's whole content rendered an empty cell, and
+  `[www.a.com](https://b.com)` — link text that itself looks like a URL —
+  vanished from the preview entirely. (#17)
+- The checklist button on an empty `- [ ]` at the end of a line inserted a
+  second checkbox instead of ticking the first. (#14)
+- `![alt](url)` on the first line titled the chat document `!alt`. (#14)
+- A corrupt or hostile batch on the channel could abort the process while
+  decoding, and since the log replays on every launch, the document became
+  permanently unopenable on every peer's device. A batch that killed the
+  previous run is now recognised on the next start and quarantined. A batch
+  that merely throws is contained instead, so one bad listener can no longer
+  end the replay or silently drop that peer's later edits. (#18)
+- A truncated history batch threw on every render of the history view, and a
+  history error could swallow a document update before it reached the
+  provider — stopping sync until restart. Malformed realtime frames from the
+  ephemeral channel are dropped instead of escaping the decoder. (#14, #18)
+- The on-device crash-safety draft failed silently once `localStorage` was
+  full or blocked (Firefox with cookies disabled, a third-party-blocked
+  iframe) — and a blocked `getItem` stopped the editor from starting at all.
+  Every storage access is guarded, and a failed save shows "no device backup"
+  in the status line instead of "saved". (#26)
+
+### Changed
+- 31 edge-case tests pinning the fixes above and neighbouring behaviour that
+  was already correct. (#16)
+
 ## [0.3.0] - 2026-09-16
 
 ### Added
