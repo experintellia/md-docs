@@ -1,4 +1,4 @@
-# Math blocks (#27): which renderer?
+# Math blocks (#27): renderer choice
 
 Issue [#27](https://github.com/experintellia/md-docs/issues/27) asks for `$$ … $$`
 math blocks rendered the way fenced code blocks are. The editor side is the same
@@ -9,27 +9,45 @@ math looks right.
 Measured 2026-10-11 against `main` at v0.3.1 (KaTeX 0.19.0, Temml 0.14.0,
 MathJax 4.1.3). See [Method](#method) to repeat it.
 
-## Recommendation
+## Decision: KaTeX
 
-**KaTeX, with only the `woff2` fonts bundled.** Render `$$` blocks now, and leave
-inline `$…$` for a follow-up.
+Chosen and built (see [As built](#as-built)). Only `$$` blocks for now; inline
+`$…$` is a follow-up.
 
 - It's the only option that renders the issue's own example correctly *and* looks
   the same in every webview we target, including old ones, because its fonts ship
   inside the `.xdc` and its output is plain HTML and CSS.
-- It costs **+336 KB** (`.xdc` 400 → 736 KB). That's a lot for this app, so two
-  cheap trims are worth taking:
-  - Load KaTeX with `import()` so a document without math never parses it. The
-    measured main chunk stays at its current size and KaTeX goes in its own
-    262 KB chunk.
-  - Optionally, drop the rarely used font families (`\mathfrak`, `\mathscr`,
-    `\mathsf`, `\mathtt`). Those then fall back to the system font. This brings
-    the cost down to **≈ +256 KB**. `\mathcal` keeps its font, since it's common
-    in probability notation like the issue's.
+- If its size ever becomes the problem, the fallback is **Option D** (no
+  renderer, styled source), not Temml. Temml's small size only holds while it
+  uses system fonts, and on Android those make it look like the second
+  screenshot below.
 
-If even +256 KB is too much, the honest alternative is **Option D** (no renderer,
-styled source), not Temml. Temml's small size only holds while it uses system
-fonts, and on Android those make it look like the second screenshot below.
+## As built
+
+The `.xdc` grows from **400.4 KB to 689.8 KB: +289.4 KB (+72%)**.
+
+| What | In the `.xdc` |
+|---|---|
+| KaTeX fonts (15 woff2 files, plus one inlined in the CSS) | +203.2 KB |
+| KaTeX script, a separate chunk loaded on first use | +75.3 KB |
+| KaTeX stylesheet | +7.2 KB |
+| Parser, widget and zip entries | +3.7 KB |
+
+The main script grows by 3 KB. KaTeX's 256 KB script loads only once a document
+shows math, so documents without math start exactly as before.
+
+### Size: what was tried
+
+| Idea | Saves | Taken? |
+|---|---|---|
+| Bundle only the woff2 fonts (KaTeX's CSS also lists woff and ttf, and Vite bundles all three) | 601 KB | ✅ `katexFonts()` in `vite.config.ts` |
+| Drop the `\mathsf` / `\mathtt` fonts; the system sans-serif and monospace stand in | 47 KB | ✅ same plugin |
+| Load the KaTeX script on first use | 0 KB, but no startup cost without math | ✅ |
+| Drop the `\mathfrak` / `\mathscr` / `\mathcal` fonts | 45 KB | ❌ No system font stands in, and `\mathfrak{g}` shown as a plain g means something else |
+| Strip TrueType hinting from the fonts (`pyftsubset --no-hinting`) | 36 KB | ❌ Means keeping 16 rebuilt font binaries in the repo and redoing them on every KaTeX upgrade, and small math on low-DPI Windows renders worse |
+| Minify KaTeX with terser instead of esbuild | 0.5 KB | ❌ Not worth a dependency |
+| Recompress the `.xdc` with zopfli instead of deflate -9 | 16 KB (the whole app, not just math) | Not here: replaces `vite-plugin-zip-pack`, so it's its own change |
+| Shrink `public/icon.png` (1254×1254 px, 160 KB in the `.xdc`) to 512 px | ≈110 KB (≈140 KB at 256 px) | Not here: nothing to do with math, but it's the biggest win available |
 
 ## Options at a glance
 
@@ -139,18 +157,19 @@ the heaviest and slowest option.
 ## Integration
 
 This part doesn't depend on the renderer. It follows the table widget
-(`tableField` in `src/live-preview/decorations.ts`) and is about 100 lines plus
-tests:
+(`tableField` in `src/live-preview/decorations.ts`):
 
-1. A `@lezer/markdown` block-parser extension that turns `$$ … $$` into a
-   `MathBlock` node, passed as `markdown({ …, extensions: [mathBlock] })` in
-   `src/editor.ts`. Without it, today's parser reads the block as a paragraph and
-   treats `\{`, `\\` and `_` as markdown.
-2. A `StateField` that replaces each `MathBlock` with a block widget, and shows
-   the raw source while the selection touches the block (the same reveal rule
-   tables use).
-3. A `MathWidget` whose `eq()` compares the source text, so only edited blocks
-   re-render. The renderer is loaded with `import()` the first time it's needed.
+1. `src/live-preview/math.ts` is a `@lezer/markdown` block parser that turns
+   `$$ … $$` into a `MathBlock` node, in both the editor and the history viewer.
+   Without it the parser read the block as a paragraph, with `\{` and `\\` as
+   markdown escapes. A blank line ends a block that was never closed, so a `$$`
+   just typed doesn't swallow the rest of the note the way an open ``` fence
+   does.
+2. `mathField` replaces each closed `MathBlock` with a block widget, and shows
+   the source, styled like a code block, while the selection touches it (the
+   same reveal rule tables use).
+3. `MathWidget` (`widgets/math.ts`) compares by its TeX, so only an edited block
+   is typeset again. It loads KaTeX with `import()` the first time it's needed.
 
 `$$` is the syntax Obsidian, GitHub, Pandoc and Typora use, so documents stay
 portable.

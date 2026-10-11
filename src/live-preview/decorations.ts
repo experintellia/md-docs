@@ -10,6 +10,7 @@ import {
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
+import { MathWidget } from './widgets/math.ts';
 import { type Segment, type TableSpec, TableWidget } from './widgets/table.ts';
 
 /**
@@ -65,11 +66,14 @@ const DECIDES = /[\p{L}\u200e\u200f\u061c]/u;
 const BLOCK_MARKERS = /^[\s>]*(?:[-*+]|\d+[.)])?\s*(?:\[[ xX]\])?\s*/;
 const RTL = /[\u200f\u061c\p{Script=Adlam}\p{Script=Arabic}\p{Script=Hanifi_Rohingya}\p{Script=Hebrew}\p{Script=Mandaic}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Syriac}\p{Script=Thaana}]/u;
 
+// Blocks pinned left-to-right whatever they contain: code, and TeX.
+const LTR_BLOCK = /^(?:FencedCode|CodeBlock|MathBlock)$/;
+
 // Is this line inside a code block? Code is pinned left-to-right whatever it
 // contains, so it cannot speak for the block around it.
 function isCode(state: EditorState, line: Line): boolean {
   for (let n = syntaxTree(state).resolveInner(line.to, -1); ; n = n.parent) {
-    if (n.name === 'FencedCode' || n.name === 'CodeBlock') return true;
+    if (LTR_BLOCK.test(n.name)) return true;
     if (!n.parent) return false;
   }
 }
@@ -123,7 +127,7 @@ function directionAt(state: EditorState, line: Line): 'ltr' | 'rtl' | null {
   // Resolved at the line's end, not its start: an indented code block begins
   // after the indent, so the first column is not inside it.
   for (let n = syntaxTree(state).resolveInner(line.to, -1); ; n = n.parent) {
-    if (n.name === 'FencedCode' || n.name === 'CodeBlock') return 'ltr';
+    if (LTR_BLOCK.test(n.name)) return 'ltr';
     if (n.name === 'Table') return blockDirection(state, n.from, n.to);
     if (!own && /^(?:Blockquote|BulletList|OrderedList)$/.test(n.name)) {
       own = blockDirection(state, n.from, n.to);
@@ -369,7 +373,9 @@ export function buildDecorations(view: EditorView): DecorationSet {
             );
           }
         }
-        if (name === 'Blockquote' || name === 'FencedCode') {
+        // A `$$` block being edited looks like the code block it is typed as;
+        // rendered, the math field below replaces it.
+        if (name === 'Blockquote' || name === 'FencedCode' || name === 'MathBlock') {
           // `- > text` parses as a ListItem directly containing a Blockquote
           // (valid CommonMark). Styling it as a quote too would double up
           // with the bullet on the same line, so a quote that *is* a list
@@ -398,7 +404,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
             // get tagged for the CSS to round the outer corners. A one-line
             // block gets both, which is why they set corners and not the
             // `border-radius` shorthand.
-            const edges = name !== 'FencedCode' ? '' :
+            const edges = name === 'Blockquote' ? '' :
               (pos === node.from ? ' md-code-first' : '') + (isLast ? ' md-code-last' : '');
             ranges.push(Decoration.line({ class: cls + edges }).range(line.from));
             if (isLast) break;
@@ -615,19 +621,54 @@ export function buildTables(state: EditorState): DecorationSet {
   return Decoration.set(ranges, true);
 }
 
-export const tableField = StateField.define<DecorationSet>({
-  create: (state) => buildTables(state),
-  update: (value, tr) => (
-    // The tree too: the parser only reaches the first few thousand characters
-    // up front and finishes in the background, and that transaction carries
-    // neither a document change nor a selection. Without this a table further
-    // down stays raw pipes until something else happens to touch the editor.
-    tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState)
-      ? buildTables(tr.state)
-      : value
-  ),
-  provide: (field) => EditorView.decorations.from(field),
-});
+// A state field holding one kind of block widget, rebuilt by `build`.
+function blockField(build: (state: EditorState) => DecorationSet): StateField<DecorationSet> {
+  return StateField.define<DecorationSet>({
+    create: build,
+    update: (value, tr) => (
+      // The tree too: the parser only reaches the first few thousand characters
+      // up front and finishes in the background, and that transaction carries
+      // neither a document change nor a selection. Without this a table further
+      // down stays raw pipes until something else happens to touch the editor.
+      tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState)
+        ? build(tr.state)
+        : value
+    ),
+    provide: (field) => EditorView.decorations.from(field),
+  });
+}
+
+export const tableField = blockField(buildTables);
+
+/**
+ * Rendered `$$` blocks — block widgets, so a state field, like tables above and
+ * with the same full-document rebuild. The widget compares by its TeX, so a
+ * rebuild re-typesets only a block whose TeX changed.
+ */
+export function buildMath(state: EditorState): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  const doc = state.doc;
+  syntaxTree(state).iterate({
+    enter: (node) => {
+      if (node.name !== 'MathBlock') return;
+      // Source while it is being edited, and while it is unclosed: rendering a
+      // block whose `$$` is still being typed would hide what is being typed.
+      if (rangeHasSelection(state, node.from, node.to)) return false;
+      if (node.node.getChildren('MathMark').length < 2) return false;
+      const tex = node.node.getChildren('MathText')
+        .map((part) => doc.sliceString(part.from, part.to))
+        .join('\n');
+      if (!tex.trim()) return false;
+      ranges.push(
+        Decoration.replace({ widget: new MathWidget(tex), block: true }).range(node.from, node.to),
+      );
+      return false;
+    },
+  });
+  return Decoration.set(ranges, true);
+}
+
+export const mathField = blockField(buildMath);
 
 /**
  * The live-preview decoration plugin. Rebuilds on document, viewport and

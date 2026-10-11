@@ -16,6 +16,12 @@ All notable changes to MD-Docs are documented here. This project adheres to
   `localStorage` about 5 s after a write, so an abort sooner than that after
   the note loses it and the document stays bricked. The test pins that
   behaviour so a fix shows up as a failure to flip.
+- Math blocks: LaTeX between `$$` lines (or `$$ x^2 $$` on one line) is typeset
+  with KaTeX while the cursor is elsewhere, and shows as source, styled like a
+  code block, while you edit it. Tap a formula to edit it. Half-typed TeX shows
+  as a red error in place. KaTeX loads the first time a document shows math, so
+  documents without math open as before. The `.xdc` grows by 289 KB, mostly
+  KaTeX's fonts; see `docs/math-rendering.md` for the size work. (#27)
 
 ### Changed
 - The `.xdc` is about half the size: 400 KB → 210 KB, with no feature removed.
