@@ -4,6 +4,8 @@ dist-release
 *.xdc
 *.local
 *.log
+test-results
+playwright-report
 .DS_Store
 .idea/
 .vscode/

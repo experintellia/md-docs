@@ -97,9 +97,11 @@ interface HistPayload {
  * Caveat worth knowing: this depends on the note reaching disk before the
  * process dies. Engines commit localStorage out of process (Electron, and
  * multiprocess Android WebView, keep the browser side alive when a renderer
- * aborts, so the note survives); a single-process WebView that goes down inside
- * the commit window may lose it, leaving the guard ineffective there rather
- * than wrong. Unverified on-device.
+ * aborts, so the note survives); a single-process engine that goes down inside
+ * the commit window loses it, leaving the guard ineffective there rather than
+ * wrong. Chromium's window is about 5s after the write, and e2e/poison.spec.ts
+ * reproduces the loss with --single-process. Whether a real single-process
+ * WebView aborts that soon after the note is unverified on-device (#22).
  *
  * ponytail: two synchronous localStorage writes per incoming batch, which on a
  * long startup replay is the whole cost of this guard. Cheap against an

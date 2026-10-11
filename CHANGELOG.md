@@ -5,6 +5,18 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Playwright end-to-end tests (`e2e/`, `npm run test:e2e`) against the built
+  bundle: live preview, toolbar and checkboxes under touch, persistence across
+  a relaunch, and two peers syncing. `.github/workflows/e2e.yml` runs them on
+  Chromium (desktop and Android emulation) on Linux and on WebKit (desktop and
+  iPhone emulation) on macOS.
+- An end-to-end test of the poison-batch guard with the real batch from #19,
+  and one that settles #22 for single-process engines: Chromium commits
+  `localStorage` about 5 s after a write, so an abort sooner than that after
+  the note loses it and the document stays bricked. The test pins that
+  behaviour so a fix shows up as a failure to flip.
+
 ## [0.3.1] - 2026-09-19
 
 ### Fixed
