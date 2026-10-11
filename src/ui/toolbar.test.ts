@@ -10,6 +10,7 @@ window.matchMedia = (): MediaQueryList =>
   ({ matches: false, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList;
 
 const { mountToolbar } = await import('./toolbar.ts');
+const { createEditor } = await import('../editor.ts');
 after(() => GlobalRegistrator.unregister());
 
 // Stub view: the toolbar commands only read `view.state`, call `view.dispatch`,
@@ -104,6 +105,38 @@ test('theme toggle adds/removes dark class and persists color-schema', () => {
   theme.click();
   assert.equal(document.documentElement.classList.contains('dark'), false);
   assert.equal(localStorage.getItem('color-schema'), 'light');
+});
+
+test('read mode stops input, renders the caret line, and hides the edit buttons', () => {
+  const container = reset();
+  // Caret on the link line: in edit mode that line shows its raw markdown.
+  const doc = '[a](https://a.example)\n- [ ] task';
+  const view = createEditor(document.body, doc);
+  try {
+    mountToolbar(container, view);
+    const toggle = btnByTitle(container, 'Toggle read / edit mode');
+    const link = (): Element | null => view.contentDOM.querySelector('.md-link[data-href]');
+    assert.equal(link(), null, 'edit mode: the caret line is source, not a link');
+
+    toggle.click();
+    assert.equal(view.state.readOnly, true);
+    assert.equal(view.contentDOM.getAttribute('contenteditable'), 'false');
+    assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+    assert.ok(container.classList.contains('reading'), 'edit buttons hidden via CSS');
+    assert.ok(link(), 'read mode: the caret line renders, so the link is tappable');
+    view.contentDOM.querySelector('.md-task-checkbox')!.dispatchEvent(
+      new window.Event('mousedown', { bubbles: true, cancelable: true }),
+    );
+    assert.equal(view.state.doc.toString(), doc, 'a checkbox tap changes nothing');
+
+    toggle.click();
+    assert.equal(view.state.readOnly, false);
+    assert.equal(view.contentDOM.getAttribute('contenteditable'), 'true');
+    assert.equal(container.classList.contains('reading'), false);
+    assert.equal(link(), null);
+  } finally {
+    view.destroy();
+  }
 });
 
 test('help button opens the overlay and the close button hides it', () => {

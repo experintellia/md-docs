@@ -6,6 +6,7 @@ import {
 } from '@fortawesome/free-regular-svg-icons';
 import {
   faBold,
+  faBookOpen,
   faClockRotateLeft,
   faHeading,
   faIndent,
@@ -13,6 +14,7 @@ import {
   faListUl,
   faMoon,
   faOutdent,
+  faPen,
   faSun,
 } from '@fortawesome/free-solid-svg-icons';
 import {
@@ -22,6 +24,7 @@ import {
   toggleChecklist,
   toggleItalic,
 } from '../commands.ts';
+import { setReadMode } from '../editor.ts';
 import { faSvg } from './icon.ts';
 import { historyButton } from './history-view.ts';
 import type { Collab } from '../collab.ts';
@@ -55,6 +58,7 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
 
   for (const action of ACTIONS) {
     const btn = utilButton(action.icon, action.title);
+    btn.classList.add('md-tool-cmd'); // hidden in read mode, see readModeButton
     // Use mousedown + preventDefault so the editor keeps focus/selection.
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -64,11 +68,11 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
     container.appendChild(btn);
   }
 
-  // Utility buttons (theme + help) pushed to the right; these are not editor
+  // Utility buttons (read mode, history, theme, help) pushed to the right; these are not editor
   // commands, so a plain click is fine — no need to preserve selection.
   const spacer = document.createElement('div');
   spacer.className = 'md-tool-spacer';
-  container.append(spacer);
+  container.append(spacer, readModeButton(container, view));
   // History needs the synced update stream, so only when collaborating.
   if (collab) container.append(historyButton(collab));
   container.append(themeButton(), helpButton());
@@ -85,6 +89,25 @@ function utilButton(icon: () => Node, title: string): HTMLButtonElement {
   btn.appendChild(icon());
   btn.title = title;
   btn.setAttribute('aria-label', title);
+  return btn;
+}
+
+/** Toggle read mode: the editor stops taking input and shows no source, so a
+ *  tap on a link opens it. The editing buttons have nothing to act on there,
+ *  so they step aside. Not persisted: every open starts in edit mode. */
+function readModeButton(container: HTMLElement, view: EditorView): HTMLButtonElement {
+  const btn = utilButton(() => faSvg(faBookOpen), 'Toggle read / edit mode');
+  btn.setAttribute('aria-pressed', 'false');
+  btn.addEventListener('click', () => {
+    const reading = container.classList.toggle('reading');
+    setReadMode(view, reading);
+    // Drop the keyboard on the way in. On the way out, leave focus alone: the
+    // next tap puts the caret where the reader wants to edit.
+    if (reading) view.contentDOM.blur();
+    btn.setAttribute('aria-pressed', String(reading));
+    // Like the theme button: show the mode a tap switches to.
+    btn.replaceChildren(faSvg(reading ? faPen : faBookOpen));
+  });
   return btn;
 }
 
@@ -147,6 +170,8 @@ function buildHelp(): HTMLElement {
       </table>
       <h2>Toolbar</h2>
       <p>Use ${ico(faIndent)} / ${ico(faOutdent)} to indent or outdent list items,
+         ${ico(faBookOpen)} / ${ico(faPen)} to switch between reading (links open
+         on tap, nothing can be changed) and editing,
          ${ico(faClockRotateLeft)} to browse and restore past versions,
          ${ico(faMoon)} / ${ico(faSun)} to switch theme, and ${ico(faCircleQuestion)}
          to reopen this help.</p>

@@ -29,6 +29,7 @@ export class CheckboxWidget extends WidgetType {
     box.addEventListener('mousedown', (e) => {
       // Toggle the underlying `[ ]` <-> `[x]` text without moving the cursor.
       e.preventDefault();
+      if (view.state.readOnly) return; // read mode / history viewer
       const insert = this.checked ? '[ ]' : '[x]';
       view.dispatch({ changes: { from: this.from, to: this.to, insert } });
     });

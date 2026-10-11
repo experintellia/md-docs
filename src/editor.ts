@@ -1,4 +1,4 @@
-import { EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap, drawSelection, dropCursor } from '@codemirror/view';
 import {
   defaultKeymap,
@@ -8,12 +8,17 @@ import {
 } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
-import { livePreview } from './live-preview';
-import { codeLanguages } from './live-preview/code-languages';
-import { mathBlock } from './live-preview/math';
-import { markdownKeymap } from './commands';
-import { hidePeerFlagsWhenCovered } from './peer-flags';
-import type { Collab } from './collab';
+import { livePreview } from './live-preview/index.ts';
+import { codeLanguages } from './live-preview/code-languages.ts';
+import { mathBlock } from './live-preview/math.ts';
+import { markdownKeymap } from './commands.ts';
+import { hidePeerFlagsWhenCovered } from './peer-flags.ts';
+import type { Collab } from './collab.ts';
+
+// Read mode is local to this viewer: peers keep editing and their changes keep
+// arriving (readOnly only stops input, not dispatch). The live preview reads
+// the same flag to stop revealing source on the caret's line.
+const readMode = new Compartment();
 
 /**
  * Build the base set of CodeMirror extensions shared by every editor instance.
@@ -41,7 +46,17 @@ export function baseExtensions(collab?: Collab): Extension[] {
     // tight-list continuation); see commands.ts.
     markdown({ base: markdownLanguage, codeLanguages, addKeymap: false, extensions: [mathBlock] }),
     livePreview(),
+    readMode.of([]),
   ];
+}
+
+/** Switch this viewer between reading and editing. */
+export function setReadMode(view: EditorView, on: boolean): void {
+  view.dispatch({
+    effects: readMode.reconfigure(
+      on ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
+    ),
+  });
 }
 
 /** Create and mount an editor into `parent`. */

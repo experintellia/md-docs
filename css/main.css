@@ -130,6 +130,9 @@ html, body {
 /* Pushes the trailing utility buttons (theme, help) to the right edge. */
 .md-tool-spacer { flex: 1 1 auto; }
 
+/* Read mode: the editing commands have nothing to act on. */
+#toolbar.reading .md-tool-cmd { display: none; }
+
 /* Help overlay — a centered modal card over a dimmed backdrop. */
 #help-overlay {
   position: fixed;

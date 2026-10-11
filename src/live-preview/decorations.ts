@@ -20,9 +20,7 @@ import { type Segment, type TableSpec, TableWidget } from './widgets/table.ts';
  */
 function lineHasSelection(state: EditorState, pos: number): boolean {
   const line = state.doc.lineAt(pos);
-  return state.selection.ranges.some(
-    (r) => r.from <= line.to && r.to >= line.from,
-  );
+  return rangeHasSelection(state, line.from, line.to);
 }
 
 // Inline nodes whose whole range gets a styling class.
@@ -154,7 +152,10 @@ type SyntaxNodeLike = ReturnType<ReturnType<typeof syntaxTree>['resolveInner']>;
 
 // Does the selection touch anything between `from` and `to`? Blocks reveal
 // their source on the same rule single lines do, just over a range.
+// A read-only editor (read mode, the history viewer) reveals nothing: there is
+// no editing to show the source for, and a link has to stay a link to be tapped.
 function rangeHasSelection(state: EditorState, from: number, to: number): boolean {
+  if (state.readOnly) return false;
   return state.selection.ranges.some((r) => r.from <= to && r.to >= from);
 }
 
@@ -633,7 +634,9 @@ function blockField(build: (state: EditorState) => DecorationSet): StateField<De
       // up front and finishes in the background, and that transaction carries
       // neither a document change nor a selection. Without this a table further
       // down stays raw pipes until something else happens to touch the editor.
-      tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState)
+      // And read mode switching, which changes what the selection reveals.
+      tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState) ||
+      tr.state.readOnly !== tr.startState.readOnly
         ? build(tr.state)
         : value
     ),
@@ -699,7 +702,9 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
         // See tableField: the background parse arrives on its own transaction.
         // Long-standing — bold past the first few thousand characters did not
         // render either until something else redrew.
-        syntaxTree(update.state) !== syntaxTree(update.startState)
+        syntaxTree(update.state) !== syntaxTree(update.startState) ||
+        // Read mode reveals nothing, so switching it re-renders the caret's line.
+        update.state.readOnly !== update.startState.readOnly
       ) {
         this.decorations = buildDecorations(update.view);
       }

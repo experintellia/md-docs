@@ -34,6 +34,11 @@ All notable changes to MD-Docs are documented here. This project adheres to
   by putting its bug back and watching the test fail.
 - A unit test for a large document's realtime catch-up, which once overflowed
   the call stack by spreading the frame into call arguments.
+- Read mode. The book button in the toolbar switches the editor to reading:
+  no keyboard, no caret, and no line turns back into its markdown, so a tap on
+  a link opens it instead of starting an edit. The formatting buttons step
+  aside while reading; the pen button switches back. Read mode is local to
+  you: peers keep editing and their changes keep arriving.
 
 ### Changed
 - The `.xdc` is about half the size: 400 KB → 210 KB, with no feature removed.
@@ -54,6 +59,9 @@ All notable changes to MD-Docs are documented here. This project adheres to
   realtime tests never destroyed their Yjs `Awareness`, whose timer kept the
   process alive. They do now, and the flag is gone. CI's `check` job now gives
   up after 10 minutes, in case a test leaks a timer again.
+- The history viewer revealed a line's markdown wherever you selected text,
+  and ticking a task box there changed the version on screen. A read-only
+  view now reveals nothing and leaves its tasks alone.
 
 ## [0.3.1] - 2026-09-19
 
