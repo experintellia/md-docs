@@ -10,7 +10,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: 'e2e',
   forbidOnly: !!process.env.CI,
-  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
+  // list, also in CI: the poison test logs how each launch ended.
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://localhost:4173',
     trace: 'retain-on-failure',

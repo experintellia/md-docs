@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import { test, expect, serveMockWebxdc, UPDATES_KEY } from './fixtures';
+import { test, expect, jetsam, serveMockWebxdc, UPDATES_KEY } from './fixtures';
 import type { BrowserType } from '@playwright/test';
 
 // The poison-batch guard from #18, end to end, with the real 91-byte batch from
@@ -43,13 +43,22 @@ async function launch(browserType: BrowserType, profile: string, args: string[] 
     if (!localStorage.getItem(key)) localStorage.setItem(key, log);
   }, [UPDATES_KEY, LOG]);
 
+  const started = Date.now();
   let aborted = false;
-  context.on('close', () => { aborted = true; }); // single-process: the whole browser died
   const page = context.pages()[0] ?? await context.newPage();
-  page.on('crash', () => { aborted = true; }); // multi-process: just the renderer
+  // A death ends the wait: not every engine fails a pending waitFor on it.
+  const died = new Promise<false>((resolve) => {
+    const die = (): void => { aborted = true; resolve(false); };
+    context.on('close', die); // single-process: the whole browser died
+    page.on('crash', die); // multi-process: just the renderer
+  });
   await page.goto('/', { waitUntil: 'commit' }).catch(() => {});
-  const opened = await page.getByText(TEXT).waitFor({ timeout: 120_000 }).then(() => true, () => false);
+  const opened = await Promise.race([
+    page.getByText(TEXT).waitFor({ timeout: 120_000 }).then(() => true, () => false),
+    died,
+  ]);
   const outcome = opened ? 'opened' : aborted ? 'aborted' : 'hung';
+  console.log(`${browserType.name()} launch ${outcome} after ${((Date.now() - started) / 1000).toFixed(1)}s`);
   // A graceful close lets a surviving browser process flush storage, as the
   // messenger's would on its own a few seconds later.
   await context.close().catch(() => {});
@@ -66,17 +75,23 @@ test.describe('poison batch (#19, #22)', () => {
     // Out-of-process renderers: Electron and multiprocess Android WebView
     // (Chromium), iOS WKWebView (WebKit's WebContent process). The browser side
     // survives the abort and commits the note.
-    // A small heap on Chromium only makes the abort come sooner.
+    // A small heap makes V8 abort sooner; JavaScriptCore has no such cap, and
+    // macOS swaps where iOS would kill the page, so jetsam does it here.
     const args = browserName === 'chromium' ? ['--js-flags=--max-old-space-size=128'] : [];
+    const stop = browserName === 'webkit' ? jetsam() : () => {};
     const profile = info.outputPath('profile');
 
-    const first = await launch(browserType, profile, args);
-    // Which way the engine went is the finding: an abort exercises the guard,
-    // a catchable out-of-memory error never needs it.
-    info.annotations.push({ type: 'first launch', description: first });
-    expect(first, 'the poison batch neither aborted the app nor let it open').not.toBe('hung');
-    if (first === 'aborted') {
-      expect(await launch(browserType, profile, args), 'the relaunch quarantined the batch').toBe('opened');
+    try {
+      const first = await launch(browserType, profile, args);
+      // Which way the engine went is the finding: an abort exercises the guard,
+      // a catchable out-of-memory error never needs it.
+      info.annotations.push({ type: 'first launch', description: first });
+      expect(first, 'the poison batch neither aborted the app nor let it open').not.toBe('hung');
+      if (first === 'aborted') {
+        expect(await launch(browserType, profile, args), 'the relaunch quarantined the batch').toBe('opened');
+      }
+    } finally {
+      stop();
     }
   });
 

@@ -1,6 +1,39 @@
+import { execFileSync } from 'node:child_process';
 import { test as base, type BrowserContext } from '@playwright/test';
 
 export { expect } from '@playwright/test';
+
+/**
+ * Stand in for iOS jetsam: SIGKILL any WebKit content process that outgrows
+ * `budgetMB`. iOS has no swap and kills a WebContent process the moment it
+ * goes over its memory budget; macOS swaps instead, so a page that allocates
+ * without bound grinds on for minutes rather than dying. Returns a stop
+ * function.
+ */
+export function jetsam(budgetMB = 1024): () => void {
+  const seen = new Set<string>();
+  const timer = setInterval(() => {
+    const ps = execFileSync('ps', ['-axo', 'pid=,rss=,command='], { encoding: 'utf8' });
+    for (const line of ps.split('\n')) {
+      const [, pid, rss, command] = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/) ?? [];
+      // WebContent on macOS, WebKitWebProcess on Linux.
+      if (!command || !/WebContent|WebKitWebProcess/.test(command)) continue;
+      if (!seen.has(pid)) {
+        seen.add(pid);
+        console.log(`jetsam: watching ${pid} ${command}`);
+      }
+      if (Number(rss) > budgetMB * 1024) {
+        console.log(`jetsam: killing ${pid} at ${Math.round(Number(rss) / 1024)} MB`);
+        try {
+          process.kill(Number(pid), 'SIGKILL');
+        } catch {
+          // Already gone.
+        }
+      }
+    }
+  }, 250);
+  return () => clearInterval(timer);
+}
 
 // The built index.html loads ./webxdc.js, which a real messenger injects. Serve
 // the @webxdc/vite-plugins mock in its place (the one `npm run serve:app` uses):
