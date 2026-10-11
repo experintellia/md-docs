@@ -143,3 +143,36 @@ test('while edited it looks like a code block, and reads left-to-right', () => {
   assert.deepEqual(lines[4], ['md-code-block', 'dir=ltr']);
   assert.deepEqual(lines[5], ['md-code-block md-code-last', 'dir=ltr']);
 });
+
+test('rendered in a quote or list, it leaves no code styling on the `> ` / `- ` line', () => {
+  // The widget starts after the marker, so that marker keeps a line of its own.
+  for (const doc of ['> $$\n> a\n> $$\n\nafter', '- $$\n  a\n  $$\n\nafter']) {
+    const s = state(doc, doc.length);
+    const view = { state: s, visibleRanges: [{ from: 0, to: s.doc.length }] } as unknown as EditorView;
+    const classes: string[] = [];
+    buildDecorations(view).between(0, s.doc.length, (_f, _t, deco) => {
+      const cls = (deco.spec as { class?: string }).class;
+      if (cls) classes.push(cls);
+    });
+    assert.ok(!classes.some((c) => c.includes('md-code-block')), `${JSON.stringify(doc)}: ${classes.join(', ')}`);
+    assert.ok(rendered(doc, doc.length), 'and it is rendered');
+  }
+});
+
+test('a line that merely starts with inline math stays prose', () => {
+  // Notes written before blocks existed: `$$` here is inline math or money.
+  assert.deepEqual(tree('Intro.\n\n$$a$$ and $$b$$ are equal,\nas shown by **bold** $$c$$\n\nz'), [
+    'Paragraph', 'Paragraph', 'Paragraph',
+  ]);
+  assert.deepEqual(tree('The cost went from\n$$5 to $$10 this year,\nwhich is a lot.'), ['Paragraph']);
+  assert.deepEqual(tree('| a | b |\n|---|---|\n$$x$$ | y\n| c | d |'), ['Table']);
+});
+
+test('an escaped dollar does not close a block, an escaped backslash does', () => {
+  assert.equal(rendered('$$\na \\$$\nb\n$$\n\nz', 16), 'a \\$$\nb');
+  assert.equal(rendered('$$\na \\\\$$\n\nz', 12), 'a \\\\');
+});
+
+test('`$$$` opens nothing', () => {
+  assert.deepEqual(tree('$$$\na\n$$'), ['Paragraph', 'MathBlock', 'MathMark:$$']);
+});

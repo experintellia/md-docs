@@ -61,6 +61,8 @@ export class MathWidget extends WidgetType {
     // remembered from when it was built: text typed above moves the block, and
     // an equal widget keeps this element.
     el.addEventListener('mousedown', (event) => {
+      // Not on the scrollbar of a formula too wide for the line: that scrolls.
+      if (event.target === el && event.offsetY >= el.clientHeight) return;
       event.preventDefault();
       view.dispatch({ selection: { anchor: view.posAtDOM(el) } });
     });

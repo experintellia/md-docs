@@ -167,7 +167,9 @@ test('tapping a formula opens its source', async () => {
   const view = editor('x\n\n$$\na^2\n$$');
   try {
     const math = await typeset(view);
-    math.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    // On the formula, as a finger would be: a press on the box itself may be on
+    // its scrollbar, which the widget leaves to scroll.
+    math.querySelector('.katex')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     assert.equal(view.state.selection.main.head, 3, 'the caret is at the block');
     assert.equal(view.contentDOM.querySelector('.md-math'), null, 'and the source is back');
   } finally {

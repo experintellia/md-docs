@@ -373,8 +373,11 @@ export function buildDecorations(view: EditorView): DecorationSet {
             );
           }
         }
-        // A `$$` block being edited looks like the code block it is typed as;
-        // rendered, the math field below replaces it.
+        // A `$$` block being edited looks like the code block it is typed as.
+        // Rendered, the math field below replaces it — all but the `> ` or
+        // `- ` it starts after, which stays a line of its own and must not be
+        // painted as code.
+        if (name === 'MathBlock' && renderedTex(state, node.node) !== null) return false;
         if (name === 'Blockquote' || name === 'FencedCode' || name === 'MathBlock') {
           // `- > text` parses as a ListItem directly containing a Blockquote
           // (valid CommonMark). Styling it as a quote too would double up
@@ -640,6 +643,18 @@ function blockField(build: (state: EditorState) => DecorationSet): StateField<De
 
 export const tableField = blockField(buildTables);
 
+// The TeX a `$$` block is typeset from, or null while it shows its source:
+// while it is being edited, while it is unclosed (rendering a block whose `$$`
+// is still being typed would hide what is being typed), and while it is empty.
+function renderedTex(state: EditorState, block: SyntaxNodeLike): string | null {
+  if (rangeHasSelection(state, block.from, block.to)) return null;
+  if (block.getChildren('MathMark').length < 2) return null;
+  const tex = block.getChildren('MathText')
+    .map((part) => state.doc.sliceString(part.from, part.to))
+    .join('\n');
+  return tex.trim() ? tex : null;
+}
+
 /**
  * Rendered `$$` blocks — block widgets, so a state field, like tables above and
  * with the same full-document rebuild. The widget compares by its TeX, so a
@@ -647,21 +662,15 @@ export const tableField = blockField(buildTables);
  */
 export function buildMath(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
-  const doc = state.doc;
   syntaxTree(state).iterate({
     enter: (node) => {
       if (node.name !== 'MathBlock') return;
-      // Source while it is being edited, and while it is unclosed: rendering a
-      // block whose `$$` is still being typed would hide what is being typed.
-      if (rangeHasSelection(state, node.from, node.to)) return false;
-      if (node.node.getChildren('MathMark').length < 2) return false;
-      const tex = node.node.getChildren('MathText')
-        .map((part) => doc.sliceString(part.from, part.to))
-        .join('\n');
-      if (!tex.trim()) return false;
-      ranges.push(
-        Decoration.replace({ widget: new MathWidget(tex), block: true }).range(node.from, node.to),
-      );
+      const tex = renderedTex(state, node.node);
+      if (tex !== null) {
+        ranges.push(
+          Decoration.replace({ widget: new MathWidget(tex), block: true }).range(node.from, node.to),
+        );
+      }
       return false;
     },
   });

@@ -6,18 +6,26 @@ import type { Element, Line, MarkdownConfig } from '@lezer/markdown';
 // this line continued, `markers` the `>` marks those containers consumed.
 type ParsedLine = Line & { depth: number; markers: Element[] };
 
-// Where a `$$` opens on this line, or -1. Four columns in is indented code.
-function opening(line: Line): number {
-  return line.indent - line.baseIndent < 4 && line.text.startsWith('$$', line.pos)
-    ? line.pos
-    : -1;
-}
-
 // Where the `$$` that ends this line starts, or -1. Never before `from`, so the
-// `$$` that opened a block cannot also close it.
+// `$$` that opened a block cannot also close it, and not after an odd run of
+// backslashes: `\$$` is an escaped dollar and then a `$`.
 function closing(text: string, from: number): number {
   const end = text.trimEnd().length - 2;
-  return end >= from && text.startsWith('$$', end) ? end : -1;
+  if (end < from || !text.startsWith('$$', end)) return -1;
+  let slashes = 0;
+  while (text[end - 1 - slashes] === '\\') slashes++;
+  return slashes % 2 === 0 ? end : -1;
+}
+
+// Where a `$$` opens on this line, or -1. Four columns in is indented code.
+// Only a `$$` alone, or one closed at the end of the same line: a line of prose
+// that merely starts with inline math (`$$a$$ and $$b$$ …`, `$$5 to $$10`) is
+// a paragraph, as it was before blocks existed. Nor `$$$`, which is no opener.
+function opening(line: Line): number {
+  if (line.indent - line.baseIndent >= 4 || !line.text.startsWith('$$', line.pos)) return -1;
+  if (line.text[line.pos + 2] === '$') return -1;
+  const close = closing(line.text, line.pos + 2);
+  return line.text.indexOf('$$', line.pos + 2) === (close < 0 ? -1 : close) ? line.pos : -1;
 }
 
 /**
