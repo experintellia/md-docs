@@ -19,7 +19,9 @@ import { toml } from '@codemirror/legacy-modes/mode/toml';
 // ponytail: CodeMirror 5 stream modes, not the Lezer `@codemirror/lang-*`
 // grammars. Lezer parses more accurately but costs ~133 KB in the `.xdc` for
 // twelve languages; these seventeen add ~22 KB. Promote an individual language
-// to its Lezer grammar if its highlighting turns out to be worth the bytes.
+// to its Lezer grammar if its highlighting turns out to be worth the bytes —
+// except JavaScript: vite.config.ts aliases `@codemirror/lang-javascript` to
+// src/lang-javascript-lite.ts, so importing it would silently get this mode.
 //
 // `support` (not `load`) so the mode is there on the first parse: everything
 // is bundled anyway, and a lazy load would leave the block unhighlighted until
@@ -29,15 +31,16 @@ function mode(
   alias: string[],
   parser: StreamParser<unknown>,
 ): LanguageDescription {
-  return LanguageDescription.of({ name, alias, support: new LanguageSupport(streamLanguage(parser)) });
-}
-
-/** A CodeMirror 5 stream mode as a CM6 language. */
-export function streamLanguage(parser: StreamParser<unknown>): StreamLanguage<unknown> {
-  // These modes tag an object key `property string`, which the legacy token
-  // table only resolves one part at a time — without this the whole tag is
-  // dropped (with a console warning) and JSON keys fall back to plain string.
-  return StreamLanguage.define({ ...parser, tokenTable: { property: tags.propertyName } });
+  return LanguageDescription.of({
+    name,
+    alias,
+    // These modes tag an object key `property string`, which the legacy token
+    // table only resolves one part at a time — without this the whole tag is
+    // dropped (with a console warning) and JSON keys fall back to plain string.
+    support: new LanguageSupport(
+      StreamLanguage.define({ ...parser, tokenTable: { property: tags.propertyName } }),
+    ),
+  });
 }
 
 /**
