@@ -50,6 +50,10 @@ All notable changes to MD-Docs are documented here. This project adheres to
     fences already bundle (−34 KB), so they are highlighted the same way as
     those fences. `<style>` blocks and auto-closing HTML tags are unchanged.
   - The JavaScript is minified with terser instead of esbuild (−5 KB).
+- On a phone, or any screen under 480px wide, history, theme and help fold
+  into a ⋮ menu at the end of the toolbar, so the formatting row fits a 375px
+  iPhone SE again. On an even narrower screen the row scrolls under the menu
+  button, which stays pinned to the edge. (#32)
 
 ### Fixed
 - `npm test` dropped unit-test results: each run reported a different subset,

@@ -8,6 +8,7 @@ import {
   faBold,
   faBookOpen,
   faClockRotateLeft,
+  faEllipsisVertical,
   faHeading,
   faIndent,
   faItalic,
@@ -72,10 +73,12 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
   // commands, so a plain click is fine — no need to preserve selection.
   const spacer = document.createElement('div');
   spacer.className = 'md-tool-spacer';
-  container.append(spacer, readModeButton(container, view));
   // History needs the synced update stream, so only when collaborating.
-  if (collab) container.append(historyButton(collab));
-  container.append(themeButton(), helpButton());
+  const utils = [...(collab ? [historyButton(collab)] : []), themeButton(), helpButton()];
+  const end = document.createElement('div');
+  end.className = 'md-tool-end';
+  end.append(readModeButton(container, view), ...moreMenu(utils));
+  container.append(spacer, end);
 
   if (isMobile()) {
     fitAppToViewport();
@@ -109,6 +112,36 @@ function readModeButton(container: HTMLElement, view: EditorView): HTMLButtonEle
     btn.replaceChildren(faSvg(reading ? faPen : faBookOpen));
   });
   return btn;
+}
+
+/**
+ * History, theme and help, plus the "more" button that folds them into a menu.
+ * Whether they sit inline or behind the button is up to CSS (narrow screens and
+ * touch get the menu, see main.css), so the same buttons serve both layouts.
+ */
+function moreMenu(items: HTMLButtonElement[]): HTMLElement[] {
+  const menu = document.createElement('div');
+  menu.className = 'md-tool-menu';
+  menu.append(...items);
+  const more = utilButton(() => faSvg(faEllipsisVertical), 'More');
+  more.classList.add('md-tool-more');
+  more.setAttribute('aria-haspopup', 'true');
+  more.setAttribute('aria-expanded', 'false');
+
+  const setOpen = (open: boolean): void => {
+    menu.classList.toggle('open', open);
+    more.setAttribute('aria-expanded', String(open));
+  };
+  more.addEventListener('click', () => setOpen(!menu.classList.contains('open')));
+  // An item's own handler runs first; then the menu has done its job.
+  menu.addEventListener('click', () => setOpen(false));
+  document.addEventListener('click', (e) => {
+    if (!menu.contains(e.target as Node) && !more.contains(e.target as Node)) setOpen(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setOpen(false);
+  });
+  return [menu, more];
 }
 
 /** Toggle dark/light and persist it. The load-time bootstrap (index.html) reads

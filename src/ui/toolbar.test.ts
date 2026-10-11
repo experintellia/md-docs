@@ -139,6 +139,33 @@ test('read mode stops input, renders the caret line, and hides the edit buttons'
   }
 });
 
+test('the more menu holds theme and help, and closes after use, outside or on Escape', () => {
+  const container = reset();
+  const { view } = makeView('hi', 0, 0);
+  mountToolbar(container, view);
+  const more = btnByTitle(container, 'More');
+  const menu = container.querySelector('.md-tool-menu')!;
+  const theme = btnByTitle(container, 'Toggle dark / light theme');
+  assert.ok(menu.contains(theme) && menu.contains(btnByTitle(container, 'Help & markdown syntax')));
+  const isOpen = (): boolean => menu.classList.contains('open');
+
+  more.click();
+  assert.ok(isOpen());
+  assert.equal(more.getAttribute('aria-expanded'), 'true');
+  theme.click();
+  assert.equal(isOpen(), false, 'an item closes the menu');
+  assert.ok(document.documentElement.classList.contains('dark'), 'and still does its job');
+
+  more.click();
+  document.body.click();
+  assert.equal(isOpen(), false, 'a tap outside closes it');
+
+  more.click();
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(isOpen(), false, 'Escape closes it');
+  assert.equal(more.getAttribute('aria-expanded'), 'false');
+});
+
 test('help button opens the overlay and the close button hides it', () => {
   const container = reset();
   const { view } = makeView('hi', 0, 0);

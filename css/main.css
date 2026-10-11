@@ -133,6 +133,55 @@ html, body {
 /* Read mode: the editing commands have nothing to act on. */
 #toolbar.reading .md-tool-cmd { display: none; }
 
+/* The trailing group: the read toggle, then history/theme/help — inline here,
+   folded behind the "more" button below. */
+.md-tool-end, .md-tool-menu { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.md-tool-more { display: none; }
+
+/* Fold history/theme/help into a menu on touch, and wherever the full row would
+   not fit (~430px: 11 buttons at 36px plus gaps).
+   ponytail: a fixed breakpoint; raise it when the toolbar gains buttons. */
+@media (pointer: coarse), (max-width: 479px) {
+  /* Pinned to the end, so on a very narrow screen the commands scroll under it.
+     Sticky makes it a stacking context, so its z-index (not the menu's) decides
+     what the menu covers: above #status, a z-index 5 flex item on touch. */
+  .md-tool-end { position: sticky; right: 0; z-index: 10; background: var(--toolbar-bg); }
+  .md-tool-more { display: inline-block; }
+  /* Fixed, because #toolbar scrolls sideways and would clip an absolute menu.
+     On touch #app carries a transform (src/ui/toolbar.ts), which makes it the
+     containing block instead of the viewport; the offsets hold either way. */
+  .md-tool-menu {
+    display: none;
+    position: fixed;
+    top: calc(var(--toolbar-height) + 4px);
+    right: 6px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+  }
+  .md-tool-menu.open { display: flex; }
+  .md-tool-menu .md-tool-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: auto;
+    padding: 10px 14px;
+    border-radius: 0;
+    font-size: 15px;
+    font-weight: 400;
+  }
+  .md-tool-menu .md-tool-btn::after { content: attr(aria-label); }
+}
+/* On touch the toolbar is at the bottom, so the menu opens upward. */
+@media (pointer: coarse) {
+  .md-tool-menu { top: auto; bottom: calc(var(--toolbar-height) + 4px); }
+}
+
 /* Help overlay — a centered modal card over a dimmed backdrop. */
 #help-overlay {
   position: fixed;
