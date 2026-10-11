@@ -24,17 +24,18 @@ Chosen and built (see [As built](#as-built)). Only `$$` blocks for now; inline
 
 ## As built
 
-The `.xdc` grows from **400.4 KB to 689.8 KB: +289.4 KB (+72%)**.
+Against `main` after #31 (which halved the app), the `.xdc` grows from
+**210.2 KB to 466.9 KB: +256.8 KB (+122%)**.
 
 | What | In the `.xdc` |
 |---|---|
-| KaTeX fonts (15 woff2 files, plus one inlined in the CSS) | +203.2 KB |
-| KaTeX script, a separate chunk loaded on first use | +75.3 KB |
-| KaTeX stylesheet | +7.2 KB |
-| Parser, widget and zip entries | +3.7 KB |
+| KaTeX fonts (16 woff2 files, hinting stripped) | +174.8 KB |
+| KaTeX script, a separate chunk loaded on first use | +75.0 KB |
+| KaTeX stylesheet | +3.2 KB |
+| Parser and widget, in the app script | +1.1 KB |
 
-The main script grows by 3 KB. KaTeX's 256 KB script loads only once a document
-shows math, so documents without math start exactly as before.
+KaTeX's 261 KB script and its fonts load only once a document shows math, so
+documents without math start as before.
 
 ### Size: what was tried
 
@@ -42,12 +43,12 @@ shows math, so documents without math start exactly as before.
 |---|---|---|
 | Bundle only the woff2 fonts (KaTeX's CSS also lists woff and ttf, and Vite bundles all three) | 601 KB | ✅ `katexFonts()` in `vite.config.ts` |
 | Drop the `\mathsf` / `\mathtt` fonts; the system sans-serif and monospace stand in | 47 KB | ✅ same plugin |
+| Strip the TrueType hinting from the fonts | 32 KB | ✅ `scripts/strip-katex-hinting.py` writes `fonts/katex-<version>/`, checking that outlines, metrics and every other table are unchanged; the build refuses a KaTeX version it has no fonts for. Rendering is pixel-identical in Chromium; Windows, the one platform that runs hinting, draws small math anti-aliased instead of grid-snapped. |
+| Keep the fonts as files instead of letting Vite inline the small ones as base64 into the app's stylesheet | ≈0 KB, but 16 KB less CSS to parse on every start | ✅ `assetsInlineLimit` |
 | Load the KaTeX script on first use | 0 KB, but no startup cost without math | ✅ |
 | Drop the `\mathfrak` / `\mathscr` / `\mathcal` fonts | 45 KB | ❌ No system font stands in, and `\mathfrak{g}` shown as a plain g means something else |
-| Strip TrueType hinting from the fonts (`pyftsubset --no-hinting`) | 36 KB | ❌ Means keeping 16 rebuilt font binaries in the repo and redoing them on every KaTeX upgrade, and small math on low-DPI Windows renders worse |
-| Minify KaTeX with terser instead of esbuild | 0.5 KB | ❌ Not worth a dependency |
+| Drop the glyph names from the fonts | 4 KB | ❌ Not hinting, and not asked for; harmless to browsers if wanted later |
 | Recompress the `.xdc` with zopfli instead of deflate -9 | 16 KB (the whole app, not just math) | Not here: replaces `vite-plugin-zip-pack`, so it's its own change |
-| Shrink `public/icon.png` (1254×1254 px, 160 KB in the `.xdc`) to 512 px | ≈110 KB (≈140 KB at 256 px) | Not here: nothing to do with math, but it's the biggest win available |
 
 ## Options at a glance
 

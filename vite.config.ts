@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type PluginOption } from 'vite';
 import zipPack from 'vite-plugin-zip-pack';
@@ -31,7 +31,14 @@ function eruda(): PluginOption {
 // ponytail: Fraktur, script and calligraphic (`\mathfrak`, `\mathscr`,
 // `\mathcal`) stay, 45 KB together: no system font stands in for them, and
 // `\mathfrak{g}` shown as a plain g says something else.
+//
+// The fonts that remain come from fonts/katex-<version>/: KaTeX's own, minus
+// their TrueType hinting (32 KB): bytecode Windows runs at small sizes, and
+// macOS, iOS and Android ignore. See
+// scripts/strip-katex-hinting.py, which also checks nothing else changed.
 function katexFonts(): PluginOption {
+  const { version } = JSON.parse(readFileSync('./node_modules/katex/package.json', 'utf-8'));
+  const dir = `/fonts/katex-${version}`;
   return {
     name: 'katex-fonts',
     // Before Vite's own CSS plugin resolves the url()s into bundled files.
@@ -42,10 +49,17 @@ function katexFonts(): PluginOption {
         .replace(/, url\([^)]+\.(?:woff|ttf)\) format\("(?:woff|truetype)"\)/g, '')
         .replace(/@font-face \{[^}]*KaTeX_(?:SansSerif|Typewriter)[^}]*\}\n?/g, '')
         .replace(/font-family: KaTeX_SansSerif;/g, 'font-family: sans-serif;')
-        .replace(/font-family: KaTeX_Typewriter;/g, 'font-family: monospace;');
+        .replace(/font-family: KaTeX_Typewriter;/g, 'font-family: monospace;')
+        .replace(/url\(fonts\/(KaTeX_[\w-]+\.woff2)\)/g, `url(${dir}/$1)`);
       // Fail the build, not the size budget, if a KaTeX upgrade reshapes this.
-      if (/\.(?:woff|ttf)\)|KaTeX_(?:SansSerif|Typewriter)/.test(out) || !out.includes('.woff2)')) {
+      if (/\.(?:woff|ttf)\)|KaTeX_(?:SansSerif|Typewriter)|url\(fonts\//.test(out) || !out.includes('.woff2)')) {
         this.error('katex-fonts: katex.css no longer matches; update the patterns');
+      }
+      // Fonts stripped from an older KaTeX would not match its glyph metrics.
+      for (const [, path] of out.matchAll(/url\((\/fonts\/[^)]+)\)/g)) {
+        if (!existsSync(`.${path}`)) {
+          this.error(`katex-fonts: no ${path}; run scripts/strip-katex-hinting.py for KaTeX ${version}`);
+        }
       }
       return out;
     },
@@ -58,6 +72,9 @@ export default defineConfig({
     target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
     // ~5 KB smaller gzipped than the default esbuild minifier, for a slower build.
     minify: 'terser',
+    // KaTeX's smallest fonts would otherwise be inlined into the app's own
+    // stylesheet as base64, and parsed on every start, math or not.
+    assetsInlineLimit: (file) => (file.endsWith('.woff2') ? false : undefined),
   },
   resolve: {
     alias: {
