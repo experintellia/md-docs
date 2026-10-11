@@ -29,16 +29,15 @@ function mode(
   alias: string[],
   parser: StreamParser<unknown>,
 ): LanguageDescription {
-  return LanguageDescription.of({
-    name,
-    alias,
-    // These modes tag an object key `property string`, which the legacy token
-    // table only resolves one part at a time — without this the whole tag is
-    // dropped (with a console warning) and JSON keys fall back to plain string.
-    support: new LanguageSupport(
-      StreamLanguage.define({ ...parser, tokenTable: { property: tags.propertyName } }),
-    ),
-  });
+  return LanguageDescription.of({ name, alias, support: new LanguageSupport(streamLanguage(parser)) });
+}
+
+/** A CodeMirror 5 stream mode as a CM6 language. */
+export function streamLanguage(parser: StreamParser<unknown>): StreamLanguage<unknown> {
+  // These modes tag an object key `property string`, which the legacy token
+  // table only resolves one part at a time — without this the whole tag is
+  // dropped (with a console warning) and JSON keys fall back to plain string.
+  return StreamLanguage.define({ ...parser, tokenTable: { property: tags.propertyName } });
 }
 
 /**

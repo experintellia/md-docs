@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type PluginOption } from 'vite';
 import zipPack from 'vite-plugin-zip-pack';
 import { mockWebxdc } from '@webxdc/vite-plugins';
@@ -25,6 +26,12 @@ export default defineConfig({
   build: {
     // Conservative targets matching the messengers' embedded webviews.
     target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+  },
+  resolve: {
+    alias: {
+      // See src/lang-javascript-lite.ts.
+      '@codemirror/lang-javascript': fileURLToPath(new URL('./src/lang-javascript-lite.ts', import.meta.url)),
+    },
   },
   plugins: [
     ...(process.env.ERUDA ? [eruda()] : []),
