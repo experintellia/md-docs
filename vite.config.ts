@@ -26,6 +26,8 @@ export default defineConfig({
   build: {
     // Conservative targets matching the messengers' embedded webviews.
     target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+    // ~5 KB smaller gzipped than the default esbuild minifier, for a slower build.
+    minify: 'terser',
   },
   resolve: {
     alias: {

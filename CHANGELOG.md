@@ -6,7 +6,7 @@ All notable changes to MD-Docs are documented here. This project adheres to
 ## [Unreleased]
 
 ### Changed
-- The `.xdc` is about half the size: 400 KB → 214 KB, with no feature removed.
+- The `.xdc` is about half the size: 400 KB → 210 KB, with no feature removed.
   - The app icon was a 1254 px truecolor PNG taking 40% of the file. It is now
     512 px with a 64-colour palette (169 KB → 9 KB) and looks the same.
   - Raw `<script>` blocks in a note were highlighted with the full Lezer
@@ -14,6 +14,7 @@ All notable changes to MD-Docs are documented here. This project adheres to
     support. They now use the legacy JavaScript mode that ```` ```js ````
     fences already bundle (−34 KB). Highlighting, `<style>` blocks and
     auto-closing HTML tags work as before.
+  - The JavaScript is minified with terser instead of esbuild (−5 KB).
 
 ## [0.3.1] - 2026-09-19
 
