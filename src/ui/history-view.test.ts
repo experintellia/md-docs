@@ -76,3 +76,35 @@ test('a dismissed dialog stops listening for keys', async () => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   assert.equal(await second, false);
 });
+
+test('confirmDialog: Enter on Cancel cancels, and keys stay with the dialog', async () => {
+  const page = document.body.appendChild(document.createElement('div'));
+  const opener = page.appendChild(document.createElement('button'));
+  opener.focus();
+  let leaked = false;
+  const spy = (): void => { leaked = true; };
+  document.addEventListener('keydown', spy); // e.g. the history screen's Escape
+  try {
+    const choice = confirmDialog('Restore this version?');
+    const ok = document.querySelector<HTMLButtonElement>('#confirm-overlay [data-act="ok"]')!;
+    assert.ok(document.activeElement === ok, 'focus starts on Restore');
+    assert.equal(page.inert, true, 'the page behind is out of reach');
+
+    const cancel = document.querySelector<HTMLButtonElement>('#confirm-overlay [data-act="cancel"]')!;
+    cancel.focus();
+    cancel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    cancel.click(); // what Enter on a button does next
+    assert.equal(await choice, false);
+    assert.equal(page.inert, false);
+    assert.ok(document.activeElement === opener, 'focus returns to the opener');
+
+    leaked = false;
+    const byEscape = confirmDialog('Restore this version?');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    assert.equal(await byEscape, false);
+    assert.equal(leaked, false, 'Escape closed the dialog, not what is under it');
+  } finally {
+    document.removeEventListener('keydown', spy);
+    page.remove();
+  }
+});

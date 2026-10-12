@@ -65,6 +65,7 @@ export function baseExtensions(collab?: Collab): Extension[] {
     drawSelection(),
     dropCursor(),
     EditorView.lineWrapping,
+    EditorView.contentAttributes.of({ 'aria-label': 'Document' }),
     keymap.of([...editing(markdownKeymap), ...defaultKeymap, indentWithTab]),
     // addKeymap:false — our markdownKeymap binds Enter/Backspace instead (with
     // tight-list continuation); see commands.ts.

@@ -94,6 +94,19 @@ test('Italic button wraps the selection in *…*', () => {
   assert.equal(doc(), '*ab*');
 });
 
+test('a command button runs from the keyboard too, once per press', () => {
+  const container = reset();
+  const { view, doc } = makeView('ab', 0, 2);
+  mountToolbar(container, view);
+  const bold = btnByTitle(container, 'Bold');
+  // Enter / Space: a click with no mousedown before it (detail 0).
+  bold.dispatchEvent(new window.MouseEvent('click', { bubbles: true, detail: 0 }));
+  assert.equal(doc(), '**ab**');
+  // A pointer's click follows the mousedown that already ran the command.
+  bold.dispatchEvent(new window.MouseEvent('click', { bubbles: true, detail: 1 }));
+  assert.equal(doc(), '**ab**');
+});
+
 test('theme toggle adds/removes dark class and persists color-schema', () => {
   const container = reset();
   const { view } = makeView('hi', 0, 0);
@@ -277,4 +290,26 @@ test('Escape keydown closes an open help overlay', () => {
 
   document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(overlay.hidden, true);
+});
+
+test('help holds focus while open and hands it back to ⋮ when it closes', () => {
+  const container = reset();
+  document.body.append(container);
+  try {
+    const { view } = makeView('hi', 0, 0);
+    mountToolbar(container, view);
+    const help = btnByTitle(container, 'Help & markdown syntax');
+    help.focus();
+    help.click();
+    const overlay = document.querySelector<HTMLElement>('#help-overlay')!;
+    assert.ok(document.activeElement === overlay.querySelector('.help-card'), 'focus moves in');
+    assert.equal(container.inert, true, 'the page behind is out of reach');
+
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(container.inert, false);
+    // The menu folded away behind ⋮ when help opened; ⋮ is what is left to land on.
+    assert.ok(document.activeElement === btnByTitle(container, 'More'), 'focus comes back');
+  } finally {
+    container.remove();
+  }
 });

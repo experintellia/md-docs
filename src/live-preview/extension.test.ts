@@ -205,3 +205,19 @@ test('a formula too long to typeset quickly stays as its source', () => {
   assert.equal(el.textContent, tex);
   assert.equal(el.querySelector('.katex'), null);
 });
+
+test('Space on a focused task checkbox ticks it, like a tap', () => {
+  const view = editor('first\n- [ ] task');
+  try {
+    const box = (): HTMLInputElement => view.contentDOM.querySelector('.md-task-checkbox')!;
+    assert.equal(box().getAttribute('aria-label'), 'Done');
+    // A keyboard activation is a click with no mousedown before it: detail 0.
+    box().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+    assert.equal(view.state.doc.toString(), 'first\n- [x] task');
+    // A tap's click (detail 1) follows the mousedown that already toggled.
+    box().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    assert.equal(view.state.doc.toString(), 'first\n- [x] task');
+  } finally {
+    view.destroy();
+  }
+});

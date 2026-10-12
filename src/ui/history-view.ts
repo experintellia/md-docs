@@ -11,6 +11,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
 import { faSvg, utilButton } from './icon.ts';
+import { trapFocus } from './modal.ts';
 import { livePreview } from '../live-preview/index.ts';
 import { mathBlock } from '../live-preview/math.ts';
 import type { Collab } from '../collab.ts';
@@ -58,6 +59,7 @@ class HistoryOverlay {
   private selected: number | null = null;
   private rows: HistoryVersion[] = [];
   private readonly collab: Collab;
+  private release: (() => void) | null = null;
 
   constructor(collab: Collab) {
     this.collab = collab;
@@ -71,11 +73,11 @@ class HistoryOverlay {
           <h1>History</h1>
           <span class="md-tool-spacer"></span>
           <div class="hist-mode">
-            <button class="md-tool-btn" data-act="mode" aria-haspopup="menu" aria-label="View mode"></button>
-            <div class="hist-menu" role="menu" hidden>
-              <button role="menuitem" data-mode="rendered">Rendered</button>
-              <button role="menuitem" data-mode="source">Source</button>
-              <button role="menuitem" data-mode="diff">Diff</button>
+            <button class="md-tool-btn" data-act="mode" title="View mode" aria-expanded="false"></button>
+            <div class="hist-menu" hidden>
+              <button data-mode="rendered">Rendered</button>
+              <button data-mode="source">Source</button>
+              <button data-mode="diff">Diff</button>
             </div>
           </div>
           <button class="md-tool-btn" data-act="restore" title="Restore this version" aria-label="Restore this version"></button>
@@ -115,6 +117,7 @@ class HistoryOverlay {
           // Non-editable: no blinking caret, but text stays selectable/copyable.
           EditorView.editable.of(false),
           EditorView.lineWrapping,
+          EditorView.contentAttributes.of({ 'aria-label': 'Selected version' }),
           markdown({ base: markdownLanguage, codeLanguages: [], extensions: [mathBlock] }),
           this.preview.of(livePreview()),
         ],
@@ -137,7 +140,7 @@ class HistoryOverlay {
     // Mode menu: the button toggles it; items pick a mode; outside-click closes.
     this.btn('mode').addEventListener('click', (e) => {
       e.stopPropagation();
-      this.menuEl.hidden = !this.menuEl.hidden;
+      this.showMenu(this.menuEl.hidden);
     });
     this.menuEl.querySelectorAll<HTMLElement>('[data-mode]').forEach((item) => {
       const mode = item.dataset.mode as ViewMode;
@@ -146,12 +149,12 @@ class HistoryOverlay {
     });
     document.addEventListener('click', (e) => {
       if (!this.menuEl.hidden && !this.el.querySelector('.hist-mode')!.contains(e.target as Node)) {
-        this.menuEl.hidden = true;
+        this.showMenu(false);
       }
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !this.el.hidden) {
-        if (!this.menuEl.hidden) this.menuEl.hidden = true;
+        if (!this.menuEl.hidden) this.showMenu(false);
         else this.close();
       }
     });
@@ -167,10 +170,18 @@ class HistoryOverlay {
     this.panelEl.classList.remove('detail'); // narrow screens start on the list
     this.renderList();
     this.el.hidden = false;
+    this.release = trapFocus(this.el, this.btn('back'));
   }
 
   private close(): void {
     this.el.hidden = true;
+    this.release?.();
+    this.release = null;
+  }
+
+  private showMenu(open: boolean): void {
+    this.menuEl.hidden = !open;
+    this.btn('mode').setAttribute('aria-expanded', String(open));
   }
 
   private btn(act: string): HTMLButtonElement {
@@ -187,7 +198,10 @@ class HistoryOverlay {
       li.className = 'hist-row';
       li.setAttribute('role', 'button');
       li.tabIndex = 0;
-      if (i === this.selected) li.classList.add('selected');
+      if (i === this.selected) {
+        li.classList.add('selected');
+        li.setAttribute('aria-current', 'true');
+      }
       const ico = restoredFrom
         ? `<span class="hist-restored-ico" title="Restored version">${faSvg(faRotateLeft).outerHTML}</span> `
         : '';
@@ -225,6 +239,8 @@ class HistoryOverlay {
       // rows are rendered newest-first; map display position back to row index.
       const on = this.rows.length - 1 - i === index;
       row.classList.toggle('selected', on);
+      if (on) row.setAttribute('aria-current', 'true');
+      else row.removeAttribute('aria-current');
       if (on) selectedRow = row;
     });
     selectedRow?.scrollIntoView({ block: 'nearest' });
@@ -253,14 +269,17 @@ class HistoryOverlay {
 
   private setMode(mode: ViewMode): void {
     this.mode = mode;
-    this.menuEl.hidden = true;
+    this.showMenu(false);
     this.syncModeButton();
     this.renderViewer();
   }
 
   private syncModeButton(): void {
     const { label, icon } = MODE_META[this.mode];
-    this.btn('mode').replaceChildren(faSvg(icon), document.createTextNode(` ${label} ▾`));
+    const arrow = document.createElement('span');
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.textContent = ' ▾';
+    this.btn('mode').replaceChildren(faSvg(icon), ` ${label}`, arrow);
   }
 
   // Show the selected version per the active mode. Diff uses a plain <pre>; the
@@ -315,8 +334,8 @@ export function confirmDialog(message: string): Promise<boolean> {
     const overlay = document.createElement('div');
     overlay.id = 'confirm-overlay';
     overlay.innerHTML = `
-      <div class="help-card confirm-card" role="dialog" aria-modal="true">
-        <p class="confirm-msg"></p>
+      <div class="help-card confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-msg">
+        <p class="confirm-msg" id="confirm-msg"></p>
         <div class="confirm-actions">
           <button type="button" data-act="cancel">Cancel</button>
           <button type="button" class="primary" data-act="ok">Restore</button>
@@ -324,22 +343,29 @@ export function confirmDialog(message: string): Promise<boolean> {
       </div>`;
     overlay.querySelector('.confirm-msg')!.textContent = message;
 
+    let release = (): void => {};
     const done = (result: boolean): void => {
       overlay.remove();
-      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
+      release();
       resolve(result);
     };
+    // Captured on window, ahead of the history screen's own Escape, which
+    // would otherwise close that screen too. Enter on a focused button is the
+    // button's: on Cancel it must not restore.
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') done(false);
-      else if (e.key === 'Enter') done(true);
+      else if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) done(true);
+      else return;
+      e.stopPropagation();
     };
     overlay.addEventListener('click', (e) => { if (e.target === overlay) done(false); });
     overlay.querySelector('[data-act="cancel"]')!.addEventListener('click', () => done(false));
     overlay.querySelector('[data-act="ok"]')!.addEventListener('click', () => done(true));
-    document.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
 
     document.body.appendChild(overlay);
-    (overlay.querySelector('[data-act="ok"]') as HTMLButtonElement).focus();
+    release = trapFocus(overlay, overlay.querySelector('[data-act="ok"]')!);
   });
 }
 

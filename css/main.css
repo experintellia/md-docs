@@ -2,7 +2,9 @@
   color-scheme: light;
   --bg: #ffffff;
   --fg: #1f2328;
-  --muted: #6e7781;
+  /* 4.5:1 or better on every background it lands on (code blocks, the
+     selected history row); #6e7781 was 4.0 on code. */
+  --muted: #59636e;
   --border: #d0d7de;
   --accent: #2563eb;
   --toolbar-bg: #f6f8fa;
@@ -19,14 +21,19 @@
      theme swap has to happen here. */
   --tok-keyword: #cf222e;
   --tok-string: #0a3069;
-  --tok-comment: #6e7781;
+  --tok-comment: #59636e;
   --tok-number: #0550ae;
   --tok-function: #8250df;
   --tok-type: #953800;
   --tok-property: #0550ae;
   --tok-operator: #0550ae;
-  --tok-meta: #6e7781;
+  --tok-meta: #59636e;
   --tok-invalid: #82071e;
+  --add: #116329;
+  --del: #a40e26;
+  --restored: #bc4c00;
+  /* Text and ticks drawn on --accent. */
+  --on-accent: #ffffff;
 }
 
 html.dark {
@@ -50,6 +57,11 @@ html.dark {
   --tok-operator: #79c0ff;
   --tok-meta: #9aa0a6;
   --tok-invalid: #ffa198;
+  --add: #3fb950;
+  --del: #ff7b72;
+  --restored: #e8830c;
+  /* White on the light-blue accent is 2.4:1. */
+  --on-accent: #1e1e1e;
 }
 
 * { box-sizing: border-box; }
@@ -213,6 +225,9 @@ html, body {
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
+/* Focused on open so a screen reader starts at the top; no ring around the
+   whole card for that. */
+.help-card:focus { outline: none; }
 .help-card h1 { margin: 0 0 8px; font-size: 22px; }
 .help-card h2 { margin: 20px 0 8px; font-size: 15px; color: var(--muted); }
 .help-card p { margin: 8px 0; line-height: 1.5; }
@@ -309,7 +324,7 @@ html, body {
   font: inherit;
   cursor: pointer;
 }
-.confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
 #editor {
   flex: 1 1 auto;
@@ -384,9 +399,9 @@ html, body {
 }
 .hist-who { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hist-diff { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-.hist-add { color: #1a7f37; }
-.hist-del { color: #cf222e; }
-.hist-restored-ico { color: #e8830c; }
+.hist-add { color: var(--add); }
+.hist-del { color: var(--del); }
+.hist-restored-ico { color: var(--restored); }
 .hist-restored-ico svg { width: 0.9em; height: 0.9em; vertical-align: -0.12em; }
 .hist-viewer { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .hist-cm { flex: 1 1 auto; min-height: 0; overflow: auto; }
@@ -447,8 +462,8 @@ html, body {
   line-height: 1.6;
 }
 .hist-diff-pane[hidden] { display: none; }
-.hist-diff-pane del { background: rgba(207, 34, 46, 0.15); color: #cf222e; text-decoration: line-through; }
-.hist-diff-pane ins { background: rgba(26, 127, 55, 0.15); color: #1a7f37; text-decoration: none; }
+.hist-diff-pane del { background: rgba(207, 34, 46, 0.15); color: var(--del); text-decoration: line-through; }
+.hist-diff-pane ins { background: rgba(26, 127, 55, 0.15); color: var(--add); text-decoration: none; }
 
 /* Narrow screens: one pane at a time. Show the list; a picked row flips the
    panel to .detail, swapping in the content pane (with its footer). The header

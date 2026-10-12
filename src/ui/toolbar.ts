@@ -28,6 +28,7 @@ import {
 } from '../commands.ts';
 import { setReadMode } from '../editor.ts';
 import { faSvg, utilButton } from './icon.ts';
+import { trapFocus } from './modal.ts';
 import { historyButton } from './history-view.ts';
 import { isMobile } from '../peer-flags.ts';
 import type { Collab } from '../collab.ts';
@@ -65,6 +66,13 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
     // Use mousedown + preventDefault so the editor keeps focus/selection.
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault();
+      action.run(view);
+      view.focus();
+    });
+    // Enter and Space on a focused button fire only click, with no mousedown
+    // before it (detail 0); a pointer's click already ran above.
+    btn.addEventListener('click', (e) => {
+      if (e.detail !== 0) return;
       action.run(view);
       view.focus();
     });
@@ -130,8 +138,10 @@ function moreMenu(items: HTMLButtonElement[]): HTMLElement[] {
     setOpen(false);
   };
   more.addEventListener('click', () => setOpen(!menu.classList.contains('open')));
-  // An item's own handler runs first; then the menu has done its job.
-  menu.addEventListener('click', close);
+  // Capture: the menu has done its job, and focus is back on ⋮ before the
+  // item's own handler runs, so a dialog the item opens hands focus back to ⋮
+  // rather than to an item the closed menu hides.
+  menu.addEventListener('click', close, true);
   // Tabbing out closes it; focus moving to ⋮ doesn't, or ⋮'s own click
   // would reopen what the focus change had just closed.
   menu.addEventListener('focusout', (e) => {
@@ -175,10 +185,12 @@ function helpButton(): HTMLButtonElement {
 }
 
 let helpEl: HTMLElement | null = null;
+let releaseHelp: (() => void) | null = null;
 
 function openHelp(): void {
   if (!helpEl) helpEl = buildHelp();
   helpEl.hidden = false;
+  releaseHelp = trapFocus(helpEl, helpEl.querySelector('.help-card')!);
 }
 
 function buildHelp(): HTMLElement {
@@ -188,7 +200,7 @@ function buildHelp(): HTMLElement {
   // Inline the toolbar's own icons so the help mirrors the buttons exactly.
   const ico = (def: Parameters<typeof faSvg>[0]): string => faSvg(def).outerHTML;
   overlay.innerHTML = `
-    <div class="help-card" role="dialog" aria-modal="true" aria-label="Help">
+    <div class="help-card" role="dialog" aria-modal="true" aria-label="Help" tabindex="-1">
       <button class="help-close" type="button" aria-label="Close help" title="Close">×</button>
       <div class="help-head">
         <button class="md-tool-btn help-back" type="button" aria-label="Back to editor"
@@ -233,7 +245,11 @@ function buildHelp(): HTMLElement {
          help sit behind ${ico(faEllipsisVertical)}.</p>
     </div>`;
 
-  const close = (): void => { overlay.hidden = true; };
+  const close = (): void => {
+    overlay.hidden = true;
+    releaseHelp?.();
+    releaseHelp = null;
+  };
   // × on the dialog, ← on the full screen a narrow display gets (main.css).
   for (const btn of overlay.querySelectorAll('.help-close, .help-back')) {
     btn.addEventListener('click', close);

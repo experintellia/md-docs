@@ -26,17 +26,26 @@ export class CheckboxWidget extends WidgetType {
     box.type = 'checkbox';
     box.className = 'md-task-checkbox';
     box.checked = this.checked;
-    box.addEventListener('mousedown', (e) => {
-      // Toggle the underlying `[ ]` <-> `[x]` text without moving the cursor.
-      e.preventDefault();
+    // The task's text follows on the line; this says what ticking means.
+    box.setAttribute('aria-label', 'Done');
+    // Toggle the underlying `[ ]` <-> `[x]` text without moving the cursor.
+    const toggle = (): void => {
       if (view.state.readOnly) return; // read mode / history viewer
       const insert = this.checked ? '[ ]' : '[x]';
       view.dispatch({ changes: { from: this.from, to: this.to, insert } });
+    };
+    box.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      toggle();
     });
     // The document owns the tick. Without this the click after a mousedown
     // that changed nothing (read mode) still flips the native box, which then
-    // shows a state the document doesn't have.
-    box.addEventListener('click', (e) => e.preventDefault());
+    // shows a state the document doesn't have. Space on a focused box fires
+    // only this click (detail 0), so that one toggles here.
+    box.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (e.detail === 0) toggle();
+    });
     return box;
   }
 

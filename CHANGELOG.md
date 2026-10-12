@@ -88,6 +88,21 @@ All notable changes to MD-Docs are documented here. This project adheres to
   history shows them as re-sent until their author's own copy of the same
   edits arrives. Your own unsent edits still go out under your name, except
   an edit that only deletes text, which goes out quietly.
+- Accessibility, from an axe-core scan and a keyboard and screen-reader pass:
+  - The formatting buttons and task checkboxes did nothing from the keyboard:
+    they acted on mousedown only, which Enter and Space don't send.
+  - Help, history and the restore confirmation now take focus when they open,
+    keep Tab inside them, and hand focus back when they close.
+  - Enter on the confirmation's Cancel button restored the version anyway,
+    and Escape there also closed the history screen behind it.
+  - The page can be zoomed again (`user-scalable=no` is gone).
+  - The editor, the history viewer and task checkboxes have accessible names;
+    the app is a `main` landmark; the selected history row is marked current;
+    the history view-mode picker is announced by the mode it shows and as
+    expanded or collapsed, and no longer claims to be an ARIA menu.
+  - Contrast: muted text and code comments in light mode, +/− counts and the
+    diff in dark mode, the restored-version icon, and the white text and tick
+    on the light-blue accent in dark mode now reach 4.5:1 (3:1 for the tick).
 
 ## [0.3.1] - 2026-09-19
 
