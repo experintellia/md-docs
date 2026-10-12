@@ -221,13 +221,15 @@ function buildHelp(): HTMLElement {
         <tr><td><code>$$</code><br><code>x^2</code><br><code>$$</code></td><td>Math (LaTeX), with <code>$$</code> on the lines above and below</td></tr>
       </table>
       <h2>Toolbar</h2>
-      <p>Use ${ico(faIndent)} / ${ico(faOutdent)} to indent or outdent list items,
-         ${ico(faBookOpen)} / ${ico(faPen)} to switch between reading (links open
-         on tap, nothing can be changed) and editing,
-         ${ico(faClockRotateLeft)} to browse and restore past versions,
-         ${ico(faMoon)} / ${ico(faSun)} to switch theme, and ${ico(faCircleQuestion)}
-         to reopen this help. On a phone or in a narrow window, those last
-         three sit behind ${ico(faEllipsisVertical)}.</p>
+      <table class="help-tools">
+        <tr><td>${ico(faIndent)}${ico(faOutdent)}</td><td>Indent or outdent a list item</td></tr>
+        <tr><td>${ico(faBookOpen)}${ico(faPen)}</td><td>Read (links open on tap, nothing can change) or edit</td></tr>
+        <tr><td>${ico(faClockRotateLeft)}</td><td>Browse and restore past versions</td></tr>
+        <tr><td>${ico(faMoon)}${ico(faSun)}</td><td>Dark or light theme</td></tr>
+        <tr><td>${ico(faCircleQuestion)}</td><td>This help</td></tr>
+      </table>
+      <p class="help-note">On a phone or in a narrow window, history, theme and
+         help sit behind ${ico(faEllipsisVertical)}.</p>
     </div>`;
 
   const close = (): void => { overlay.hidden = true; };

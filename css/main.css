@@ -220,6 +220,10 @@ html, body {
 .help-card td { padding: 4px 8px 4px 0; vertical-align: top; line-height: 1.4; }
 .help-card td:first-child { white-space: nowrap; }
 .help-card svg { width: 1em; height: 1em; vertical-align: -0.125em; }
+/* Toolbar section: an icon column, each pair of icons a little apart. */
+.help-tools td:first-child { width: 4em; font-size: 17px; }
+.help-tools svg + svg { margin-left: 8px; }
+.help-note { color: var(--muted); font-size: 14px; }
 .help-card code {
   padding: 1px 5px;
   background: var(--code-bg);
