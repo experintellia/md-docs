@@ -25,14 +25,14 @@ Chosen and built (see [As built](#as-built)). Only `$$` blocks for now; inline
 ## As built
 
 Against `main` after #31 (which halved the app), the `.xdc` grows from
-**210.2 KB to 466.9 KB: +256.8 KB (+122%)**.
+**210.2 KB to 462.9 KB: +252.7 KB (+120%)**.
 
 | What | In the `.xdc` |
 |---|---|
-| KaTeX fonts (16 woff2 files, hinting stripped) | +174.8 KB |
+| KaTeX fonts (16 woff2 files, without hinting or glyph names) | +170.6 KB |
 | KaTeX script, a separate chunk loaded on first use | +75.0 KB |
 | KaTeX stylesheet | +3.2 KB |
-| Parser and widget, in the app script | +1.1 KB |
+| Parser and widget, in the app script | +1.2 KB |
 
 KaTeX's 261 KB script and its fonts load only once a document shows math, so
 documents without math start as before.
@@ -43,11 +43,11 @@ documents without math start as before.
 |---|---|---|
 | Bundle only the woff2 fonts (KaTeX's CSS also lists woff and ttf, and Vite bundles all three) | 601 KB | ✅ `katexFonts()` in `vite.config.ts` |
 | Drop the `\mathsf` / `\mathtt` fonts; the system sans-serif and monospace stand in | 47 KB | ✅ same plugin |
-| Strip the TrueType hinting from the fonts | 32 KB | ✅ `scripts/strip-katex-hinting.py` writes `fonts/katex-<version>/`, checking that outlines, metrics and every other table are unchanged; the build refuses a KaTeX version it has no fonts for. Rendering is pixel-identical in Chromium; Windows, the one platform that runs hinting, draws small math anti-aliased instead of grid-snapped. |
+| Strip the TrueType hinting from the fonts | 32 KB | ✅ `scripts/strip-katex-fonts.py` writes `fonts/katex-<version>/`, checking glyph by glyph that outlines, metrics and every other table are unchanged; the build refuses a KaTeX version it has no fonts for. Rendering is pixel-identical in Chromium; Windows, the one platform that runs hinting, draws small math anti-aliased instead of grid-snapped. |
+| Drop the glyph names from the fonts (`post` table format 3) | 4 KB | ✅ same script. Text is laid out by character map and glyph number; the names are for font editors. |
 | Keep the fonts as files instead of letting Vite inline the small ones as base64 into the app's stylesheet | ≈0 KB, but 16 KB less CSS to parse on every start | ✅ `assetsInlineLimit` |
 | Load the KaTeX script on first use | 0 KB, but no startup cost without math | ✅ |
 | Drop the `\mathfrak` / `\mathscr` / `\mathcal` fonts | 45 KB | ❌ No system font stands in, and `\mathfrak{g}` shown as a plain g means something else |
-| Drop the glyph names from the fonts | 4 KB | ❌ Not hinting, and not asked for; harmless to browsers if wanted later |
 | Recompress the `.xdc` with zopfli instead of deflate -9 | 16 KB (the whole app, not just math) | Not here: replaces `vite-plugin-zip-pack`, so it's its own change |
 
 ## Options at a glance

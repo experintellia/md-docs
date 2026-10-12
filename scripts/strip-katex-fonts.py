@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Write KaTeX's fonts without their TrueType hinting to fonts/katex-<version>/.
+"""Write KaTeX's fonts, minus what a browser never reads, to fonts/katex-<version>/.
 
-Hinting is bytecode that snaps outlines to the pixel grid at small sizes. Only
-Windows (and Linux with full hinting) runs it; macOS, iOS and Android ignore it.
-It is a fifth of KaTeX's woff2 bytes, so the build (vite.config.ts) bundles
-these copies instead of KaTeX's own. Only the hinting goes: the tables that
-carry it, each glyph's instructions, and the maxp fields that size them.
+Two things go, together a sixth of KaTeX's woff2 bytes, so the build
+(vite.config.ts) bundles these copies instead of KaTeX's own:
+
+- The TrueType hinting: bytecode that snaps outlines to the pixel grid at small
+  sizes. Windows runs it; macOS, iOS and Android ignore it. That is the tables
+  carrying it, each glyph's instructions, and the maxp fields that size them.
+- The glyph names in the post table. Text is laid out by character map and
+  glyph number; the names are for font editors.
+
 Outlines, metrics, the character map and every other table are checked to come
-out identical.
+out identical, glyph by glyph.
 
 Re-run after upgrading KaTeX; the build refuses to start until you do:
 
     pip install fonttools brotli
-    python3 scripts/strip-katex-hinting.py
+    python3 scripts/strip-katex-fonts.py
 """
 import json
 import pathlib
@@ -39,23 +43,30 @@ def strip(font):
     for field in ('maxTwilightPoints', 'maxStorage', 'maxFunctionDefs',
                   'maxInstructionDefs', 'maxStackElements', 'maxSizeOfInstructions'):
         setattr(maxp, field, 0)
+    font['post'].formatType = 3.0  # no glyph names
 
 
+# Glyphs are compared by number: without stored names, fontTools makes up its
+# own when it reads the font back.
 def outline(font, name):
     g = font['glyf'][name]
     if g.isComposite():
-        return [(c.glyphName, c.x, c.y, getattr(c, 'transform', None)) for c in g.components]
+        return [(font.getGlyphID(c.glyphName), c.x, c.y, getattr(c, 'transform', None))
+                for c in g.components]
     if g.numberOfContours == 0:
         return []
     return (list(g.coordinates), list(g.endPtsOfContours), [f & 1 for f in g.flags])
 
 
 def check(before, after):
-    assert after.getGlyphOrder() == before.getGlyphOrder()
-    for name in before.getGlyphOrder():
-        assert outline(after, name) == outline(before, name), name
-    # The checksum is of the whole file, which is meant to change.
+    old, new = before.getGlyphOrder(), after.getGlyphOrder()
+    assert len(new) == len(old)
+    for a, b in zip(old, new):
+        assert outline(after, b) == outline(before, a), a
+    # The checksum is of the whole file, which is meant to change; the post
+    # table is compared without its names, the rest of it must match.
     before['head'].checkSumAdjustment = after['head'].checkSumAdjustment = 0
+    before['post'].formatType = 3.0
     for tag in before.keys():
         if tag in HINTING or tag in ('glyf', 'loca', 'maxp', 'GlyphOrder'):
             continue

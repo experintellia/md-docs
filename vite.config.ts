@@ -33,9 +33,9 @@ function eruda(): PluginOption {
 // `\mathfrak{g}` shown as a plain g says something else.
 //
 // The fonts that remain come from fonts/katex-<version>/: KaTeX's own, minus
-// their TrueType hinting (32 KB): bytecode Windows runs at small sizes, and
-// macOS, iOS and Android ignore. See
-// scripts/strip-katex-hinting.py, which also checks nothing else changed.
+// their TrueType hinting (only Windows runs it) and glyph names (no browser
+// reads them), 36 KB together. See scripts/strip-katex-fonts.py, which also
+// checks that nothing else changed.
 function katexFonts(): PluginOption {
   const { version } = JSON.parse(readFileSync('./node_modules/katex/package.json', 'utf-8'));
   const dir = `/fonts/katex-${version}`;
@@ -58,7 +58,7 @@ function katexFonts(): PluginOption {
       // Fonts stripped from an older KaTeX would not match its glyph metrics.
       for (const [, path] of out.matchAll(/url\((\/fonts\/[^)]+)\)/g)) {
         if (!existsSync(`.${path}`)) {
-          this.error(`katex-fonts: no ${path}; run scripts/strip-katex-hinting.py for KaTeX ${version}`);
+          this.error(`katex-fonts: no ${path}; run scripts/strip-katex-fonts.py for KaTeX ${version}`);
         }
       }
       return out;
