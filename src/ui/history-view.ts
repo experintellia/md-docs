@@ -10,11 +10,11 @@ import {
   faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
-import { faSvg } from './icon.ts';
+import { faSvg, utilButton } from './icon.ts';
 import { livePreview } from '../live-preview/index.ts';
 import { mathBlock } from '../live-preview/math.ts';
 import type { Collab } from '../collab.ts';
-import type { HistoryVersion } from '../history.ts';
+import { commonEnds, type HistoryVersion } from '../history.ts';
 
 /**
  * Full-screen document history: a scrollable list of past versions (datetime +
@@ -36,20 +36,10 @@ const MODE_META: Record<ViewMode, { label: string; icon: IconDefinition }> = {
 
 let overlay: HistoryOverlay | null = null;
 
-export function openHistory(collab: Collab): void {
-  if (!overlay) overlay = new HistoryOverlay(collab);
-  overlay.open();
-}
-
 /** A toolbar button that opens the history screen. */
 export function historyButton(collab: Collab): HTMLButtonElement {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'md-tool-btn';
-  btn.appendChild(faSvg(faClockRotateLeft));
-  btn.title = 'Document history';
-  btn.setAttribute('aria-label', 'Document history');
-  btn.addEventListener('click', () => openHistory(collab));
+  const btn = utilButton(() => faSvg(faClockRotateLeft), 'Document history');
+  btn.addEventListener('click', () => (overlay ??= new HistoryOverlay(collab)).open());
   return btn;
 }
 
@@ -389,21 +379,14 @@ function isNarrow(): boolean {
 }
 
 function isToday(d: Date): boolean {
-  const n = new Date();
-  return d.getFullYear() === n.getFullYear()
-    && d.getMonth() === n.getMonth()
-    && d.getDate() === n.getDate();
+  return d.toDateString() === new Date().toDateString();
 }
 
 // Single-region diff: unchanged prefix/suffix kept, the middle shown as removed
-// (struck) then added. Mirrors history.ts's char-count approximation — exact for
+// (struck) then added. Same approximation as history.ts's char counts — exact for
 // one edit region, a coarse single block when a batch touched two far-apart spots.
 function diffHtml(prev: string, next: string): string {
-  let p = 0;
-  const min = Math.min(prev.length, next.length);
-  while (p < min && prev[p] === next[p]) p++;
-  let s = 0;
-  while (s < min - p && prev[prev.length - 1 - s] === next[next.length - 1 - s]) s++;
+  const { p, s } = commonEnds(prev, next);
   const removed = prev.slice(p, prev.length - s);
   const added = next.slice(p, next.length - s);
   return escapeHtml(next.slice(0, p))

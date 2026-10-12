@@ -23,3 +23,14 @@ export function faSvg(def: IconDefinition): SVGSVGElement {
   }
   return svg;
 }
+
+/** A toolbar button showing `icon`, labelled `title` for hover and screen readers. */
+export function utilButton(icon: () => Node, title: string): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'md-tool-btn';
+  btn.appendChild(icon());
+  btn.title = title;
+  btn.setAttribute('aria-label', title);
+  return btn;
+}

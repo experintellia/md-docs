@@ -45,6 +45,7 @@ const HIDDEN_MARKS = new Set([
 ]);
 
 const hidden = Decoration.replace({});
+const bullet = Decoration.replace({ widget: new BulletWidget() });
 
 // A character decides a line's direction only if it is a letter or one of the
 // explicit direction marks. Digits and punctuation do not — and `\p{Script=…}`
@@ -339,6 +340,17 @@ export function buildDecorations(view: EditorView): DecorationSet {
       to,
       enter: (node) => {
         const name = node.name;
+        // A link's text, clickable through `data-href` unless its line is being
+        // edited.
+        const linkMark = (destination: string): void => {
+          const url = lineHasSelection(state, node.from) ? null : safeHref(destination);
+          ranges.push(
+            Decoration.mark({
+              class: 'md-link',
+              attributes: url ? { 'data-href': url } : undefined,
+            }).range(node.from, node.to),
+          );
+        };
 
         // --- Block-level: headings, blockquotes, fenced code -> line classes
         const hClass = headingClass(name);
@@ -444,15 +456,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
           // In preview (markers hidden) the link text becomes clickable via a
           // data-href the click handler below opens; while editing the line we
           // leave it as plain styled text so the raw `[text](url)` stays editable.
-          const url = lineHasSelection(state, node.from)
-            ? null
-            : safeHref(linkDestination(node.node, doc) ?? '');
-          ranges.push(
-            Decoration.mark({
-              class: 'md-link',
-              attributes: url ? { 'data-href': url } : undefined,
-            }).range(node.from, node.to),
-          );
+          linkMark(linkDestination(node.node, doc) ?? '');
           return;
         }
         if (name === 'URL') {
@@ -471,15 +475,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
             }
             return;
           }
-          const url = lineHasSelection(state, node.from)
-            ? null
-            : safeHref(doc.sliceString(node.from, node.to));
-          ranges.push(
-            Decoration.mark({
-              class: 'md-link',
-              attributes: url ? { 'data-href': url } : undefined,
-            }).range(node.from, node.to),
-          );
+          linkMark(doc.sliceString(node.from, node.to));
           return;
         }
 
@@ -496,10 +492,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
           ranges.push(
             /^\[[ xX]\]/.test(after)
               ? hidden.range(node.from, end)
-              : Decoration.replace({ widget: new BulletWidget() }).range(
-                node.from,
-                end,
-              ),
+              : bullet.range(node.from, end),
           );
           return;
         }
@@ -625,18 +618,21 @@ export function buildTables(state: EditorState): DecorationSet {
   return Decoration.set(ranges, true);
 }
 
+// Has the tree or read mode changed? The tree because the parser only reaches
+// the first few thousand characters up front and finishes in the background,
+// on a transaction that carries neither a document change nor a selection —
+// without this a table or bold text further down stays raw until something else
+// touches the editor. Read mode because it changes what the selection reveals.
+function treeOrModeChanged(start: EditorState, state: EditorState): boolean {
+  return syntaxTree(state) !== syntaxTree(start) || state.readOnly !== start.readOnly;
+}
+
 // A state field holding one kind of block widget, rebuilt by `build`.
 function blockField(build: (state: EditorState) => DecorationSet): StateField<DecorationSet> {
   return StateField.define<DecorationSet>({
     create: build,
     update: (value, tr) => (
-      // The tree too: the parser only reaches the first few thousand characters
-      // up front and finishes in the background, and that transaction carries
-      // neither a document change nor a selection. Without this a table further
-      // down stays raw pipes until something else happens to touch the editor.
-      // And read mode switching, which changes what the selection reveals.
-      tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState) ||
-      tr.state.readOnly !== tr.startState.readOnly
+      tr.docChanged || tr.selection || treeOrModeChanged(tr.startState, tr.state)
         ? build(tr.state)
         : value
     ),
@@ -699,21 +695,11 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
         update.docChanged ||
         update.viewportChanged ||
         update.selectionSet ||
-        // See tableField: the background parse arrives on its own transaction.
-        // Long-standing — bold past the first few thousand characters did not
-        // render either until something else redrew.
-        syntaxTree(update.state) !== syntaxTree(update.startState) ||
-        // Read mode reveals nothing, so switching it re-renders the caret's line.
-        update.state.readOnly !== update.startState.readOnly
+        treeOrModeChanged(update.startState, update.state)
       ) {
         this.decorations = buildDecorations(update.view);
       }
     }
   },
-  {
-    decorations: (v) => v.decorations,
-    // Hidden ranges must be atomic so clicking past them behaves; but keep the
-    // active line editable. We rely on per-line reveal rather than atomicRanges
-    // to avoid backspace traps (see CREDITS — Atomic Editor notes this).
-  },
+  { decorations: (v) => v.decorations },
 );
