@@ -3,6 +3,10 @@ import { createEditor } from './editor';
 import { createCollab } from './collab';
 import { connectRealtime } from './realtime';
 import { mountToolbar } from './ui/toolbar';
+// KaTeX's own script loads on first use (see live-preview/widgets/math.ts); its
+// stylesheet is small and fetches no font until a formula needs one. Trimmed at
+// build time, see vite.config.ts.
+import 'katex/dist/katex.css';
 
 // Entry point. Phase 2: a Yjs-backed document synced to chat peers via the
 // webxdc persistent channel, bound to CodeMirror with undo + awareness.

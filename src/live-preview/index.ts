@@ -2,7 +2,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
-import { linkClickHandler, livePreviewPlugin, tableField } from './decorations.ts';
+import { linkClickHandler, livePreviewPlugin, mathField, tableField } from './decorations.ts';
 
 // Highlight style for fenced-code-block contents (and other tagged tokens).
 // Colours come from CSS custom properties so the one style serves both themes
@@ -37,6 +37,7 @@ export function livePreview(): Extension {
   return [
     livePreviewPlugin,
     tableField,
+    mathField,
     linkClickHandler,
     syntaxHighlighting(mdHighlight),
     // Read each line's own direction instead of assuming one for the whole

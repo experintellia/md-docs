@@ -55,3 +55,28 @@ test('peers see each other type', async ({ page, context }) => {
   await page.keyboard.insertText('hello bob');
   await expect(bob.locator('.cm-content')).toContainText('hello bob');
 });
+
+test('a $$ block typesets, with its fonts, and a tap opens its source', async ({ page, isMobile }) => {
+  // The example from #27, verbatim: a bare `\\` between two lines.
+  await page.keyboard.insertText(String.raw`$$
+\Omega = \{ (\omega_1 , \omega_2) \, | \, \omega \in \{1,2,3\} \}
+\\
+\Omega = \{ (1,2), (1,3), (2,1), (2,3), (3,1), (3,2) \}
+$$
+
+after`);
+  const math = page.locator('.md-math');
+  await expect(math.locator('.katex-newline')).toHaveCount(1);
+  await expect(math.locator('.katex-error')).toHaveCount(0);
+  // The bundled fonts have their hinting and glyph names stripped (see
+  // scripts/strip-katex-fonts.py), and each engine has its own font parser:
+  // every face the formula used must have loaded, not been rejected.
+  await expect.poll(() => page.evaluate(() => [...document.fonts]
+    .filter((f) => f.family.replace(/"/g, '').startsWith('KaTeX') && f.status !== 'unloaded')
+    .map((f) => `${f.family.replace(/"/g, '')} ${f.style} ${f.status}`).sort()))
+    .toEqual(expect.arrayContaining(['KaTeX_Main normal loaded', 'KaTeX_Math italic loaded']));
+  expect(await page.evaluate(() => [...document.fonts].filter((f) => f.status === 'error').length)).toBe(0);
+  await press(math.locator('.katex'), isMobile);
+  await expect(math).toHaveCount(0);
+  await expect(page.locator('.cm-content')).toContainText(String.raw`\Omega = \{ (1,2)`);
+});
