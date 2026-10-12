@@ -44,7 +44,7 @@ test('watching someone else type publishes nothing', async ({ page, context }) =
   // First, bob's close does flush: an edit of his own goes out under his name.
   await write(bob, 'hi');
   await bob.reload();
-  expect(await chat(page)).toEqual(['bob info summary']);
+  expect(await chat(bob)).toEqual(['bob info summary']);
 
   await realtimeUp(bob);
   await write(page, 'hello bob');
@@ -52,9 +52,10 @@ test('watching someone else type publishes nothing', async ({ page, context }) =
   // Nothing new is published, so it came over realtime: the path under test.
   expect(await chat(page)).toEqual(['bob info summary']);
   await bob.reload(); // closing flushes whatever bob queued
-  // His reopen may pass alice's edit on (e2e/draft-resend.spec.ts), but it
-  // claims nothing: no info line, no summary.
-  expect((await chat(page)).filter((u) => u.includes('summary'))).toEqual(['bob info summary']);
+  // His close sent no claim of his own. (His reopen may pass alice's edit on,
+  // quietly; e2e/draft-resend.spec.ts covers what that sends.) Read on bob's
+  // page, where his writes land first.
+  expect((await chat(bob)).filter((u) => u.includes('summary'))).toEqual(['bob info summary']);
 });
 
 test('a device that joins an existing document shows it and keeps up', async ({ page, context }) => {

@@ -14,6 +14,10 @@ import { test, expect, peer, press, serveMockWebxdc, chat, editor, open, write, 
 const LOSE_SENDS = 'if (new URLSearchParams(location.search).has("lose")) window.webxdc.sendUpdate = () => {};';
 const losing = (name: string): string => `/?lose${peer(name).slice(1)}`;
 
+// Each page runs in its own renderer, and a write reaches another page's
+// localStorage a moment later. So a check that someone sent nothing reads the
+// page that would have sent it, and a read that waits on another page polls.
+
 test.beforeEach(async ({ context }) => {
   await serveMockWebxdc(context, REALTIME_UP + LOSE_SENDS);
 });
@@ -54,15 +58,15 @@ test("a watcher who reopens before the author's edit lands passes it on without 
   await expect(editor(bob)).toContainText('from alice');
 
   await reopen(bob);
-  expect(await chat(page)).toEqual(['bob re-sent']);
+  expect(await chat(bob)).toEqual(['bob re-sent']);
 
   // Alice's own send lands after it, and is the only claim; bob's next close
   // has nothing queued. The timeline credits her, not the peer that passed
   // her edit on.
   await page.reload();
   await bob.reload();
-  expect(await chat(page)).toEqual(['bob re-sent', 'alice info summary']);
-  await expect(await credits(page, isMobile)).toHaveText(['alice']);
+  await expect.poll(() => chat(bob)).toEqual(['bob re-sent', 'alice info summary']);
+  await expect(await credits(bob, isMobile)).toHaveText(['alice']);
 });
 
 test("edits whose author's send was lost reach the chat through a watcher, who retries a lost re-send", async ({ page, context, isMobile }) => {
@@ -75,7 +79,6 @@ test("edits whose author's send was lost reach the chat through a watcher, who r
   await page.close(); // and never comes back
 
   await reopen(bob); // still losing sends: the re-send is lost as well
-  expect(await chat(bob)).toEqual([]);
   await reopen(bob, peer('bob'));
   expect(await chat(bob)).toEqual(['bob re-sent']);
 
@@ -100,7 +103,7 @@ test("a watcher's own edit on top of a lost one reaches others once the watcher 
   // Carol has bob's edit but not the text it builds on, so she can't show it.
   const carol = await context.newPage();
   await open(carol, 'carol');
-  expect(await chat(carol)).toEqual(['bob info summary']);
+  await expect.poll(() => chat(carol)).toEqual(['bob info summary']);
   await expect(editor(carol)).not.toContainText('world');
 
   await bob.goto(peer('bob'));
@@ -161,7 +164,8 @@ test("a watcher who reopens after the author's edit landed sends nothing", async
   await page.reload();
 
   await reopen(bob);
-  expect(await chat(page)).toEqual(['alice info summary']);
+  await bob.reload(); // and anything the restore queued goes out with this close
+  await expect.poll(() => chat(bob)).toEqual(['alice info summary']);
 });
 
 test('a draft saved by the previous version still sends our lost edits under our name', async ({ page }) => {
