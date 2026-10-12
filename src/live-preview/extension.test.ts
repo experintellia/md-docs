@@ -13,6 +13,8 @@ const { markdown, markdownLanguage } = await import('@codemirror/lang-markdown')
 const { ensureSyntaxTree } = await import('@codemirror/language');
 const { tableField } = await import('./decorations.ts');
 const { mathBlock } = await import('./math.ts');
+const { render, MAX_TEX } = await import('./widgets/math.ts');
+const katex = (await import('katex')).default;
 after(() => GlobalRegistrator.unregister());
 
 // Tier 2: the direction decorations are only half the feature. Without
@@ -175,4 +177,31 @@ test('tapping a formula opens its source', async () => {
   } finally {
     view.destroy();
   }
+});
+
+// The TeX comes from other chat members, and typesetting blocks the UI thread.
+function typesetInto(tex: string): HTMLElement {
+  const el = document.createElement('div');
+  render(katex, el, tex);
+  return el;
+}
+
+test('a note cannot define macros, so a few bytes cannot become minutes of work', () => {
+  // `\def\a{…}` and a thousand `\a`: 2 KB that took KaTeX 80 seconds to typeset.
+  const bomb = `\\def\\a{${'x+'.repeat(150)}}${'\\a'.repeat(999)}`;
+  for (const tex of [bomb, '\\newcommand{\\R}{\\mathbb{R}} x \\in \\R', '\\global\\let\\b=x \\b']) {
+    const started = Date.now();
+    const error = typesetInto(tex).querySelector('.katex-error');
+    assert.ok(error, `${tex.slice(0, 30)}: shown as an error`);
+    assert.match(error.getAttribute('title')!, /is off: a shared note cannot define macros/);
+    assert.ok(Date.now() - started < 1000, 'and refused before any expansion work');
+  }
+  assert.ok(typesetInto('\\mathbb{R}^n').querySelector('.katex'), 'ordinary TeX still typesets');
+});
+
+test('a formula too long to typeset quickly stays as its source', () => {
+  const tex = 'x+'.repeat(MAX_TEX / 2 + 1);
+  const el = typesetInto(tex);
+  assert.equal(el.textContent, tex);
+  assert.equal(el.querySelector('.katex'), null);
 });

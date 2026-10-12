@@ -12,7 +12,29 @@ function loadKatex(): Promise<Katex> {
   return loading ??= import('katex').then((m) => (katex = m.default));
 }
 
-function render(k: Katex, el: HTMLElement, tex: string): void {
+// The document comes from other chat members, and typesetting runs on the UI
+// thread of everyone who has it open. A macro is how a few bytes become a lot
+// of work: KaTeX caps how many expansions run, not how much each one yields,
+// so `\def\a{…}` and a thousand `\a` (2 KB) froze the editor for 80 seconds,
+// again on every peer each time it scrolled into view. So a note cannot define
+// macros; each command that would is an error instead. These are all of
+// KaTeX's definers.
+const DEFINERS = [
+  '\\def', '\\gdef', '\\edef', '\\xdef', '\\let', '\\futurelet', '\\global', '\\long',
+  '\\newcommand', '\\renewcommand', '\\providecommand',
+];
+
+// Past this, plain size is the cost: typesetting grows faster than the TeX
+// does. 10,000 characters takes up to 0.13 s on a laptop; no hand-written
+// formula comes near it.
+export const MAX_TEX = 10_000;
+
+export function render(k: Katex, el: HTMLElement, tex: string): void {
+  if (tex.length > MAX_TEX) {
+    el.textContent = tex;
+    el.title = `Too long to typeset (over ${MAX_TEX} characters)`;
+    return;
+  }
   try {
     k.render(tex, el, {
       displayMode: true,
@@ -22,11 +44,13 @@ function render(k: Katex, el: HTMLElement, tex: string): void {
       // A bare `\\` is a no-op in LaTeX display math, and KaTeX warns on every
       // render that it breaks the line anyway. Breaking it is what people mean.
       strict: 'ignore',
-      // The document comes from other chat members. `trust` stays off, which
-      // keeps links, images and raw HTML classes out; and a size given in the
-      // TeX (`\rule{500em}{500em}`) is capped at 50em, so nobody can plant a
-      // block a mile tall.
+      // `trust` stays off, which keeps links, images and raw HTML classes out;
+      // and a size given in the TeX (`\rule{500em}{500em}`) is capped at 50em.
       maxSize: 50,
+      // Fresh per render: KaTeX writes into this object.
+      macros: Object.fromEntries(DEFINERS.map((name) => [name, () => {
+        throw new k.ParseError(`${name} is off: a shared note cannot define macros`);
+      }])),
     });
   } catch {
     // Not a parse error (those are rendered, above) — leave the source up.

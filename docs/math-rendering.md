@@ -25,14 +25,14 @@ Chosen and built (see [As built](#as-built)). Only `$$` blocks for now; inline
 ## As built
 
 Against `main` after #31 (which halved the app), the `.xdc` grows from
-**210.2 KB to 462.9 KB: +252.7 KB (+120%)**.
+**210.2 KB to 448.9 KB: +238.7 KB (+114%)**.
 
 | What | In the `.xdc` |
 |---|---|
-| KaTeX fonts (16 woff2 files, without hinting or glyph names) | +170.6 KB |
+| KaTeX fonts (14 woff2 files, without hinting or glyph names) | +156.8 KB |
 | KaTeX script, a separate chunk loaded on first use | +75.0 KB |
 | KaTeX stylesheet | +3.2 KB |
-| Parser and widget, in the app script | +1.2 KB |
+| Parser and widget, in the app script | +1.4 KB |
 
 KaTeX's 261 KB script and its fonts load only once a document shows math, so
 documents without math start as before.
@@ -45,6 +45,8 @@ documents without math start as before.
 | Drop the `\mathsf` / `\mathtt` fonts; the system sans-serif and monospace stand in | 47 KB | ✅ same plugin |
 | Strip the TrueType hinting from the fonts | 32 KB | ✅ `scripts/strip-katex-fonts.py` writes `fonts/katex-<version>/`, checking glyph by glyph that outlines, metrics and every other table are unchanged; the build refuses a KaTeX version it has no fonts for. Rendering is pixel-identical in Chromium; Windows, the one platform that runs hinting, draws small math anti-aliased instead of grid-snapped. |
 | Drop the glyph names from the fonts (`post` table format 3) | 4 KB | ✅ same script. Text is laid out by character map and glyph number; the names are for font editors. |
+| Drop the bold calligraphic and bold Fraktur faces | 14 KB | ✅ No command reaches bold calligraphic. Bold Fraktur is only reached by pasted 𝕬-style characters, which KaTeX lays out with the regular face's metrics, so the browser's synthetic bold fits. |
+| Drop the bold-italic text face (`\textbf{\textit{…}}`) | 14 KB | ❌ The synthetic bold would not match KaTeX's metrics for it. |
 | Keep the fonts as files instead of letting Vite inline the small ones as base64 into the app's stylesheet | ≈0 KB, but 16 KB less CSS to parse on every start | ✅ `assetsInlineLimit` |
 | Load the KaTeX script on first use | 0 KB, but no startup cost without math | ✅ |
 | Drop the `\mathfrak` / `\mathscr` / `\mathcal` fonts | 45 KB | ❌ No system font stands in, and `\mathfrak{g}` shown as a plain g means something else |
@@ -108,8 +110,15 @@ the heaviest and slowest option.
   anyway but warns on every render, so pass `strict: 'ignore'`. Pass
   `throwOnError: false` too, so a half-typed `\frac{1}{` shows red source rather
   than throwing.
-- Security: documents come from other chat members. Keep the default
-  `trust: false` so `\href`, `\includegraphics` and `\htmlClass` stay disabled.
+- Security: documents come from other chat members.
+  - Keep the default `trust: false` so `\href`, `\includegraphics` and
+    `\htmlClass` stay disabled.
+  - Turn macro definitions off. KaTeX caps how many expansions run, not how
+    much each one produces, so `\def\a{…}` followed by a thousand `\a` (2 KB)
+    took 80 s to typeset, freezing every peer's editor. Each definer is now a
+    parse error.
+  - Leave formulas over 10,000 characters as source: typesetting time grows
+    faster than the input.
 - Inherits `color`, so dark mode needs nothing extra.
 
 ### B. Temml: [temml.org](https://temml.org)

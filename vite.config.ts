@@ -26,7 +26,11 @@ function eruda(): PluginOption {
 // Vite bundles whatever a stylesheet points at: 59 files, 1 MB, most of the
 // `.xdc`. Every webview we target reads woff2, so the other two go. So do the
 // sans-serif and typewriter faces (`\mathsf`, `\mathtt`): the system's own
-// sans-serif and monospace keep what they mean, and save another 47 KB.
+// sans-serif and monospace keep what they mean, and save another 47 KB. And
+// two bold faces KaTeX never lays out with (14 KB): bold calligraphic has no
+// command at all, and bold Fraktur — only reached by pasting 𝕬-style
+// characters — is measured with the regular face's metrics anyway, so the
+// browser's synthetic bold of it fits.
 //
 // ponytail: Fraktur, script and calligraphic (`\mathfrak`, `\mathscr`,
 // `\mathcal`) stay, 45 KB together: no system font stands in for them, and
@@ -44,15 +48,20 @@ function katexFonts(): PluginOption {
     // Before Vite's own CSS plugin resolves the url()s into bundled files.
     enforce: 'pre',
     transform(css, id) {
-      if (!/\/katex\/dist\/katex\.css(\?|$)/.test(id)) return;
+      // Any of KaTeX's stylesheets (katex.min.css, katex-swap.css), so that
+      // switching to one fails the check below instead of silently bundling
+      // every font again.
+      if (!/\/katex\/dist\/katex[^/]*\.css(\?|$)/.test(id)) return;
       const out = css
         .replace(/, url\([^)]+\.(?:woff|ttf)\) format\("(?:woff|truetype)"\)/g, '')
-        .replace(/@font-face \{[^}]*KaTeX_(?:SansSerif|Typewriter)[^}]*\}\n?/g, '')
+        .replace(/@font-face \{[^}]*KaTeX_(?:SansSerif|Typewriter|Caligraphic-Bold|Fraktur-Bold)[^}]*\}\n?/g, '')
         .replace(/font-family: KaTeX_SansSerif;/g, 'font-family: sans-serif;')
-        .replace(/font-family: KaTeX_Typewriter;/g, 'font-family: monospace;')
+        // The app's code font, not a bare `monospace`: alone, that keyword
+        // also shrinks the text to the browser's 13/16 monospace size.
+        .replace(/font-family: KaTeX_Typewriter;/g, 'font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;')
         .replace(/url\(fonts\/(KaTeX_[\w-]+\.woff2)\)/g, `url(${dir}/$1)`);
       // Fail the build, not the size budget, if a KaTeX upgrade reshapes this.
-      if (/\.(?:woff|ttf)\)|KaTeX_(?:SansSerif|Typewriter)|url\(fonts\//.test(out) || !out.includes('.woff2)')) {
+      if (/\.(?:woff|ttf)\)|KaTeX_(?:SansSerif|Typewriter|Caligraphic-Bold|Fraktur-Bold)|url\(fonts\//.test(out) || !out.includes('.woff2)')) {
         this.error('katex-fonts: katex.css no longer matches; update the patterns');
       }
       // Fonts stripped from an older KaTeX would not match its glyph metrics.

@@ -77,9 +77,10 @@ def main():
     for old in OUT.parent.glob('katex-*'):
         shutil.rmtree(old)
     OUT.mkdir(parents=True)
-    # Not SansSerif or Typewriter: the build drops those faces (vite.config.ts).
+    # Not the faces the build drops (katexFonts() in vite.config.ts).
+    dropped = ('SansSerif', 'Typewriter', 'Caligraphic-Bold', 'Fraktur-Bold')
     sources = [p for p in sorted((KATEX / 'dist' / 'fonts').glob('*.woff2'))
-               if 'SansSerif' not in p.name and 'Typewriter' not in p.name]
+               if not any(d in p.name for d in dropped)]
     total_in = total_out = 0
     # Keep the bounding boxes and timestamp as KaTeX shipped them, rather than
     # letting fontTools recompute them, so nothing but the hinting differs.

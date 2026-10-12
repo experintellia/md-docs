@@ -20,8 +20,10 @@ All notable changes to MD-Docs are documented here. This project adheres to
   with KaTeX while the cursor is elsewhere, and shows as source, styled like a
   code block, while you edit it. Tap a formula to edit it. Half-typed TeX shows
   as a red error in place. KaTeX loads the first time a document shows math, so
-  documents without math open as before. The `.xdc` grows by 253 KB, mostly
-  KaTeX's fonts; see `docs/math-rendering.md` for the size work. (#27)
+  documents without math open as before. A note cannot define macros (`\def`,
+  `\newcommand`, …): the TeX comes from other chat members, and a macro lets a
+  few bytes take minutes to typeset. The `.xdc` grows by 239 KB, mostly KaTeX's
+  fonts; see `docs/math-rendering.md` for the size work. (#27)
 
 ### Changed
 - The `.xdc` is about half the size: 400 KB → 210 KB, with no feature removed.
