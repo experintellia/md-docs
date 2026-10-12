@@ -1,4 +1,5 @@
 import * as Y from 'yjs';
+import { toUint8Array } from 'js-base64';
 
 /**
  * Document history, reconstructed from the webxdc update stream.
@@ -277,7 +278,7 @@ export function setupHistory(real: typeof window.webxdc): History {
       let prev = '';
       for (const r of records) {
         try {
-          Y.applyUpdateV2(doc, b64ToBytes(r.blob));
+          Y.applyUpdateV2(doc, toUint8Array(r.blob));
         } catch {
           // A batch we cannot decode (truncated, or written by some other
           // app/format sharing the channel) skips its row rather than throwing
@@ -300,25 +301,22 @@ export function setupHistory(real: typeof window.webxdc): History {
   };
 }
 
-// Added/removed character counts between two versions, by trimming the common
-// prefix and suffix. Exact for a single contiguous edit; for a batch that edits
-// two far-apart spots it reports the span covering both — a slight over-count,
-// acceptable for ~10s batches whose edits are usually localized.
+// Lengths of the common prefix and suffix of two versions; what lies between is
+// the edit. Exact for a single contiguous edit; for a batch that edits two
+// far-apart spots it covers the span of both — a slight over-count, acceptable
+// for ~10s batches whose edits are usually localized.
 // ponytail: upgrade to a real word/line diff only if multi-region batches matter.
-function charDiff(prev: string, next: string): { added: number; removed: number } {
+export function commonEnds(prev: string, next: string): { p: number; s: number } {
   let p = 0;
   const min = Math.min(prev.length, next.length);
   while (p < min && prev[p] === next[p]) p++;
   let s = 0;
   while (s < min - p && prev[prev.length - 1 - s] === next[next.length - 1 - s]) s++;
-  return { removed: prev.length - p - s, added: next.length - p - s };
+  return { p, s };
 }
 
-// Decode the provider's base64 payload natively — avoids importing js-base64
-// (a transitive y-webxdc dep we'd rather not depend on directly).
-function b64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
+// Added/removed character counts between two versions.
+function charDiff(prev: string, next: string): { added: number; removed: number } {
+  const { p, s } = commonEnds(prev, next);
+  return { removed: prev.length - p - s, added: next.length - p - s };
 }

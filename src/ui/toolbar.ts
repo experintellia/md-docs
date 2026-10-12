@@ -27,8 +27,9 @@ import {
   toggleItalic,
 } from '../commands.ts';
 import { setReadMode } from '../editor.ts';
-import { faSvg } from './icon.ts';
+import { faSvg, utilButton } from './icon.ts';
 import { historyButton } from './history-view.ts';
+import { isMobile } from '../peer-flags.ts';
 import type { Collab } from '../collab.ts';
 
 interface Action {
@@ -85,16 +86,6 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
   if (isMobile()) {
     fitAppToViewport();
   }
-}
-
-function utilButton(icon: () => Node, title: string): HTMLButtonElement {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'md-tool-btn';
-  btn.appendChild(icon());
-  btn.title = title;
-  btn.setAttribute('aria-label', title);
-  return btn;
 }
 
 /** Toggle read mode: the editor stops taking input and shows no source, so a
@@ -254,10 +245,6 @@ function buildHelp(): HTMLElement {
 
   document.body.appendChild(overlay);
   return overlay;
-}
-
-function isMobile(): boolean {
-  return window.matchMedia('(pointer: coarse)').matches;
 }
 
 /**
