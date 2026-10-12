@@ -149,19 +149,23 @@ test('read mode stops input, renders the caret line, and hides the edit buttons'
   }
 });
 
-test('read mode renders a table under the caret, and edit mode reveals it again', () => {
-  const container = reset();
-  const view = createEditor(document.body, '| a | b |\n| - | - |\n| 1 | 2 |');
-  try {
-    mountToolbar(container, view);
-    const table = (): Element | null => view.contentDOM.querySelector('.md-table');
-    assert.equal(table(), null, 'the caret is in it, so it is source');
-    btnByTitle(container, 'Toggle read / edit mode').click();
-    assert.ok(table());
-    btnByTitle(container, 'Toggle read / edit mode').click();
-    assert.equal(table(), null);
-  } finally {
-    view.destroy();
+test('read mode renders a table or math block under the caret, and edit mode reveals it again', () => {
+  // Both are block widgets in state fields of their own, which have to
+  // rebuild when read mode flips.
+  for (const [doc, cls] of [['| a | b |\n| - | - |\n| 1 | 2 |', '.md-table'], ['$$\nx^2\n$$', '.md-math']]) {
+    const container = reset();
+    const view = createEditor(document.body, doc);
+    try {
+      mountToolbar(container, view);
+      const block = (): Element | null => view.contentDOM.querySelector(cls);
+      assert.equal(block(), null, `${cls}: the caret is in it, so it is source`);
+      btnByTitle(container, 'Toggle read / edit mode').click();
+      assert.ok(block(), `${cls}: rendered in read mode`);
+      btnByTitle(container, 'Toggle read / edit mode').click();
+      assert.equal(block(), null);
+    } finally {
+      view.destroy();
+    }
   }
 });
 
