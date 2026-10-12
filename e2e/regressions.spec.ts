@@ -19,6 +19,18 @@ async function write(page: Page, text: string): Promise<void> {
   await page.keyboard.insertText(text);
 }
 
+// The mock connects realtime 500 ms after joinRealtimeChannel, and a frame sent
+// before then is dropped. A second 500 ms timer fires after the mock's own.
+const REALTIME_UP = `{
+  const join = window.webxdc.joinRealtimeChannel;
+  window.webxdc.joinRealtimeChannel = (...args) => {
+    const channel = join(...args);
+    setTimeout(() => (window.realtimeUp = true), 500);
+    return channel;
+  };
+}`;
+const realtimeUp = (page: Page): Promise<unknown> => page.waitForFunction(() => 'realtimeUp' in window);
+
 /** Who has published to the chat so far, one entry per update. */
 const senders = (page: Page): Promise<string[]> =>
   page.evaluate((key) => (JSON.parse(localStorage.getItem(key) ?? '[]') as { _sender: string }[])
@@ -53,35 +65,42 @@ test('reopening the app publishes nothing', async ({ page, context }) => {
 test('watching someone else type publishes nothing', async ({ page, context }) => {
   // 0.1.11: every peer re-published what reached it over realtime, under its
   // own name, notifying the chat as if it had made the edit.
+  await serveMockWebxdc(context, REALTIME_UP);
   await open(page);
   const bob = await context.newPage();
   await open(bob, 'bob');
-  await bob.waitForTimeout(600); // the mock connects realtime 500ms after joining
-  await write(page, 'hello bob');
-  await expect(editor(bob)).toContainText('hello bob');
-  // Nobody has published yet, so it came over realtime: the path under test.
-  expect(await senders(page)).toEqual([]);
-  await bob.reload(); // closing flushes whatever bob queued
-  expect(await senders(page)).not.toContain('bob@local.host');
-
-  // And bob's close does flush: an edit of his own is published under his name.
+  // First, bob's close does flush: an edit of his own goes out under his name.
+  // Checked before alice types, while the draft both pages share here holds
+  // nothing of hers that a reopen could re-queue.
   await write(bob, 'hi');
   await bob.reload();
-  expect(await senders(page)).toContain('bob@local.host');
+  expect(await senders(page)).toEqual(['bob@local.host']);
+
+  await realtimeUp(bob);
+  await write(page, 'hello bob');
+  await expect(editor(bob)).toContainText('hello bob');
+  // Nothing new is published, so it came over realtime: the path under test.
+  expect(await senders(page)).toEqual(['bob@local.host']);
+  await bob.reload(); // closing flushes whatever bob queued
+  expect(await senders(page)).toEqual(['bob@local.host']);
 });
 
 test('a device that joins an existing document shows it and keeps up', async ({ page, context }) => {
   // The editor used to start empty on a second device while the synced
   // document already held the text, so the next incoming edit landed at a
   // position the editor did not have ("Invalid change range").
+  await serveMockWebxdc(context, REALTIME_UP);
   await open(page);
   await write(page, 'written before bob joined');
   await page.reload(); // into the chat log
 
   const bob = await context.newPage();
+  // A new device has no draft; here it would read alice's, and show the text
+  // without the chat log.
+  await bob.addInitScript((key) => localStorage.removeItem(key), DRAFT_KEY);
   await open(bob, 'bob');
   await expect(editor(bob)).toContainText('written before bob joined');
-  await bob.waitForTimeout(600); // the mock connects realtime 500ms after joining
+  await realtimeUp(bob);
   await editor(page).click();
   await page.keyboard.press('ControlOrMeta+End');
   await page.keyboard.insertText(', and after');

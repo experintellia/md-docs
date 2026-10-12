@@ -49,9 +49,9 @@ All notable changes to MD-Docs are documented here. This project adheres to
 ### Fixed
 - The unit test run silently skipped tests: `--test-force-exit` let the runner
   exit before every file had reported, so a run counted anywhere from about
-  100 to all 165 tests and still passed. The one file that kept the process
-  alive (realtime tests never destroyed their `Awareness` timers) now cleans
-  up, and the flag is gone.
+  100 tests to all of them and still passed. The one file that kept the
+  process alive (realtime tests never destroyed their `Awareness` timers) now
+  cleans up, and the flag is gone.
 
 ## [0.3.1] - 2026-09-19
 
