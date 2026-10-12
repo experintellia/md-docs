@@ -211,11 +211,9 @@ realtime sends.
 
 `npm test` runs typecheck → eslint → unit tests, then CI builds. Unit tests use
 Node's built-in runner with native TS type-stripping (`node --test`, Node 24) —
-no test framework dependency. A test that creates a Yjs `Awareness` must
-`destroy()` it: its internal cleanup timer otherwise keeps that file's process
-alive and `npm test` hangs. Don't reach for `--test-force-exit` instead — with a
-process per test file it exits as soon as the tests reported *so far* are done,
-silently dropping the rest of a slower file's results. Coverage by layer:
+no test framework dependency. A test must not leave timers running — see
+[`AGENTS.md`](./AGENTS.md) for why that matters and why `--test-force-exit` is
+no substitute. Coverage by layer:
 
 - **Pure logic** — `titleFromMarkdown` (chat title parsing).
 - **Collaboration (CRDT)** — peer convergence, the late-joiner *seed invariant*
@@ -229,15 +227,10 @@ silently dropping the rest of a slower file's results. Coverage by layer:
 - **Realtime transport** — frame tag bytes (doc vs awareness), late-joiner
   catch-up, echo suppression, feature-detect; via a mock `webxdc` channel.
 
-**Deferred — Tier 4 end-to-end (not yet built):** drive the real app with
-Playwright and assert collaborative edits converge across peers. Make it a
-separate, non-blocking job (or nightly), never a PR gate — it's slower and
-flakier than the unit layer. webxdc can be **mocked for Playwright**: the dev
-server already injects a single-peer `webxdc.js` via `@webxdc/vite-plugins`'
-`mockWebxdc()` (see `vite.config.ts`), so Playwright can drive a standalone
-app at `:3000` with no messenger; for multi-peer convergence, mock the realtime
-channel (or run two `webxdc-dev` peers) and assert the second peer receives the
-first's edits.
+**Tier 4 end-to-end** (`e2e/`, `npm run test:e2e`): Playwright drives the
+built bundle on Chromium and WebKit, desktop and mobile, with the
+`@webxdc/vite-plugins` mock standing in for the messenger's `webxdc.js` — see
+`playwright.config.ts` and `.github/workflows/e2e.yml`.
 
 ## Credits / attribution (we are inspired by, not copying)
 

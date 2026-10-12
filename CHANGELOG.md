@@ -29,12 +29,13 @@ All notable changes to MD-Docs are documented here. This project adheres to
   - The JavaScript is minified with terser instead of esbuild (−5 KB).
 
 ### Fixed
-- `npm test` silently dropped unit tests: each run reported a different subset
-  of the 165, mostly from the live-preview decoration tests, so a failing one
-  could go unnoticed. `--test-force-exit` ended the run before slower files had
-  reported; it was only there because the realtime tests never destroyed their
-  Yjs `Awareness`, whose timer kept the process alive. They do now, and the
-  flag is gone.
+- `npm test` dropped unit-test results: each run reported a different subset,
+  mostly missing live-preview decoration tests, and a failure could show only
+  as a failed file with no test name or message. `--test-force-exit` stopped
+  the reporter before it had printed everything; it was only there because the
+  realtime tests never destroyed their Yjs `Awareness`, whose timer kept the
+  process alive. They do now, and the flag is gone. CI's `check` job now gives
+  up after 10 minutes, in case a test leaks a timer again.
 
 ## [0.3.1] - 2026-09-19
 
