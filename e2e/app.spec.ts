@@ -96,3 +96,46 @@ after`);
   await expect(math).toHaveCount(0);
   await expect(page.locator('.cm-content')).toContainText(String.raw`\Omega = \{ (1,2)`);
 });
+
+test('arrow keys move the caret the way a right-to-left line reads', async ({ page }) => {
+  // The caret ends at the Arabic word's logical end, which is its left edge, so
+  // ArrowRight steps back into the word. Were the line taken as LTR, as the
+  // whole editor is without perLineTextDirection, it would leave the line.
+  await page.keyboard.insertText('hello\nمرحبا');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.insertText('X');
+  await expect(page.locator('.cm-line').nth(1)).toHaveText('مرحبXا');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.insertText('Y');
+  await expect(page.locator('.cm-line').nth(1)).toHaveText('مرحبXاY');
+});
+
+test('right-to-left lines, quotes and tables sit on the right edge', async ({ page }) => {
+  await page.keyboard.insertText('hello\n\nمرحبا\n\n> اقتباس\n\n| مصطلح | ترجمة |\n|---|---|\n| كتاب | book |\n\nend');
+  // The space left and right of what an element holds. Zero-width boxes (a
+  // hidden marker, a widget buffer) would otherwise pin a range to one edge.
+  const gaps = (el: Locator): Promise<{ left: number; right: number }> => el.evaluate((box) => {
+    const range = document.createRange();
+    range.selectNodeContents(box);
+    const rects = [...range.getClientRects()].filter((r) => r.width > 0);
+    const outer = box.getBoundingClientRect();
+    return {
+      left: Math.min(...rects.map((r) => r.left)) - outer.left,
+      right: outer.right - Math.max(...rects.map((r) => r.right)),
+    };
+  });
+  const line = (text: string): Locator => page.locator('.cm-line', { hasText: text });
+  const ltr = await gaps(line('hello'));
+  expect(ltr.left).toBeLessThan(ltr.right);
+  for (const placed of [line('مرحبا'), line('اقتباس'), page.locator('.md-table-wrap')]) {
+    const rtl = await gaps(placed);
+    expect(rtl.right).toBeLessThan(rtl.left);
+  }
+  await expect(line('اقتباس')).toHaveCSS('border-right-width', '3px');
+  await expect(line('اقتباس')).toHaveCSS('border-left-width', '0px');
+  // Columns read right to left: the first header is the rightmost.
+  const [first, second] = await page.locator('.md-table th').evaluateAll((ths) =>
+    ths.map((th) => th.getBoundingClientRect().left));
+  expect(first).toBeGreaterThan(second);
+});
