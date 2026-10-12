@@ -3,6 +3,9 @@ import { strict as assert } from 'node:assert';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { EditorState, Transaction, type TransactionSpec } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
+import * as Y from 'yjs';
+import { Awareness } from 'y-protocols/awareness';
+import type { Collab } from '../collab.ts';
 
 GlobalRegistrator.register();
 // happy-dom's matchMedia may be missing; stub to desktop so keyboard-docking is skipped.
@@ -181,6 +184,26 @@ test('in read mode no shortcut edits, ours included', () => {
     assert.equal(view.state.doc.toString(), '**ab**', 'the same key edits in edit mode');
   } finally {
     view.destroy();
+  }
+});
+
+test('going into read mode takes our caret off peers\' screens', () => {
+  const container = reset();
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('t');
+  const awareness = new Awareness(ydoc);
+  const collab = { ydoc, ytext, awareness, undoManager: new Y.UndoManager(ytext) } as unknown as Collab;
+  const view = createEditor(document.body, '', [], collab);
+  try {
+    mountToolbar(container, view, collab);
+    // What y-codemirror publishes while the editor has focus.
+    awareness.setLocalStateField('cursor', { anchor: 0, head: 0 });
+    btnByTitle(container, 'Toggle read / edit mode').click();
+    assert.equal(awareness.getLocalState()?.cursor, null);
+  } finally {
+    view.destroy();
+    awareness.destroy(); // its timer would keep the test process alive
+    ydoc.destroy();
   }
 });
 

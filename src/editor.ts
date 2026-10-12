@@ -49,6 +49,14 @@ export function baseExtensions(collab?: Collab): Extension[] {
       yCollab(collab.ytext, collab.awareness, { undoManager: collab.undoManager }),
       keymap.of(editing(yUndoManagerKeymap)),
       hidePeerFlagsWhenCovered, // mobile: keep peer flags off the local cursor
+      // y-codemirror publishes our caret while the editor has focus and never
+      // withdraws it. A reader has no caret, so take it off peers' screens on
+      // the way into read mode; the next focus in edit mode publishes it again.
+      EditorView.updateListener.of((u) => {
+        if (u.state.readOnly && !u.startState.readOnly) {
+          collab.awareness.setLocalStateField('cursor', null);
+        }
+      }),
     ]
     : [history(), keymap.of(historyKeymap)];
 

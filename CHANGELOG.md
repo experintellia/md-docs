@@ -38,7 +38,8 @@ All notable changes to MD-Docs are documented here. This project adheres to
   no keyboard, no caret, and no line turns back into its markdown, so a tap on
   a link opens it instead of starting an edit. The formatting buttons step
   aside while reading; the pen button switches back. Read mode is local to
-  you: peers keep editing and their changes keep arriving. (#32)
+  you: peers keep editing and their changes keep arriving, and your cursor
+  leaves their screens until you edit again. (#32)
 
 ### Changed
 - The `.xdc` is about half the size: 400 KB → 210 KB, with no feature removed.
