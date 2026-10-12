@@ -3,12 +3,18 @@ import { strict as assert } from 'node:assert';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
 GlobalRegistrator.register();
+// KaTeX refuses to render outside standards mode, and happy-dom has no
+// `compatMode` at all. The app is in standards mode: index.html has a doctype.
+Object.defineProperty(document, 'compatMode', { value: 'CSS1Compat' });
 const { EditorState } = await import('@codemirror/state');
 const { EditorView } = await import('@codemirror/view');
 const { livePreview } = await import('./index.ts');
 const { markdown, markdownLanguage } = await import('@codemirror/lang-markdown');
 const { ensureSyntaxTree } = await import('@codemirror/language');
 const { tableField } = await import('./decorations.ts');
+const { mathBlock } = await import('./math.ts');
+const { render, MAX_TEX } = await import('./widgets/math.ts');
+const katex = (await import('katex')).default;
 after(() => GlobalRegistrator.unregister());
 
 // Tier 2: the direction decorations are only half the feature. Without
@@ -28,7 +34,7 @@ function editor(doc: string): InstanceType<typeof EditorView> {
     // and everything the preview derives from a block would be invisible here.
     state: EditorState.create({
       doc,
-      extensions: [markdown({ base: markdownLanguage }), livePreview()],
+      extensions: [markdown({ base: markdownLanguage, extensions: [mathBlock] }), livePreview()],
     }),
   });
 }
@@ -113,4 +119,89 @@ test('a table past the first parse chunk renders without being touched', () => {
   } finally {
     view.destroy();
   }
+});
+
+// KaTeX loads on first use, so the typeset block lands a few ticks after the
+// editor is built. Until then the block holds its TeX as plain text.
+async function typeset(view: InstanceType<typeof EditorView>): Promise<Element> {
+  for (let tick = 0; tick < 100; tick++) {
+    const math = view.contentDOM.querySelector('.md-math');
+    if (math?.firstElementChild) return math;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error('KaTeX never rendered');
+}
+
+test('the example from the issue reaches the DOM typeset, on two lines', async () => {
+  const view = editor(String.raw`# temp
+
+$$
+\Omega = \{ (\omega_1 , \omega_2) \, | \, \omega \in \{1,2,3\} \}
+\\
+\Omega = \{ (1,2), (1,3), (2,1), (2,3), (3,1), (3,2) \}
+$$`);
+  try {
+    const math = await typeset(view);
+    assert.ok(math.querySelector('.katex'), 'typeset');
+    assert.ok(!math.querySelector('.katex-error'), 'no parse error');
+    assert.ok(math.querySelector('.katex-newline'), 'the `\\` breaks the line');
+    assert.equal(math.getAttribute('dir'), 'ltr');
+    assert.ok(
+      ![...view.contentDOM.querySelectorAll('.cm-line')].some((l) => l.textContent!.includes('$$')),
+      'the source is replaced, not decorated',
+    );
+  } finally {
+    view.destroy();
+  }
+});
+
+test('half-typed TeX shows as an error in place, not a crash', async () => {
+  const view = editor('x\n\n$$\n\\frac{1}{\n$$');
+  try {
+    const math = await typeset(view);
+    assert.ok(math.querySelector('.katex-error'), 'rendered as an error');
+  } finally {
+    view.destroy();
+  }
+});
+
+test('tapping a formula opens its source', async () => {
+  const view = editor('x\n\n$$\na^2\n$$');
+  try {
+    const math = await typeset(view);
+    // On the formula, as a finger would be: a press on the box itself may be on
+    // its scrollbar, which the widget leaves to scroll.
+    math.querySelector('.katex')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    assert.equal(view.state.selection.main.head, 3, 'the caret is at the block');
+    assert.equal(view.contentDOM.querySelector('.md-math'), null, 'and the source is back');
+  } finally {
+    view.destroy();
+  }
+});
+
+// The TeX comes from other chat members, and typesetting blocks the UI thread.
+function typesetInto(tex: string): HTMLElement {
+  const el = document.createElement('div');
+  render(katex, el, tex);
+  return el;
+}
+
+test('a note cannot define macros, so a few bytes cannot become minutes of work', () => {
+  // `\def\a{…}` and a thousand `\a`: 2 KB that took KaTeX 80 seconds to typeset.
+  const bomb = `\\def\\a{${'x+'.repeat(150)}}${'\\a'.repeat(999)}`;
+  for (const tex of [bomb, '\\newcommand{\\R}{\\mathbb{R}} x \\in \\R', '\\global\\let\\b=x \\b']) {
+    const started = Date.now();
+    const error = typesetInto(tex).querySelector('.katex-error');
+    assert.ok(error, `${tex.slice(0, 30)}: shown as an error`);
+    assert.match(error.getAttribute('title')!, /is off: a shared note cannot define macros/);
+    assert.ok(Date.now() - started < 1000, 'and refused before any expansion work');
+  }
+  assert.ok(typesetInto('\\mathbb{R}^n').querySelector('.katex'), 'ordinary TeX still typesets');
+});
+
+test('a formula too long to typeset quickly stays as its source', () => {
+  const tex = 'x+'.repeat(MAX_TEX / 2 + 1);
+  const el = typesetInto(tex);
+  assert.equal(el.textContent, tex);
+  assert.equal(el.querySelector('.katex'), null);
 });

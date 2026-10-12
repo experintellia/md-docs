@@ -143,6 +143,7 @@ function buildHelp(): HTMLElement {
         <tr><td><code>---</code></td><td>Separator line (three or more minuses on their own line)</td></tr>
         <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
         <tr><td><code>[text](url)</code></td><td>Link</td></tr>
+        <tr><td><code>$$</code><br><code>x^2</code><br><code>$$</code></td><td>Math (LaTeX), with <code>$$</code> on the lines above and below</td></tr>
       </table>
       <h2>Toolbar</h2>
       <p>Use ${ico(faIndent)} / ${ico(faOutdent)} to indent or outdent list items,

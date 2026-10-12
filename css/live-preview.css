@@ -178,3 +178,24 @@
   background: var(--toolbar-bg);
   font-weight: 600;
 }
+
+/* Rendered `$$` block. Replaces the source while the cursor is elsewhere, like
+   a table. Before KaTeX has loaded it holds the TeX itself, hence monospace —
+   KaTeX sets its own font on what it renders. */
+.md-math {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-align: center;
+  /* A wide formula scrolls on its own instead of panning the whole editor.
+     KaTeX's display math never wraps, so overflow alone is not enough: the
+     formula's full width would still size .cm-content, widening every line
+     on a phone. Zero width keeps it out of that sum; min-width then fills the
+     line it was laid into. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  width: 0;
+  min-width: 100%;
+  padding: 0.4em 6px;
+}
+/* KaTeX's 1em display margins, on top of the padding above. */
+.md-math .katex-display { margin: 0; }

@@ -12,6 +12,7 @@ import {
 import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
 import { faSvg } from './icon.ts';
 import { livePreview } from '../live-preview/index.ts';
+import { mathBlock } from '../live-preview/math.ts';
 import type { Collab } from '../collab.ts';
 import type { HistoryVersion } from '../history.ts';
 
@@ -124,7 +125,7 @@ class HistoryOverlay {
           // Non-editable: no blinking caret, but text stays selectable/copyable.
           EditorView.editable.of(false),
           EditorView.lineWrapping,
-          markdown({ base: markdownLanguage, codeLanguages: [] }),
+          markdown({ base: markdownLanguage, codeLanguages: [], extensions: [mathBlock] }),
           this.preview.of(livePreview()),
         ],
       }),
