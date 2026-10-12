@@ -58,9 +58,13 @@ All notable changes to MD-Docs are documented here. This project adheres to
 - On a screen up to 560px wide, help opens as a full screen with a back
   button, like the history view, instead of a card over the editor. Wider
   screens keep the dialog. (#32)
-- Help explains fenced code blocks and the language name that picks their
-  highlighting, shows multi-line examples (code, math) as one block, and
-  lists the toolbar's buttons as a table instead of one long sentence. (#32)
+- Help's syntax list now runs from the toolbar's own buttons, in the
+  toolbar's order, through links to the rarer blocks, and adds what the
+  editor already rendered but the help never mentioned: strikethrough,
+  numbered lists, fenced code blocks (with the language name that picks
+  their highlighting) and tables. Multi-line examples (code, tables, math)
+  show as one block, and the toolbar's buttons are a table instead of one
+  long sentence. (#32)
 
 ### Fixed
 - `npm test` dropped unit-test results: each run reported a different subset,
