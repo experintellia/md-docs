@@ -33,6 +33,10 @@ export class CheckboxWidget extends WidgetType {
       const insert = this.checked ? '[ ]' : '[x]';
       view.dispatch({ changes: { from: this.from, to: this.to, insert } });
     });
+    // The document owns the tick. Without this the click after a mousedown
+    // that changed nothing (read mode) still flips the native box, which then
+    // shows a state the document doesn't have.
+    box.addEventListener('click', (e) => e.preventDefault());
     return box;
   }
 

@@ -11,6 +11,7 @@ window.matchMedia = (): MediaQueryList =>
 
 const { mountToolbar } = await import('./toolbar.ts');
 const { createEditor } = await import('../editor.ts');
+const { runScopeHandlers } = await import('@codemirror/view');
 after(() => GlobalRegistrator.unregister());
 
 // Stub view: the toolbar commands only read `view.state`, call `view.dispatch`,
@@ -117,17 +118,23 @@ test('read mode stops input, renders the caret line, and hides the edit buttons'
     const toggle = btnByTitle(container, 'Toggle read / edit mode');
     const link = (): Element | null => view.contentDOM.querySelector('.md-link[data-href]');
     assert.equal(link(), null, 'edit mode: the caret line is source, not a link');
+    view.focus();
 
     toggle.click();
     assert.equal(view.state.readOnly, true);
     assert.equal(view.contentDOM.getAttribute('contenteditable'), 'false');
+    assert.ok(document.activeElement !== view.contentDOM, 'the keyboard goes away');
     assert.equal(toggle.getAttribute('aria-pressed'), 'true');
-    assert.ok(container.classList.contains('reading'), 'edit buttons hidden via CSS');
+    assert.ok(container.classList.contains('reading'));
+    for (const title of COMMAND_TITLES) {
+      assert.ok(btnByTitle(container, title).classList.contains('md-tool-cmd'), `${title} hides`);
+    }
     assert.ok(link(), 'read mode: the caret line renders, so the link is tappable');
-    view.contentDOM.querySelector('.md-task-checkbox')!.dispatchEvent(
-      new window.Event('mousedown', { bubbles: true, cancelable: true }),
-    );
+    const box = view.contentDOM.querySelector<HTMLInputElement>('.md-task-checkbox')!;
+    box.dispatchEvent(new window.Event('mousedown', { bubbles: true, cancelable: true }));
+    box.click();
     assert.equal(view.state.doc.toString(), doc, 'a checkbox tap changes nothing');
+    assert.equal(box.checked, false, 'nor does the box tick itself');
 
     toggle.click();
     assert.equal(view.state.readOnly, false);
@@ -139,31 +146,77 @@ test('read mode stops input, renders the caret line, and hides the edit buttons'
   }
 });
 
+test('read mode renders a table under the caret, and edit mode reveals it again', () => {
+  const container = reset();
+  const view = createEditor(document.body, '| a | b |\n| - | - |\n| 1 | 2 |');
+  try {
+    mountToolbar(container, view);
+    const table = (): Element | null => view.contentDOM.querySelector('.md-table');
+    assert.equal(table(), null, 'the caret is in it, so it is source');
+    btnByTitle(container, 'Toggle read / edit mode').click();
+    assert.ok(table());
+    btnByTitle(container, 'Toggle read / edit mode').click();
+    assert.equal(table(), null);
+  } finally {
+    view.destroy();
+  }
+});
+
+test('in read mode no shortcut edits, ours included', () => {
+  // A focused task checkbox hands its keys to the keymap, and our commands
+  // (unlike CodeMirror's) don't check readOnly themselves.
+  const container = reset();
+  const view = createEditor(document.body, 'ab');
+  const ctrlB = (): boolean => runScopeHandlers(
+    view, new window.KeyboardEvent('keydown', { key: 'b', ctrlKey: true }) as KeyboardEvent, 'editor',
+  );
+  try {
+    mountToolbar(container, view);
+    view.dispatch({ selection: { anchor: 0, head: 2 } });
+    btnByTitle(container, 'Toggle read / edit mode').click();
+    ctrlB();
+    assert.equal(view.state.doc.toString(), 'ab');
+    btnByTitle(container, 'Toggle read / edit mode').click();
+    ctrlB();
+    assert.equal(view.state.doc.toString(), '**ab**', 'the same key edits in edit mode');
+  } finally {
+    view.destroy();
+  }
+});
+
 test('the more menu holds theme and help, and closes after use, outside or on Escape', () => {
   const container = reset();
-  const { view } = makeView('hi', 0, 0);
-  mountToolbar(container, view);
-  const more = btnByTitle(container, 'More');
-  const menu = container.querySelector('.md-tool-menu')!;
-  const theme = btnByTitle(container, 'Toggle dark / light theme');
-  assert.ok(menu.contains(theme) && menu.contains(btnByTitle(container, 'Help & markdown syntax')));
-  const isOpen = (): boolean => menu.classList.contains('open');
+  document.body.append(container); // for focus
+  try {
+    const { view } = makeView('hi', 0, 0);
+    mountToolbar(container, view);
+    const more = btnByTitle(container, 'More');
+    const menu = container.querySelector('.md-tool-menu')!;
+    const theme = btnByTitle(container, 'Toggle dark / light theme');
+    assert.ok(menu.contains(theme) && menu.contains(btnByTitle(container, 'Help & markdown syntax')));
+    assert.ok(more.compareDocumentPosition(menu) & Node.DOCUMENT_POSITION_FOLLOWING, 'Tab goes ⋮ → items');
+    const isOpen = (): boolean => menu.classList.contains('open');
 
-  more.click();
-  assert.ok(isOpen());
-  assert.equal(more.getAttribute('aria-expanded'), 'true');
-  theme.click();
-  assert.equal(isOpen(), false, 'an item closes the menu');
-  assert.ok(document.documentElement.classList.contains('dark'), 'and still does its job');
+    more.click();
+    assert.ok(isOpen());
+    assert.equal(more.getAttribute('aria-expanded'), 'true');
+    theme.focus();
+    theme.click();
+    assert.equal(isOpen(), false, 'an item closes the menu');
+    assert.ok(document.documentElement.classList.contains('dark'), 'and still does its job');
+    assert.ok(document.activeElement === more, 'focus goes back to ⋮, not <body>');
 
-  more.click();
-  document.body.click();
-  assert.equal(isOpen(), false, 'a tap outside closes it');
+    more.click();
+    document.body.dispatchEvent(new window.Event('pointerdown', { bubbles: true }));
+    assert.equal(isOpen(), false, 'a tap outside closes it');
 
-  more.click();
-  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  assert.equal(isOpen(), false, 'Escape closes it');
-  assert.equal(more.getAttribute('aria-expanded'), 'false');
+    more.click();
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(isOpen(), false, 'Escape closes it');
+    assert.equal(more.getAttribute('aria-expanded'), 'false');
+  } finally {
+    container.remove();
+  }
 });
 
 test('help button opens the overlay and the close button hides it', () => {

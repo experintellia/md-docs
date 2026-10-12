@@ -69,8 +69,9 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
     container.appendChild(btn);
   }
 
-  // Utility buttons (read mode, history, theme, help) pushed to the right; these are not editor
-  // commands, so a plain click is fine — no need to preserve selection.
+  // Utility buttons (read mode, history, theme, help) pushed to the right;
+  // these are not editor commands, so a plain click is fine — no need to
+  // preserve selection.
   const spacer = document.createElement('div');
   spacer.className = 'md-tool-spacer';
   // History needs the synced update stream, so only when collaborating.
@@ -125,23 +126,36 @@ function moreMenu(items: HTMLButtonElement[]): HTMLElement[] {
   menu.append(...items);
   const more = utilButton(() => faSvg(faEllipsisVertical), 'More');
   more.classList.add('md-tool-more');
-  more.setAttribute('aria-haspopup', 'true');
   more.setAttribute('aria-expanded', 'false');
 
   const setOpen = (open: boolean): void => {
     menu.classList.toggle('open', open);
     more.setAttribute('aria-expanded', String(open));
   };
+  // Closing from inside hands focus back to the button instead of <body>.
+  const close = (): void => {
+    if (menu.contains(document.activeElement)) more.focus();
+    setOpen(false);
+  };
   more.addEventListener('click', () => setOpen(!menu.classList.contains('open')));
   // An item's own handler runs first; then the menu has done its job.
-  menu.addEventListener('click', () => setOpen(false));
-  document.addEventListener('click', (e) => {
+  menu.addEventListener('click', close);
+  // Tabbing out closes it; focus moving to ⋮ doesn't, or ⋮'s own click
+  // would reopen what the focus change had just closed.
+  menu.addEventListener('focusout', (e) => {
+    const to = e.relatedTarget as Node | null;
+    if (to !== more && !menu.contains(to)) setOpen(false);
+  });
+  // pointerdown, not click: iOS fires no click for a tap on an element that
+  // doesn't listen for one, such as the editor's empty bottom padding.
+  document.addEventListener('pointerdown', (e) => {
     if (!menu.contains(e.target as Node) && !more.contains(e.target as Node)) setOpen(false);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') setOpen(false);
+    if (e.key === 'Escape' && menu.classList.contains('open')) close();
   });
-  return [menu, more];
+  // The button first, so Tab goes from it into the items.
+  return [more, menu];
 }
 
 /** Toggle dark/light and persist it. The load-time bootstrap (index.html) reads

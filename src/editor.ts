@@ -1,5 +1,12 @@
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
-import { EditorView, keymap, drawSelection, dropCursor } from '@codemirror/view';
+import {
+  EditorView,
+  keymap,
+  drawSelection,
+  dropCursor,
+  type Command,
+  type KeyBinding,
+} from '@codemirror/view';
 import {
   defaultKeymap,
   history,
@@ -20,6 +27,15 @@ import type { Collab } from './collab.ts';
 // the same flag to stop revealing source on the caret's line.
 const readMode = new Compartment();
 
+// CodeMirror's own commands stand down in a read-only state; ours and
+// y-codemirror's undo/redo don't, and in read mode a key can still reach the
+// keymap from a focused task checkbox. Guard every binding that edits.
+function editing(bindings: readonly KeyBinding[]): KeyBinding[] {
+  const guard = (run?: Command): Command | undefined =>
+    run && ((view) => !view.state.readOnly && run(view));
+  return bindings.map((b) => ({ ...b, run: guard(b.run), shift: guard(b.shift) }));
+}
+
 /**
  * Build the base set of CodeMirror extensions shared by every editor instance.
  *
@@ -31,7 +47,7 @@ export function baseExtensions(collab?: Collab): Extension[] {
   const undo = collab
     ? [
       yCollab(collab.ytext, collab.awareness, { undoManager: collab.undoManager }),
-      keymap.of(yUndoManagerKeymap),
+      keymap.of(editing(yUndoManagerKeymap)),
       hidePeerFlagsWhenCovered, // mobile: keep peer flags off the local cursor
     ]
     : [history(), keymap.of(historyKeymap)];
@@ -41,7 +57,7 @@ export function baseExtensions(collab?: Collab): Extension[] {
     drawSelection(),
     dropCursor(),
     EditorView.lineWrapping,
-    keymap.of([...markdownKeymap, ...defaultKeymap, indentWithTab]),
+    keymap.of([...editing(markdownKeymap), ...defaultKeymap, indentWithTab]),
     // addKeymap:false — our markdownKeymap binds Enter/Backspace instead (with
     // tight-list continuation); see commands.ts.
     markdown({ base: markdownLanguage, codeLanguages, addKeymap: false, extensions: [mathBlock] }),
