@@ -42,6 +42,8 @@ export interface History {
    * The timeline in chronological (receipt) order: each update batch
    * reconstructed to its full text, consecutive no-op batches (identical text)
    * dropped, and per-version char add/remove counts vs the previous shown one.
+   * A re-sent version (see resend) is credited to the sender of the next no-op
+   * batch, its author's own copy landing late.
    */
   versions(): HistoryVersion[];
   /**
@@ -53,9 +55,10 @@ export interface History {
   /**
    * Pass on edits that reached us but maybe not the chat (other people's, from
    * a restored draft) without claiming them: no info line in the chat, no
-   * summary, and the timeline shows the batch as re-sent.
+   * summary, and the timeline shows the batch as re-sent. `document` keeps the
+   * chat's title current; it names no one.
    */
-  resend(serializedYjsUpdate: string): void;
+  resend(serializedYjsUpdate: string, document: string): void;
   onChange(cb: () => void): void;
   /**
    * Resolves once the channel's startup replay has been delivered (webxdc's
@@ -301,10 +304,14 @@ export function setupHistory(real: typeof window.webxdc): History {
         if (text === prev) {
           // Consecutive no-op batches are dropped. One arriving after a re-sent
           // version is usually its author's own send, landing late: credit them.
-          // ponytail: any non-re-sent no-op in that gap takes the credit; check
-          // that it covers the re-sent structs if a wrong name ever shows up.
+          // A restore that changes nothing is not.
+          // ponytail: any other no-op in that gap (typing then deleting within
+          // one batch) takes the credit; check that it covers the re-sent
+          // structs if a wrong name ever shows up.
           const last = out[out.length - 1];
-          if (last?.resent && !r.resent) Object.assign(last, { t: r.t, author: r.author, resent: undefined });
+          if (last?.resent && !r.resent && !r.restoredFrom) {
+            Object.assign(last, { t: r.t, author: r.author, resent: undefined });
+          }
           continue;
         }
         const { added, removed } = charDiff(prev, text);
@@ -317,9 +324,9 @@ export function setupHistory(real: typeof window.webxdc): History {
     markRestore: (from) => { pendingRestore = from; },
     // Straight to the real sendUpdate: a re-send must not carry off a restore
     // tag meant for the user's next edit.
-    resend: (serializedYjsUpdate) => {
+    resend: (serializedYjsUpdate, document) => {
       const payload: HistPayload = { serializedYjsUpdate, t: Date.now(), author, resent: true };
-      (real.sendUpdate as typeof real.sendUpdate)({ payload } as never, '');
+      (real.sendUpdate as typeof real.sendUpdate)({ payload, document } as never, '');
     },
     onChange: (cb) => { listeners.push(cb); },
     replayed: () => replayed,

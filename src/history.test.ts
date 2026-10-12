@@ -228,9 +228,10 @@ test('a re-send claims nothing, leaves a pending restore tag alone, and its auth
   history.webxdc.setUpdateListener(() => {});
 
   history.markRestore({ t: 1, author: 'Bob' });
-  history.resend('blob');
+  history.resend('blob', 'Notes');
   history.webxdc.sendUpdate({ payload: { serializedYjsUpdate: 'next' } } as never, '');
-  assert.deepEqual(Object.keys(sent[0]), ['payload'], 'no info, summary or document');
+  assert.deepEqual(Object.keys(sent[0]).sort(), ['document', 'payload'], 'no info or summary');
+  assert.equal(sent[0].document, 'Notes', 'the title stays current');
   assert.equal(sent[0].payload.resent, true);
   assert.equal(sent[0].payload.author, 'Bob');
   assert.equal(sent[0].payload.restoredFrom, undefined);
@@ -249,6 +250,8 @@ test('a re-send claims nothing, leaves a pending restore tag alone, and its auth
   assert.deepEqual(who(), [['Bob', 2000, true]], 'shown as re-sent by Bob');
   listener!({ payload: { serializedYjsUpdate: blob, t: 1500, author: 'Dave', resent: true } });
   assert.deepEqual(who(), [['Bob', 2000, true]], 'another re-send credits nobody');
+  listener!({ payload: { serializedYjsUpdate: blob, t: 1700, author: 'Erin', restoredFrom: { t: 2000, author: 'x' } } });
+  assert.deepEqual(who(), [['Bob', 2000, true]], 'nor does restoring the version as it stands');
   listener!({ payload: { serializedYjsUpdate: blob, t: 1000, author: 'Carol' } });
   assert.deepEqual(who(), [['Carol', 1000, false]], 'the author, once her own send lands');
 });

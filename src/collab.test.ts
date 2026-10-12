@@ -134,7 +134,8 @@ test("someone else's unsent tail is re-sent once, quietly, claiming nothing", as
   assert.equal(sent.length, 1, 're-sent, and nothing queued to go out under our name');
   const [u] = sent;
   assert.equal(u.payload.resent, true);
-  assert.deepEqual([u.info, u.summary, u.document], [undefined, undefined, undefined], 'no chat line, summary or title');
+  assert.deepEqual([u.info, u.summary], [undefined, undefined], 'no chat line, no summary');
+  assert.equal(u.document, 'hello from alice', 'the title stays current');
   assert.equal(collab.ytext.toString(), 'hello from alice');
   assert.equal(rebuilt(log, sent), 'hello from alice', 'the re-send carries the tail');
   assert.deepEqual(ownIds(), [collab.ydoc.clientID], 'an ID with nothing unsent is dropped');
@@ -157,7 +158,7 @@ test('a draft from before the own-ID list existed is treated as ours, as it was 
     assert.equal(sent.length, 1, String(own));
     assert.ok(sent[0].info, `${own}: sent as our edit`);
     assert.equal(rebuilt(log, sent), 'hello tail');
-    assert.deepEqual(ownIds(), [collab.ydoc.clientID]);
+    assert.deepEqual(ownIds(), [prev.clientID, collab.ydoc.clientID], `${own}: listed now, in case this send is lost too`);
   }
   localStorage.removeItem(DRAFT_KEY);
 });

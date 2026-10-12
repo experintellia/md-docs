@@ -169,6 +169,7 @@ test('a draft saved by the previous version still sends our lost edits under our
   await write(page, 'from the old version');
   // That version kept no list of its client IDs.
   await page.evaluate(() => localStorage.removeItem('md-docs-own-clients'));
+  await reopen(page); // still losing sends: queued under our name, and lost again
   await reopen(page, peer('bob'));
   await page.reload();
   expect(await chat(page)).toEqual(['bob info summary']);

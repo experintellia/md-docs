@@ -85,8 +85,9 @@ All notable changes to MD-Docs are documented here. This project adheres to
   another person's edits that had come in live, and on reopen it sent them
   again as their own edit. Those edits still go out again, since the chat may
   never have got them, but quietly: no chat line, no summary change, and the
-  history shows them as re-sent until their author's own copy arrives. Your
-  own unsent edits still go out under your name.
+  history shows them as re-sent until their author's own copy of the same
+  edits arrives. Your own unsent edits still go out under your name, except
+  an edit that only deletes text, which goes out quietly.
 
 ## [0.3.1] - 2026-09-19
 

@@ -82,20 +82,20 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
   // ponytail: no destroy() — a webxdc app is one long-lived page, nothing to
   // tear down. The provider's own visibilitychange/beforeunload flush handles
   // saving on close.
+  // First line becomes the webxdc document title (shown in the chat), as
+  // plaintext — markdown syntax would look like noise in the chat list.
+  const title = (): string =>
+    (titleFromMarkdown(ytext.toString().split('\n', 1)[0] || '') || 'Untitled').slice(0, 60);
   const provider = new WebxdcProvider({
     webxdc,
     ydoc,
     autosaveInterval: 10_000, // matches the webxdc default sendUpdateInterval
     getEditInfo: () => {
-      // First line becomes the webxdc document title (shown in the chat), as
-      // plaintext — markdown syntax would look like noise in the chat list.
-      const firstLine = ytext.toString().split('\n', 1)[0] || '';
-      const document = (titleFromMarkdown(firstLine) || 'Untitled').slice(0, 60);
       // Compact local date+time of this (the latest) edit; getEditInfo runs at
       // each flush, so `new Date()` is the last-edit moment.
       const when = new Date().toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
       return {
-        document,
+        document: title(),
         summary: `Last edit: ${webxdc.selfName} · ${when}`,
         // Fired once per peer per session (y-webxdc guards it). Generic wording —
         // these are ordinary edits, not necessarily a brand-new document.
@@ -134,8 +134,8 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
     console.warn('collab: local storage unavailable', err);
     onDraftSave?.(false);
   }
-  // null when never written or unreadable: then a draft is treated as ours, as
-  // before this key existed.
+  // null when never written or unreadable: then a draft's unsent edits are
+  // treated as ours, as before this key existed (bar a pure deletion, below).
   let own: number[] | null = null;
   try {
     const ids: unknown = JSON.parse(localStorage.getItem(OWN_KEY) ?? 'null');
@@ -165,8 +165,12 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
       try {
         const update = toUint8Array(draft);
         const unsent = clientsAhead(update, ydoc);
-        stillUnsent = own ? unsent.filter((id) => own.includes(id)) : [];
-        if (own === null ? unsent.length > 0 : stillUnsent.length > 0) {
+        stillUnsent = own ? unsent.filter((id) => own.includes(id)) : unsent;
+        // ponytail: a pure deletion carries no client ID, so an unsent one of
+        // ours goes out quietly too (data intact, no info line). Telling it
+        // apart needs to know which of our sends landed; build that only if
+        // the missing line is ever missed.
+        if (stillUnsent.length > 0) {
           Y.applyUpdateV2(ydoc, update);
         } else {
           // Our client ID as the origin is what the provider and realtime.ts
@@ -179,7 +183,7 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
           } finally {
             ydoc.off('updateV2', grab);
           }
-          if (tail.length) history.resend(fromUint8Array(Y.mergeUpdatesV2(tail)));
+          if (tail.length) history.resend(fromUint8Array(Y.mergeUpdatesV2(tail)), title());
         }
       } catch {
         // Corrupt/garbage draft — drop it rather than block startup.
