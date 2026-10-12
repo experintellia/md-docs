@@ -16,6 +16,16 @@ All notable changes to MD-Docs are documented here. This project adheres to
   `localStorage` about 5 s after a write, so an abort sooner than that after
   the note loses it and the document stays bricked. The test pins that
   behaviour so a fix shows up as a failure to flip.
+- End-to-end tests for past bugs that lived between modules, in CSS, or in a
+  real engine, where the unit tests cannot see them: a reopen or a watching
+  peer publishing an edit nobody made (0.1.11), a second device starting with
+  an empty editor, the app on Delta Chat's read-only `webxdc` object, a failed
+  device draft showing "no device backup" (#26), restoring a version through
+  the in-app dialog (0.1.8), selections in code staying visible (0.2.0), and
+  the phone layout's status line and checkbox size (0.1.6). Each was checked
+  by putting its bug back and watching the test fail.
+- A unit test for a large document's realtime catch-up, which once overflowed
+  the call stack by spreading the frame into call arguments.
 
 ### Changed
 - The `.xdc` is about half the size: 400 KB → 210 KB, with no feature removed.
@@ -27,6 +37,13 @@ All notable changes to MD-Docs are documented here. This project adheres to
     fences already bundle (−34 KB), so they are highlighted the same way as
     those fences. `<style>` blocks and auto-closing HTML tags are unchanged.
   - The JavaScript is minified with terser instead of esbuild (−5 KB).
+
+### Fixed
+- The unit test run silently skipped tests: `--test-force-exit` let the runner
+  exit before every file had reported, so a run counted anywhere from about
+  100 to all 165 tests and still passed. The one file that kept the process
+  alive (realtime tests never destroyed their `Awareness` timers) now cleans
+  up, and the flag is gone.
 
 ## [0.3.1] - 2026-09-19
 

@@ -1,13 +1,18 @@
-import { test } from 'node:test';
+import { test, afterEach } from 'node:test';
 import { strict as assert } from 'node:assert';
 import * as Y from 'yjs';
 import { Awareness, encodeAwarenessUpdate } from 'y-protocols/awareness';
 import { connectRealtime } from './realtime.ts';
 
 // Tier 2: realtime transport behaviour, driven through the public
-// `connectRealtime` with a MOCK webxdc. Wire framing: `Uint8Array.of(tag,
-// ...body)`, tag 0 = DOC, tag 1 = AWARENESS; the listener reads `data[0]` and
+// `connectRealtime` with a MOCK webxdc. Wire framing: one tag byte, then the
+// body; tag 0 = DOC, tag 1 = AWARENESS; the listener reads `data[0]` and
 // `data.subarray(1)`. No production code is touched.
+
+// Every Awareness runs a 3s interval until its doc is destroyed. Left running,
+// it keeps this file's process alive forever.
+const docs: Y.Doc[] = [];
+afterEach(() => { for (const doc of docs.splice(0)) doc.destroy(); });
 
 type Listener = (data: Uint8Array) => void;
 
@@ -20,7 +25,8 @@ interface Harness {
 
 // Fresh mock window + ydoc/awareness per test so global state can't bleed.
 // `withChannel: false` simulates a viewer without the experimental realtime API.
-function setup(withChannel = true): Harness {
+// `text` is the document as it stands when the peer connects.
+function setup(withChannel = true, text = ''): Harness {
   const sent: Uint8Array[] = [];
   let listener: Listener = () => {};
   const channel = {
@@ -38,6 +44,8 @@ function setup(withChannel = true): Harness {
   };
 
   const ydoc = new Y.Doc();
+  docs.push(ydoc);
+  ydoc.getText('codemirror').insert(0, text);
   const awareness = new Awareness(ydoc);
   connectRealtime(ydoc, awareness);
   return { ydoc, awareness, sent, fire: (data) => listener(data) };
@@ -97,6 +105,7 @@ test('an awareness change is sent as an AWARENESS frame', () => {
 test('an incoming AWARENESS frame is routed without throwing', () => {
   const { awareness, fire } = setup();
   const peerDoc = new Y.Doc();
+  docs.push(peerDoc);
   const peer = new Awareness(peerDoc);
   peer.setLocalStateField('user', { name: 'Bob' });
   const frame = Uint8Array.of(1, ...encodeAwarenessUpdate(peer, [peer.clientID]));
@@ -158,6 +167,7 @@ test('the catch-up frame carries the existing document, not an empty one', () =>
     },
   };
   const ydoc = new Y.Doc();
+  docs.push(ydoc);
   ydoc.getText('codemirror').insert(0, 'already here');
   connectRealtime(ydoc, new Awareness(ydoc));
   void listener;
@@ -176,4 +186,16 @@ test('each peer gets a stable colour derived from its address', () => {
   assert.match(user.color, /^hsl\(\d+ 70% 50%\)$/);
   assert.match(user.colorLight, /^hsl\(\d+ 70% 50% \/ 0\.35\)$/);
   assert.equal(setup().awareness.getLocalState()!.user!.color, user.color, 'same address, same hue');
+});
+
+test('a large document catches up in one frame instead of overflowing the call stack', () => {
+  // Frames were once built as Uint8Array.of(tag, ...body). Spreading a body
+  // into call arguments overflows the engine's limit for a real document's
+  // full-state catch-up; small test documents never hit it.
+  const text = 'x'.repeat(1_000_000);
+  const { sent } = setup(true, text);
+
+  const peer = new Y.Doc();
+  Y.applyUpdate(peer, sent[0].subarray(1));
+  assert.equal(peer.getText('codemirror').toString(), text);
 });

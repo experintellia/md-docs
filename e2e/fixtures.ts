@@ -46,7 +46,7 @@ export function jetsam(budgetMB = 1024): () => void {
 // it keeps the update log in localStorage and relays it between tabs with
 // `storage` events, so every page in one context is a peer on one chat, and a
 // reload replays the log like a relaunch does.
-const MOCK_WEBXDC = fileURLToPath(
+export const MOCK_WEBXDC = fileURLToPath(
   new URL('../node_modules/@webxdc/vite-plugins/src/webxdc.js', import.meta.url),
 );
 export async function serveMockWebxdc(context: BrowserContext): Promise<void> {
