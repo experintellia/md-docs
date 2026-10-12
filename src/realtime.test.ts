@@ -9,12 +9,13 @@ import { connectRealtime } from './realtime.ts';
 // body; tag 0 = DOC, tag 1 = AWARENESS; the listener reads `data[0]` and
 // `data.subarray(1)`. No production code is touched.
 
-// Every Awareness runs a 3s interval until its doc is destroyed. Left running,
-// it keeps this file's process alive forever.
-const docs: Y.Doc[] = [];
-afterEach(() => { for (const doc of docs.splice(0)) doc.destroy(); });
-
 type Listener = (data: Uint8Array) => void;
+
+// An Awareness runs a setInterval until destroy(); left running, it keeps this
+// file's test process alive forever.
+const live: Awareness[] = [];
+const track = (a: Awareness): Awareness => (live.push(a), a);
+afterEach(() => live.splice(0).forEach((a) => a.destroy()));
 
 interface Harness {
   ydoc: Y.Doc;
@@ -44,9 +45,8 @@ function setup(withChannel = true, text = ''): Harness {
   };
 
   const ydoc = new Y.Doc();
-  docs.push(ydoc);
   ydoc.getText('codemirror').insert(0, text);
-  const awareness = new Awareness(ydoc);
+  const awareness = track(new Awareness(ydoc));
   connectRealtime(ydoc, awareness);
   return { ydoc, awareness, sent, fire: (data) => listener(data) };
 }
@@ -105,8 +105,7 @@ test('an awareness change is sent as an AWARENESS frame', () => {
 test('an incoming AWARENESS frame is routed without throwing', () => {
   const { awareness, fire } = setup();
   const peerDoc = new Y.Doc();
-  docs.push(peerDoc);
-  const peer = new Awareness(peerDoc);
+  const peer = track(new Awareness(peerDoc));
   peer.setLocalStateField('user', { name: 'Bob' });
   const frame = Uint8Array.of(1, ...encodeAwarenessUpdate(peer, [peer.clientID]));
 

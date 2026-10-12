@@ -9,7 +9,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # A leaked handle in a unit test hangs `node --test`; fail fast instead.
+    # A test that leaks a timer hangs `npm test` (see AGENTS.md); fail instead.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
