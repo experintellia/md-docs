@@ -19,7 +19,9 @@ import { toml } from '@codemirror/legacy-modes/mode/toml';
 // ponytail: CodeMirror 5 stream modes, not the Lezer `@codemirror/lang-*`
 // grammars. Lezer parses more accurately but costs ~133 KB in the `.xdc` for
 // twelve languages; these seventeen add ~22 KB. Promote an individual language
-// to its Lezer grammar if its highlighting turns out to be worth the bytes.
+// to its Lezer grammar if its highlighting turns out to be worth the bytes —
+// except JavaScript: vite.config.ts aliases `@codemirror/lang-javascript` to
+// src/lang-javascript-lite.ts, so importing it would silently get this mode.
 //
 // `support` (not `load`) so the mode is there on the first parse: everything
 // is bundled anyway, and a lazy load would leave the block unhighlighted until
