@@ -5,6 +5,7 @@ import {
   faSquareCheck,
 } from '@fortawesome/free-regular-svg-icons';
 import {
+  faArrowLeft,
   faBold,
   faBookOpen,
   faClockRotateLeft,
@@ -198,7 +199,11 @@ function buildHelp(): HTMLElement {
   overlay.innerHTML = `
     <div class="help-card" role="dialog" aria-modal="true" aria-label="Help">
       <button class="help-close" type="button" aria-label="Close help" title="Close">×</button>
-      <h1>MD-Docs</h1>
+      <div class="help-head">
+        <button class="md-tool-btn help-back" type="button" aria-label="Back to editor"
+          title="Back to editor">${ico(faArrowLeft)}</button>
+        <h1>MD-Docs</h1>
+      </div>
       <p>A collaborative markdown editor. Everyone who opens this app in the chat
          edits the <strong>same document</strong> — changes sync to all peers, and
          the <strong>first line becomes the document's title</strong> shown in chat.</p>
@@ -221,11 +226,15 @@ function buildHelp(): HTMLElement {
          on tap, nothing can be changed) and editing,
          ${ico(faClockRotateLeft)} to browse and restore past versions,
          ${ico(faMoon)} / ${ico(faSun)} to switch theme, and ${ico(faCircleQuestion)}
-         to reopen this help.</p>
+         to reopen this help. On a phone or in a narrow window, those last
+         three sit behind ${ico(faEllipsisVertical)}.</p>
     </div>`;
 
   const close = (): void => { overlay.hidden = true; };
-  overlay.querySelector('.help-close')!.addEventListener('click', close);
+  // × on the dialog, ← on the full screen a narrow display gets (main.css).
+  for (const btn of overlay.querySelectorAll('.help-close, .help-back')) {
+    btn.addEventListener('click', close);
+  }
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !overlay.hidden) close();

@@ -238,6 +238,37 @@ html, body {
   cursor: pointer;
 }
 .help-close:hover { color: var(--fg); }
+.help-back { display: none; }
+
+/* Narrow screens: a full screen with a back button, like the history view,
+   rather than a card floating over the editor. Same breakpoint as the card's
+   max-width and the history view's list/detail split. */
+@media (max-width: 560px) {
+  #help-overlay { padding: 0; }
+  .help-card {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    padding: 0 16px 16px;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .help-close { display: none; }
+  .help-head {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 -16px 8px;
+    padding: 6px 8px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .help-head h1 { margin: 0; font-size: 16px; }
+  .help-back { display: inline-block; }
+}
 
 /* In-app confirm dialog (replaces window.confirm, suppressed in the iOS webview).
    Reuses .help-card for the card chrome. */

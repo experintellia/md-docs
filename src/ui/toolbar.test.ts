@@ -254,6 +254,11 @@ test('help button opens the overlay and the close button hides it', () => {
 
   overlay.querySelector<HTMLButtonElement>('.help-close')!.click();
   assert.equal(overlay.hidden, true);
+
+  // The ← of the full-screen layout closes it the same way.
+  btnByTitle(container, 'Help & markdown syntax').click();
+  overlay.querySelector<HTMLButtonElement>('.help-back')!.click();
+  assert.equal(overlay.hidden, true);
 });
 
 test('Escape keydown closes an open help overlay', () => {

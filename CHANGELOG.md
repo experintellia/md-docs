@@ -55,6 +55,9 @@ All notable changes to MD-Docs are documented here. This project adheres to
   into a ⋮ menu at the end of the toolbar, so the formatting row fits a 375px
   iPhone SE again. On an even narrower screen the row scrolls under the menu
   button, which stays pinned to the edge. (#32)
+- On a screen up to 560px wide, help opens as a full screen with a back
+  button, like the history view, instead of a card over the editor. Wider
+  screens keep the dialog. (#32)
 
 ### Fixed
 - `npm test` dropped unit-test results: each run reported a different subset,
