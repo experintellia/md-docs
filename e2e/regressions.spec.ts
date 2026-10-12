@@ -1,40 +1,12 @@
-import type { Locator, Page } from '@playwright/test';
-import { test, expect, peer, press, serveMockWebxdc, UPDATES_KEY } from './fixtures';
+import {
+  test, expect, press, serveMockWebxdc, chat, editor, open, write, REALTIME_UP, realtimeUp,
+} from './fixtures';
 
 // Bugs the app has had, pinned where they lived: in the wiring between
 // modules, in CSS, or in how a real engine behaves. Bugs in a single module's
 // logic are pinned by the unit tests beside it (src/**/*.test.ts).
 
-const editor = (page: Page): Locator => page.locator('#editor .cm-content');
-
 const DRAFT_KEY = 'md-docs-draft'; // must match src/collab.ts
-
-async function open(page: Page, name = 'alice'): Promise<void> {
-  await page.goto(peer(name));
-  await expect(page.locator('.cm-editor')).toBeVisible();
-}
-
-async function write(page: Page, text: string): Promise<void> {
-  await editor(page).click();
-  await page.keyboard.insertText(text);
-}
-
-// The mock connects realtime 500 ms after joinRealtimeChannel, and a frame sent
-// before then is dropped. A second 500 ms timer fires after the mock's own.
-const REALTIME_UP = `{
-  const join = window.webxdc.joinRealtimeChannel;
-  window.webxdc.joinRealtimeChannel = (...args) => {
-    const channel = join(...args);
-    setTimeout(() => (window.realtimeUp = true), 500);
-    return channel;
-  };
-}`;
-const realtimeUp = (page: Page): Promise<unknown> => page.waitForFunction(() => 'realtimeUp' in window);
-
-/** Who has published to the chat so far, one entry per update. */
-const senders = (page: Page): Promise<string[]> =>
-  page.evaluate((key) => (JSON.parse(localStorage.getItem(key) ?? '[]') as { _sender: string }[])
-    .map((update) => update._sender), UPDATES_KEY);
 
 test('reopening the app publishes nothing', async ({ page, context }) => {
   // 0.1.11: the device draft was applied before the channel replay, so every
@@ -52,14 +24,14 @@ test('reopening the app publishes nothing', async ({ page, context }) => {
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), DRAFT_KEY)).not.toBeNull();
   await page.reload(); // closing flushes the edit to the chat
   await expect(editor(page)).toContainText('hello');
-  const published = await senders(page);
-  expect(published).toEqual(['alice@local.host']);
+  const published = await chat(page);
+  expect(published).toEqual(['alice info summary']);
 
   // Twice: the second close flushes whatever the first reopen queued.
   await page.reload();
   await page.reload();
   await expect(editor(page)).toContainText('hello');
-  expect(await senders(page)).toEqual(published);
+  expect(await chat(page)).toEqual(published);
 });
 
 test('watching someone else type publishes nothing', async ({ page, context }) => {
@@ -70,19 +42,20 @@ test('watching someone else type publishes nothing', async ({ page, context }) =
   const bob = await context.newPage();
   await open(bob, 'bob');
   // First, bob's close does flush: an edit of his own goes out under his name.
-  // Checked before alice types, while the draft both pages share here holds
-  // nothing of hers that a reopen could re-queue.
   await write(bob, 'hi');
   await bob.reload();
-  expect(await senders(page)).toEqual(['bob@local.host']);
+  expect(await chat(bob)).toEqual(['bob info summary']);
 
   await realtimeUp(bob);
   await write(page, 'hello bob');
   await expect(editor(bob)).toContainText('hello bob');
   // Nothing new is published, so it came over realtime: the path under test.
-  expect(await senders(page)).toEqual(['bob@local.host']);
+  expect(await chat(page)).toEqual(['bob info summary']);
   await bob.reload(); // closing flushes whatever bob queued
-  expect(await senders(page)).toEqual(['bob@local.host']);
+  // His close sent no claim of his own. (His reopen may pass alice's edit on,
+  // quietly; e2e/draft-resend.spec.ts covers what that sends.) Read on bob's
+  // page, where his writes land first.
+  expect((await chat(bob)).filter((u) => u.includes('summary'))).toEqual(['bob info summary']);
 });
 
 test('a device that joins an existing document shows it and keeps up', async ({ page, context }) => {
@@ -95,9 +68,6 @@ test('a device that joins an existing document shows it and keeps up', async ({ 
   await page.reload(); // into the chat log
 
   const bob = await context.newPage();
-  // A new device has no draft; here it would read alice's, and show the text
-  // without the chat log.
-  await bob.addInitScript((key) => localStorage.removeItem(key), DRAFT_KEY);
   await open(bob, 'bob');
   await expect(editor(bob)).toContainText('written before bob joined');
   await realtimeUp(bob);
@@ -128,7 +98,8 @@ test('a draft that cannot be kept on the device says so', async ({ page, context
   await context.addInitScript((draftKey) => {
     const setItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key: string, value: string): void {
-      if (key === draftKey) throw new DOMException('full', 'QuotaExceededError');
+      // Peers' keys carry a prefix here (see serveMockWebxdc).
+      if (key.endsWith(draftKey)) throw new DOMException('full', 'QuotaExceededError');
       setItem.call(this, key, value);
     };
   }, DRAFT_KEY);
