@@ -34,9 +34,12 @@ npm start
 ### Check / lint
 
 ```sh
-npm test        # typecheck + eslint
-npm run fix     # auto-fix lint
+npm test          # typecheck + eslint + unit tests
+npm run test:e2e  # Playwright end-to-end tests against the built bundle
+npm run fix       # auto-fix lint
 ```
+
+The end-to-end tests need browsers once: `npx playwright install chromium webkit`.
 
 ### Build
 
@@ -65,7 +68,9 @@ git push origin v0.1.0
 ```
 
 Every push and pull request also runs CI (`.github/workflows/ci.yml`):
-typecheck, lint and build. Pull requests additionally get a preview comment
+typecheck, lint and build — and the end-to-end tests
+(`.github/workflows/e2e.yml`): Chromium on Linux, WebKit on macOS as the
+closest stand-in for iOS. Pull requests additionally get a preview comment
 (`.github/workflows/preview.yml`) linking the built `.xdc` and reporting its
 size against the base branch — bundle size is the budget that matters for an
 app that travels through chats.

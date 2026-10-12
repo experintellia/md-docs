@@ -1,0 +1,47 @@
+# End-to-end tests (Playwright, e2e/) against the built bundle, one job per
+# engine the app ships into: Chromium for Android WebView and the Electron
+# desktop client, WebKit for iOS WKWebView. WebKit runs on macOS because its
+# macOS build is the closest Playwright gets to iOS Safari — the Linux one is a
+# different port (WPE/GTK) with its own quirks.
+name: E2E
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            browser: chromium
+            projects: --project=chromium --project=mobile-chrome
+          - os: macos-latest
+            browser: webkit
+            projects: --project=webkit --project=mobile-safari
+    name: e2e (${{ matrix.browser }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # 24: matches ci.yml.
+          node-version: 24
+          cache: npm
+      - name: Install
+        # Not `npm ci` — see the note in ci.yml.
+        run: npm install --no-audit --no-fund
+      - name: Install ${{ matrix.browser }}
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Test
+        run: npx playwright test ${{ matrix.projects }}
+      # Always, not just on failure: the poison-batch test records which way
+      # each engine went (abort vs. survive) as an annotation in the report.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: playwright-report
+          retention-days: 14
