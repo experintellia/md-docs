@@ -7,10 +7,10 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ### Added
 - Playwright end-to-end tests (`e2e/`, `npm run test:e2e`) against the built
-  bundle: live preview, toolbar and checkboxes under touch, persistence across
-  a relaunch, and two peers syncing. `.github/workflows/e2e.yml` runs them on
-  Chromium (desktop and Android emulation) on Linux and on WebKit (desktop and
-  iPhone emulation) on macOS.
+  bundle: live preview, highlighting in raw `<script>` blocks, toolbar and
+  checkboxes under touch, persistence across a relaunch, and two peers syncing.
+  `.github/workflows/e2e.yml` runs them on Chromium (desktop and Android
+  emulation) on Linux and on WebKit (desktop and iPhone emulation) on macOS.
 - An end-to-end test of the poison-batch guard with the real batch from #19,
   and one that settles #22 for single-process engines: Chromium commits
   `localStorage` about 5 s after a write, so an abort sooner than that after
@@ -35,6 +35,15 @@ All notable changes to MD-Docs are documented here. This project adheres to
     fences already bundle (−34 KB), so they are highlighted the same way as
     those fences. `<style>` blocks and auto-closing HTML tags are unchanged.
   - The JavaScript is minified with terser instead of esbuild (−5 KB).
+
+### Fixed
+- `npm test` dropped unit-test results: each run reported a different subset,
+  mostly missing live-preview decoration tests, and a failure could show only
+  as a failed file with no test name or message. `--test-force-exit` stopped
+  the reporter before it had printed everything; it was only there because the
+  realtime tests never destroyed their Yjs `Awareness`, whose timer kept the
+  process alive. They do now, and the flag is gone. CI's `check` job now gives
+  up after 10 minutes, in case a test leaks a timer again.
 
 ## [0.3.1] - 2026-09-19
 

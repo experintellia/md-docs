@@ -43,6 +43,21 @@ test('a checkbox toggles its task', async ({ page, isMobile }) => {
   await expect(box).toBeChecked();
 });
 
+test('a raw <script> block is highlighted like a ```js fence', async ({ page }) => {
+  // lang-html highlights <script> through src/lang-javascript-lite.ts, which
+  // stands in for lang-javascript (see AGENTS.md). If an upgraded lang-html
+  // needs more from it, this is where it breaks: only once a script is typed.
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.keyboard.insertText('```js\nconst a = 1;\n```\n\n<script>\nconst b = 2;\n</script>\n');
+  const keyword = (line: string): Locator =>
+    page.locator('.cm-line', { hasText: line }).getByText('const', { exact: true });
+  const fenced = await keyword('const a = 1;').evaluate((el) => getComputedStyle(el).color);
+  await expect(keyword('const b = 2;')).toHaveCSS('color', fenced);
+  expect(errors).toEqual([]);
+});
+
 test('an edit made right before closing survives the relaunch', async ({ page }) => {
   await page.keyboard.insertText('keep me');
   await page.reload();
