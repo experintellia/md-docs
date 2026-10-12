@@ -1,6 +1,6 @@
 import { ViewPlugin, type EditorView, type ViewUpdate } from '@codemirror/view';
 
-const coarse = (): boolean => window.matchMedia('(pointer: coarse)').matches;
+export const isMobile = (): boolean => window.matchMedia('(pointer: coarse)').matches;
 
 /**
  * Mobile only: the always-on peer name flag (`.cm-ySelectionInfo`) floats just
@@ -34,11 +34,11 @@ function hideCoveredFlags(view: EditorView): void {
 export const hidePeerFlagsWhenCovered = ViewPlugin.fromClass(
   class {
     constructor(view: EditorView) {
-      if (coarse()) hideCoveredFlags(view);
+      if (isMobile()) hideCoveredFlags(view);
     }
 
     update(update: ViewUpdate): void {
-      if (coarse()) hideCoveredFlags(update.view);
+      if (isMobile()) hideCoveredFlags(update.view);
     }
   },
 );
