@@ -110,10 +110,20 @@ test('a command button runs once per press, from a pointer, keyboard or screen r
   down();
   click();
   assert.equal(doc(), 'ab', 'unbolded once, not toggled back');
-  // Pressed, dragged off, released elsewhere: no click comes, and the next
-  // keyboard press still runs.
+  // Pressed, wandered off and back, released on the button: one run.
   down();
-  bold.dispatchEvent(new window.MouseEvent('mouseleave'));
+  bold.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true }));
+  click();
+  assert.equal(doc(), '**ab**');
+  // Pressed, released elsewhere: no click comes, and the next keyboard press
+  // still runs.
+  down();
+  document.body.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true }));
+  click();
+  assert.equal(doc(), '**ab**', 'once on mousedown, once on the keyboard');
+  // A right-click does nothing, and leaves the keyboard working.
+  bold.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 2 }));
+  assert.equal(doc(), '**ab**');
   click();
   assert.equal(doc(), 'ab');
 });

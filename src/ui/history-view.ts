@@ -282,7 +282,14 @@ class HistoryOverlay {
     const arrow = document.createElement('span');
     arrow.setAttribute('aria-hidden', 'true');
     arrow.textContent = ' ▾';
-    this.btn('mode').replaceChildren(faSvg(icon), ` ${label}`, arrow);
+    const btn = this.btn('mode');
+    btn.replaceChildren(faSvg(icon), ` ${label}`, arrow);
+    // What it is for, then the visible mode, so a voice user can say "Rendered".
+    btn.setAttribute('aria-label', `View mode: ${label}`);
+    this.menuEl.querySelectorAll<HTMLElement>('[data-mode]').forEach((item) => {
+      if (item.dataset.mode === this.mode) item.setAttribute('aria-current', 'true');
+      else item.removeAttribute('aria-current');
+    });
   }
 
   // Show the selected version per the active mode. Diff uses a plain <pre>; the

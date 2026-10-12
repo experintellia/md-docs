@@ -57,7 +57,9 @@ export class CheckboxWidget extends WidgetType {
     return true;
   }
 
-  override ignoreEvent(): boolean {
-    return false;
+  // Keys on a focused box are the box's (Space ticks it, Tab moves on), not
+  // the editor's: Tab would indent and Enter split a line at the caret.
+  override ignoreEvent(event: Event): boolean {
+    return event.type.startsWith('key');
   }
 }

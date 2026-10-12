@@ -59,6 +59,11 @@ test('the toolbar and checkboxes work from the keyboard', async ({ page, isMobil
   await expect(box).toBeFocused();
   await page.keyboard.press('Space');
   await expect(box).not.toBeChecked();
+  // Tab leaves the box; it doesn't indent the line at the editor's caret.
+  const before = await page.locator('.cm-content').innerText();
+  await page.keyboard.press('Tab');
+  await expect(box).not.toBeFocused();
+  expect(await page.locator('.cm-content').innerText()).toBe(before);
 });
 
 test('a raw <script> block is highlighted like a ```js fence', async ({ page }) => {
