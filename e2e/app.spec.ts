@@ -99,8 +99,9 @@ after`);
 
 test('arrow keys move the caret the way a right-to-left line reads', async ({ page }) => {
   // The caret ends at the Arabic word's logical end, which is its left edge, so
-  // ArrowRight steps back into the word. Were the line taken as LTR, as the
-  // whole editor is without perLineTextDirection, it would leave the line.
+  // ArrowRight steps back into the word and ArrowLeft forward. Without
+  // perLineTextDirection the line is moved through as if LTR, and Y lands at
+  // the far end: مYرحبXا.
   await page.keyboard.insertText('hello\nمرحبا');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.insertText('X');
