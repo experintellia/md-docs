@@ -2,7 +2,7 @@ import { test, after } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import * as Y from 'yjs';
-import { fromUint8Array } from 'js-base64';
+import { fromUint8Array, toUint8Array } from 'js-base64';
 
 GlobalRegistrator.register();
 const { createCollab, titleFromMarkdown } = await import('./collab.ts');
@@ -37,8 +37,14 @@ test('titleFromMarkdown reduces a markdown line to plaintext', () => {
 // still re-propagates — with the notification, since that IS a real edit.
 
 const DRAFT_KEY = 'md-docs-draft'; // must match collab.ts
+const OWN_KEY = 'md-docs-own-clients'; // must match collab.ts
 const KEY = 'codemirror';
-interface Sent { payload: { serializedYjsUpdate: string }; info?: string }
+interface Sent {
+  payload: { serializedYjsUpdate: string; resent?: boolean };
+  info?: string;
+  summary?: string;
+  document?: string;
+}
 
 // Minimal webxdc mock: setUpdateListener replays `stored` synchronously and
 // resolves (like a real client after catch-up); sendUpdate is captured.
@@ -72,15 +78,32 @@ test('a fully-synced draft neither queues nor notifies on plain open', async () 
 
   assert.equal(sent.length, 0, 'nothing queued → no send, no notification');
   assert.equal(collab.ytext.toString(), 'hello');
+  assert.deepEqual(ownIds(), [collab.ydoc.clientID]);
 });
 
-test('an unsent draft tail re-queues and sends exactly one notifying update', async () => {
-  const src = new Y.Doc();
-  src.getText(KEY).insert(0, 'hello');
-  const storedB64 = fromUint8Array(Y.encodeStateAsUpdateV2(src));
-  src.getText(KEY).insert(5, ' tail'); // never reached the channel
-  localStorage.setItem(DRAFT_KEY, fromUint8Array(Y.encodeStateAsUpdateV2(src)));
-  const sent = mockWebxdc([storedB64]);
+// A device that saw `log` reach the chat, then saved a draft of `doc` on top.
+function stage(doc: Y.Doc, log: string, own: number[] | null): Sent[] {
+  localStorage.setItem(DRAFT_KEY, fromUint8Array(Y.encodeStateAsUpdateV2(doc)));
+  if (own) localStorage.setItem(OWN_KEY, JSON.stringify(own));
+  else localStorage.removeItem(OWN_KEY);
+  return mockWebxdc([log]);
+}
+const snapshot = (doc: Y.Doc): string => fromUint8Array(Y.encodeStateAsUpdateV2(doc));
+const ownIds = (): unknown => JSON.parse(localStorage.getItem(OWN_KEY)!);
+
+// What a peer holding only the chat log plus `sent` would show.
+function rebuilt(log: string, sent: Sent[]): string {
+  const doc = new Y.Doc();
+  for (const b of [log, ...sent.map((u) => u.payload.serializedYjsUpdate)]) Y.applyUpdateV2(doc, toUint8Array(b));
+  return doc.getText(KEY).toString();
+}
+
+test('our own unsent draft tail re-queues and sends exactly one notifying update', async () => {
+  const prev = new Y.Doc(); // our previous session
+  prev.getText(KEY).insert(0, 'hello');
+  const log = snapshot(prev);
+  prev.getText(KEY).insert(5, ' tail'); // its send never reached the channel
+  const sent = stage(prev, log, [prev.clientID]);
 
   const collab = createCollab();
   await settle();
@@ -88,7 +111,113 @@ test('an unsent draft tail re-queues and sends exactly one notifying update', as
 
   assert.equal(sent.length, 1);
   assert.ok(sent[0].info, 'the notification travels with the real edit');
+  assert.ok(sent[0].summary, 'and the summary names us');
+  assert.equal(sent[0].payload.resent, undefined);
   assert.equal(collab.ytext.toString(), 'hello tail');
+  assert.equal(rebuilt(log, sent), 'hello tail');
+  assert.deepEqual(ownIds(), [prev.clientID, collab.ydoc.clientID], 'kept listed: this send can be lost too');
+  localStorage.removeItem(DRAFT_KEY);
+});
+
+test("someone else's unsent tail is re-sent once, quietly, claiming nothing", async () => {
+  // Alice's edit reached us over realtime; her own send hasn't reached the chat.
+  const alice = new Y.Doc();
+  alice.getText(KEY).insert(0, 'hello');
+  const log = snapshot(alice);
+  alice.getText(KEY).insert(5, ' from alice');
+  const sent = stage(alice, log, [12345]); // an ID of ours with nothing unsent
+
+  const collab = createCollab();
+  await settle();
+  collab.provider.syncToChatPeers();
+
+  assert.equal(sent.length, 1, 're-sent, and nothing queued to go out under our name');
+  const [u] = sent;
+  assert.equal(u.payload.resent, true);
+  assert.deepEqual([u.info, u.summary, u.document], [undefined, undefined, undefined], 'no chat line, summary or title');
+  assert.equal(collab.ytext.toString(), 'hello from alice');
+  assert.equal(rebuilt(log, sent), 'hello from alice', 'the re-send carries the tail');
+  assert.deepEqual(ownIds(), [collab.ydoc.clientID], 'an ID with nothing unsent is dropped');
+  localStorage.removeItem(DRAFT_KEY);
+});
+
+test('a draft from before the own-ID list existed is treated as ours, as it was then', async () => {
+  for (const own of [null, 'not json']) {
+    const prev = new Y.Doc();
+    prev.getText(KEY).insert(0, 'hello');
+    const log = snapshot(prev);
+    prev.getText(KEY).insert(5, ' tail');
+    const sent = stage(prev, log, null);
+    if (own) localStorage.setItem(OWN_KEY, own); // unreadable counts as absent
+
+    const collab = createCollab();
+    await settle();
+    collab.provider.syncToChatPeers();
+
+    assert.equal(sent.length, 1, String(own));
+    assert.ok(sent[0].info, `${own}: sent as our edit`);
+    assert.equal(rebuilt(log, sent), 'hello tail');
+    assert.deepEqual(ownIds(), [collab.ydoc.clientID]);
+  }
+  localStorage.removeItem(DRAFT_KEY);
+});
+
+test("our unsent edits mixed with someone else's go out once, as ours", async () => {
+  const alice = new Y.Doc();
+  alice.getText(KEY).insert(0, 'hello');
+  const log = snapshot(alice);
+  alice.getText(KEY).insert(5, ' alice');
+  const prev = new Y.Doc(); // our previous session, which had alice's edit
+  Y.applyUpdateV2(prev, Y.encodeStateAsUpdateV2(alice));
+  prev.getText(KEY).insert(11, ' and us');
+  const sent = stage(prev, log, [prev.clientID]);
+
+  const collab = createCollab();
+  await settle();
+  collab.provider.syncToChatPeers();
+
+  assert.equal(sent.length, 1);
+  assert.ok(sent[0].info);
+  assert.equal(sent[0].payload.resent, undefined);
+  assert.equal(rebuilt(log, sent), 'hello alice and us');
+  assert.deepEqual(ownIds(), [prev.clientID, collab.ydoc.clientID], 'alice is not listed as us');
+  localStorage.removeItem(DRAFT_KEY);
+});
+
+test("our edit the chat already has, waiting on someone else's lost one, is not sent again as ours", async () => {
+  const alice = new Y.Doc(); // her send never reached the chat
+  alice.getText(KEY).insert(0, 'hello');
+  const prev = new Y.Doc(); // our previous session, which got it over realtime
+  Y.applyUpdateV2(prev, Y.encodeStateAsUpdateV2(alice));
+  const before = Y.encodeStateVector(prev);
+  prev.getText(KEY).insert(5, ' world');
+  const log = fromUint8Array(Y.encodeStateAsUpdateV2(prev, before)); // our edit did land
+  const sent = stage(prev, log, [prev.clientID]);
+
+  const collab = createCollab();
+  await settle();
+  collab.provider.syncToChatPeers();
+
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.resent, true, 'only alice is missing, so nothing to claim');
+  assert.equal(rebuilt(log, sent), 'hello world', 'and with her text a peer can show ours');
+  localStorage.removeItem(DRAFT_KEY);
+});
+
+test('an unsent deletion still goes out, quietly: it carries no client ID to call ours', async () => {
+  const prev = new Y.Doc();
+  prev.getText(KEY).insert(0, 'hello');
+  const log = snapshot(prev);
+  prev.getText(KEY).delete(4, 1);
+  const sent = stage(prev, log, [prev.clientID]);
+
+  const collab = createCollab();
+  await settle();
+  collab.provider.syncToChatPeers();
+
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.resent, true);
+  assert.equal(rebuilt(log, sent), 'hell');
   localStorage.removeItem(DRAFT_KEY);
 });
 
@@ -123,6 +252,7 @@ test('with no draft stored the editor starts from the channel replay alone', () 
     collab.provider.syncToChatPeers();
     assert.equal(collab.ytext.toString(), 'from peers');
     assert.equal(sent.length, 0, 'a plain open queues nothing');
+    assert.deepEqual(ownIds(), [collab.ydoc.clientID], 'listed before any draft can hold our edits');
   });
 });
 

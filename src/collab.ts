@@ -6,6 +6,21 @@ import { setupHistory, type History } from './history.ts';
 
 // localStorage key for the synchronous crash/exit safety net (see below).
 const DRAFT_KEY = 'md-docs-draft';
+// The Yjs client IDs this device has edited under while those edits may still
+// be missing from the chat. Every app start is a new ID; a restored draft's
+// unsent tail is ours only if it carries one of these.
+const OWN_KEY = 'md-docs-own-clients';
+
+/** The clients with edits in `update` that `doc` does not have yet. */
+function clientsAhead(update: Uint8Array, doc: Y.Doc): number[] {
+  // Read from the encoded doc, not Y.encodeStateVector(doc): that leaves out
+  // pending edits, ones the chat delivered that wait on edits still missing.
+  // Ours would then look unsent. Counting stops at a gap, where a send was lost.
+  const have = Y.decodeStateVector(Y.encodeStateVectorFromUpdateV2(Y.encodeStateAsUpdateV2(doc)));
+  return [...Y.decodeStateVector(Y.encodeStateVectorFromUpdateV2(update))]
+    .filter(([client, clock]) => clock > (have.get(client) ?? 0))
+    .map(([client]) => client);
+}
 
 /**
  * The shared collaboration state: a Yjs document synced to chat peers via the
@@ -102,8 +117,13 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
   // which the provider queued → spurious "updated the document" notification
   // + full-doc re-send on every plain open. After replay, applying the draft
   // is a pure diff: fully-synced → no updateV2 fires (see collab.sync.test.ts)
-  // → nothing queued; a genuinely unsent tail still re-queues, so the next
-  // flush re-propagates it to peers — and that one SHOULD notify.
+  // → nothing to send. A genuinely unsent tail still goes out:
+  // - Our own edits re-queue, so the next flush sends them under our name, and
+  //   that one SHOULD notify.
+  // - Other people's edits, which reached us over realtime before their author's
+  //   send reached the chat (or never did), go out as a quiet re-send. They
+  //   aren't ours to claim, but they're kept: they may exist nowhere else, and
+  //   our own later edits can't be applied by a peer that lacks them.
   let saved: string | null = null;
   try {
     saved = localStorage.getItem(DRAFT_KEY);
@@ -114,11 +134,53 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
     console.warn('collab: local storage unavailable', err);
     onDraftSave?.(false);
   }
-  let restored = !saved;
-  if (saved) {
+  // null when never written or unreadable: then a draft is treated as ours, as
+  // before this key existed.
+  let own: number[] | null = null;
+  try {
+    const ids: unknown = JSON.parse(localStorage.getItem(OWN_KEY) ?? 'null');
+    if (Array.isArray(ids)) own = ids as number[];
+  } catch {
+    // Unreadable; see above.
+  }
+  let restored = false;
+  // Runs before any save, since saveDraft waits for `restored`: this session's
+  // ID must be on the list before a draft can hold its edits.
+  const markRestored = (stillUnsent: number[]): void => {
+    try {
+      localStorage.setItem(OWN_KEY, JSON.stringify([...stillUnsent, ydoc.clientID]));
+    } catch {
+      // Blocked or full; the save path reports it. Our unsent edits would then
+      // go out quietly on the next start, still not lost.
+    }
+    restored = true;
+  };
+  if (!saved) markRestored([]);
+  else {
+    const draft = saved;
     const applyDraft = (): void => {
+      // Our earlier sessions' IDs stay listed while their edits are missing
+      // from the chat: the send queued below can be lost too.
+      let stillUnsent: number[] = [];
       try {
-        Y.applyUpdateV2(ydoc, toUint8Array(saved));
+        const update = toUint8Array(draft);
+        const unsent = clientsAhead(update, ydoc);
+        stillUnsent = own ? unsent.filter((id) => own.includes(id)) : [];
+        if (own === null ? unsent.length > 0 : stillUnsent.length > 0) {
+          Y.applyUpdateV2(ydoc, update);
+        } else {
+          // Our client ID as the origin is what the provider and realtime.ts
+          // read as "from the chat": neither queues nor re-broadcasts it.
+          const tail: Uint8Array[] = [];
+          const grab = (u: Uint8Array): void => { tail.push(u); };
+          ydoc.on('updateV2', grab);
+          try {
+            Y.applyUpdateV2(ydoc, update, ydoc.clientID);
+          } finally {
+            ydoc.off('updateV2', grab);
+          }
+          if (tail.length) history.resend(fromUint8Array(Y.mergeUpdatesV2(tail)));
+        }
       } catch {
         // Corrupt/garbage draft — drop it rather than block startup.
         try {
@@ -130,7 +192,7 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
         // Has to run even when dropping the draft failed. Otherwise every later
         // save early-returns on `!restored` and the net is off for the rest of
         // the session — while the status line still reads "saved".
-        restored = true;
+        markRestored(stillUnsent);
       }
     };
     // then(f, f) + timeout race: a rejected or never-settling replay promise

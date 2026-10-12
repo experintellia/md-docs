@@ -216,3 +216,39 @@ test('selfName missing (a client that does not expose it) stamps "unknown"', () 
   setupHistory(real).webxdc.sendUpdate({ payload: {} } as never, '');
   assert.equal(sent[0].payload.author, 'unknown');
 });
+
+test('a re-send claims nothing, leaves a pending restore tag alone, and its author gets the credit', () => {
+  let listener: ((u: { payload: Record<string, unknown> }) => void) | undefined;
+  const sent: Array<Record<string, unknown> & { payload: Record<string, unknown> }> = [];
+  const history = setupHistory({
+    selfName: 'Bob',
+    setUpdateListener: (cb: typeof listener) => { listener = cb; return Promise.resolve(); },
+    sendUpdate: (u: (typeof sent)[number]) => { sent.push(u); },
+  } as unknown as typeof window.webxdc);
+  history.webxdc.setUpdateListener(() => {});
+
+  history.markRestore({ t: 1, author: 'Bob' });
+  history.resend('blob');
+  history.webxdc.sendUpdate({ payload: { serializedYjsUpdate: 'next' } } as never, '');
+  assert.deepEqual(Object.keys(sent[0]), ['payload'], 'no info, summary or document');
+  assert.equal(sent[0].payload.resent, true);
+  assert.equal(sent[0].payload.author, 'Bob');
+  assert.equal(sent[0].payload.restoredFrom, undefined);
+  assert.deepEqual(sent[1].payload.restoredFrom, { t: 1, author: 'Bob' }, 'the restore tag waits for the real edit');
+
+  // Bob re-sends Carol's edit; her own batch lands after it.
+  const src = new Y.Doc();
+  const updates: Uint8Array[] = [];
+  src.on('updateV2', (u: Uint8Array) => updates.push(u));
+  src.getText('codemirror').insert(0, 'hi');
+  const blob = Buffer.from(updates[0]).toString('base64');
+  const who = (): Array<[string, number, boolean]> =>
+    history.versions().map((v) => [v.author, v.t, v.resent === true]);
+
+  listener!({ payload: { serializedYjsUpdate: blob, t: 2000, author: 'Bob', resent: true } });
+  assert.deepEqual(who(), [['Bob', 2000, true]], 'shown as re-sent by Bob');
+  listener!({ payload: { serializedYjsUpdate: blob, t: 1500, author: 'Dave', resent: true } });
+  assert.deepEqual(who(), [['Bob', 2000, true]], 'another re-send credits nobody');
+  listener!({ payload: { serializedYjsUpdate: blob, t: 1000, author: 'Carol' } });
+  assert.deepEqual(who(), [['Carol', 1000, false]], 'the author, once her own send lands');
+});

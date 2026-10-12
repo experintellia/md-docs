@@ -80,6 +80,13 @@ All notable changes to MD-Docs are documented here. This project adheres to
   vertical scrollbar beside its horizontal one: the horizontal scrollbar took
   its height out of the bar and squeezed the buttons. The bar now grows by
   the scrollbar's height instead. (#32)
+- Reopening the app could post "*name* updated the document" and set "Last
+  edit: *name*" for someone who had only watched. Their device backup held
+  another person's edits that had come in live, and on reopen it sent them
+  again as their own edit. Those edits still go out again, since the chat may
+  never have got them, but quietly: no chat line, no summary change, and the
+  history shows them as re-sent until their author's own copy arrives. Your
+  own unsent edits still go out under your name.
 
 ## [0.3.1] - 2026-09-19
 

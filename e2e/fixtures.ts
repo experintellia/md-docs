@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { test as base, type BrowserContext, type Locator } from '@playwright/test';
+import { test as base, expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 
-export { expect } from '@playwright/test';
+export { expect };
 
 /**
  * Stand in for iOS jetsam: SIGKILL any WebKit content process that outgrows
@@ -49,11 +49,22 @@ export function jetsam(budgetMB = 1024): () => void {
 // reload replays the log like a relaunch does. `patch` runs right after it,
 // to bend the mock towards a particular messenger; it replaces any mock already
 // served to the context.
+//
+// Those pages share one origin, and so one localStorage, where real peers are
+// separate devices. The app's own keys (md-docs-*) are kept apart per peer;
+// the mock's log stays shared, as the chat is.
 const MOCK_WEBXDC = fileURLToPath(
   new URL('../node_modules/@webxdc/vite-plugins/src/webxdc.js', import.meta.url),
 );
+const PER_DEVICE_STORAGE = `{
+  const local = (key) => String(key).startsWith('md-docs-') ? window.webxdc.selfAddr + '/' + key : key;
+  for (const name of ['getItem', 'setItem', 'removeItem']) {
+    const real = Storage.prototype[name];
+    Storage.prototype[name] = function (key, ...rest) { return real.call(this, local(key), ...rest); };
+  }
+}`;
 export async function serveMockWebxdc(context: BrowserContext, patch = ''): Promise<void> {
-  const body = `${readFileSync(MOCK_WEBXDC, 'utf8')}\n${patch}`;
+  const body = `${readFileSync(MOCK_WEBXDC, 'utf8')}\n${PER_DEVICE_STORAGE}\n${patch}`;
   await context.unroute('**/webxdc.js');
   await context.route('**/webxdc.js', (route) => route.fulfill({ body, contentType: 'text/javascript' }));
 }
@@ -68,6 +79,38 @@ export const peer = (name: string): string => `/#name=${name}&addr=${name}@local
 
 /** localStorage key the mock keeps the persistent update log under. */
 export const UPDATES_KEY = '__xdcUpdatesKey__';
+
+/** The chat log so far, one entry per update: who sent it, and what it claims. */
+export const chat = (page: Page): Promise<string[]> => page.evaluate((key) =>
+  (JSON.parse(localStorage.getItem(key) ?? '[]') as
+    { _sender: string; info?: string; summary?: string; payload: { resent?: boolean } }[])
+    .map((u) => [u._sender.split('@')[0], u.payload.resent && 're-sent', u.info && 'info', u.summary && 'summary']
+      .filter(Boolean).join(' ')), UPDATES_KEY);
+
+export const editor = (page: Page): Locator => page.locator('#editor .cm-content');
+
+/** Open the app as `name`, or at `url` (a path with the peer in its hash). */
+export async function open(page: Page, name = 'alice', url = peer(name)): Promise<void> {
+  await page.goto(url);
+  await expect(page.locator('.cm-editor')).toBeVisible();
+}
+
+export async function write(page: Page, text: string): Promise<void> {
+  await editor(page).click();
+  await page.keyboard.insertText(text);
+}
+
+// The mock connects realtime 500 ms after joinRealtimeChannel, and a frame sent
+// before then is dropped. A second 500 ms timer fires after the mock's own.
+export const REALTIME_UP = `{
+  const join = window.webxdc.joinRealtimeChannel;
+  window.webxdc.joinRealtimeChannel = (...args) => {
+    const channel = join(...args);
+    setTimeout(() => (window.realtimeUp = true), 500);
+    return channel;
+  };
+}`;
+export const realtimeUp = (page: Page): Promise<unknown> => page.waitForFunction(() => 'realtimeUp' in window);
 
 export const test = base.extend({
   context: async ({ context }, use) => {

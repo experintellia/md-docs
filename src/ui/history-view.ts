@@ -192,7 +192,7 @@ class HistoryOverlay {
     this.listEl.replaceChildren();
     // Newest first.
     for (let i = this.rows.length - 1; i >= 0; i--) {
-      const { t, author, added, removed, restoredFrom } = this.rows[i];
+      const { t, added, removed, restoredFrom } = this.rows[i];
       const li = document.createElement('li');
       li.className = 'hist-row';
       li.setAttribute('role', 'button');
@@ -203,7 +203,7 @@ class HistoryOverlay {
         : '';
       li.innerHTML = `<span class="hist-when">${ico}${formatWhen(t)}</span>
         <span class="hist-meta">
-          <span class="hist-who">${escapeHtml(author)}</span>
+          <span class="hist-who">${escapeHtml(who(this.rows[i]))}</span>
           ${added || removed ? `<span class="hist-diff"
             ><span class="hist-add">+${added}</span> <span class="hist-del">−${removed}</span></span>` : ''}
         </span>`;
@@ -256,7 +256,7 @@ class HistoryOverlay {
       ? ` · <span class="hist-add">+${v.added}</span> <span class="hist-del">−${v.removed}</span>`
       : '';
     this.footerEl.innerHTML =
-      `${new Date(v.t).toLocaleString()} · ${escapeHtml(v.author)}${diff}`;
+      `${new Date(v.t).toLocaleString()} · ${escapeHtml(who(v))}${diff}`;
     (this.btn('prev') as HTMLButtonElement).disabled = this.selected === 0;
     (this.btn('next') as HTMLButtonElement).disabled = this.selected === this.rows.length - 1;
   }
@@ -305,7 +305,7 @@ class HistoryOverlay {
       return;
     }
     // Tag the resulting batch so every peer's timeline marks it as a restore.
-    this.collab.history.markRestore({ t: v.t, author: v.author });
+    this.collab.history.markRestore({ t: v.t, author: who(v) });
     const { ytext } = this.collab;
     ytext.doc!.transact(() => {
       ytext.delete(0, ytext.length);
@@ -351,6 +351,11 @@ export function confirmDialog(message: string): Promise<boolean> {
     document.body.appendChild(overlay);
     (overlay.querySelector('[data-act="ok"]') as HTMLButtonElement).focus();
   });
+}
+
+// A re-sent version's author only passed the edits on; whose they are is unknown.
+function who(v: HistoryVersion): string {
+  return v.resent ? `re-sent by ${v.author}` : v.author;
 }
 
 function escapeHtml(s: string): string {
