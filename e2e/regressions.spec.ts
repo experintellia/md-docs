@@ -149,6 +149,9 @@ test('restoring an earlier version goes through the in-app dialog', async ({ pag
   await page.reload();
   await expect(editor(page)).toContainText('version two');
 
+  // On a phone, history sits behind the ⋮ menu.
+  const more = page.getByRole('button', { name: 'More' });
+  if (await more.isVisible()) await press(more, isMobile);
   await press(page.getByRole('button', { name: 'Document history' }), isMobile);
   await press(page.locator('.hist-row').nth(1), isMobile); // newest first
   await press(page.locator('#history-overlay [data-act="restore"]'), isMobile);
