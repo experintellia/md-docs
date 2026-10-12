@@ -24,6 +24,16 @@ All notable changes to MD-Docs are documented here. This project adheres to
   `\newcommand`, …): the TeX comes from other chat members, and a macro lets a
   few bytes take minutes to typeset. The `.xdc` grows by 239 KB, mostly KaTeX's
   fonts; see `docs/math-rendering.md` for the size work. (#27)
+- End-to-end tests for past bugs that lived between modules, in CSS, or in a
+  real engine, where the unit tests cannot see them: a reopen or a watching
+  peer publishing an edit nobody made (0.1.11), a second device starting with
+  an empty editor, the app on Delta Chat's read-only `webxdc` object, a failed
+  device draft showing "no device backup" (#26), restoring a version through
+  the in-app dialog (0.1.8), selections in code staying visible (0.2.0), and
+  the phone layout's status line and checkbox size (0.1.6). Each was checked
+  by putting its bug back and watching the test fail.
+- A unit test for a large document's realtime catch-up, which once overflowed
+  the call stack by spreading the frame into call arguments.
 
 ### Changed
 - The `.xdc` is about half the size: 400 KB → 210 KB, with no feature removed.
