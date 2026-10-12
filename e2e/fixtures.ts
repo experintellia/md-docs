@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { test as base, type BrowserContext } from '@playwright/test';
+import { test as base, type BrowserContext, type Locator } from '@playwright/test';
 
 export { expect } from '@playwright/test';
 
@@ -45,14 +46,22 @@ export function jetsam(budgetMB = 1024): () => void {
 // the @webxdc/vite-plugins mock in its place (the one `npm run serve:app` uses):
 // it keeps the update log in localStorage and relays it between tabs with
 // `storage` events, so every page in one context is a peer on one chat, and a
-// reload replays the log like a relaunch does.
-export const MOCK_WEBXDC = fileURLToPath(
+// reload replays the log like a relaunch does. `patch` runs right after it,
+// to bend the mock towards a particular messenger; it replaces any mock already
+// served to the context.
+const MOCK_WEBXDC = fileURLToPath(
   new URL('../node_modules/@webxdc/vite-plugins/src/webxdc.js', import.meta.url),
 );
-export async function serveMockWebxdc(context: BrowserContext): Promise<void> {
-  await context.route('**/webxdc.js', (route) =>
-    route.fulfill({ path: MOCK_WEBXDC }));
+export async function serveMockWebxdc(context: BrowserContext, patch = ''): Promise<void> {
+  const body = `${readFileSync(MOCK_WEBXDC, 'utf8')}\n${patch}`;
+  await context.unroute('**/webxdc.js');
+  await context.route('**/webxdc.js', (route) => route.fulfill({ body, contentType: 'text/javascript' }));
 }
+
+/** Tap on a phone, click elsewhere: the toolbar and checkboxes act on the
+ *  mousedown a tap synthesizes, which is where iOS differs. */
+export const press = (target: Locator, isMobile: boolean): Promise<void> =>
+  isMobile ? target.tap() : target.click();
 
 /** The mock reads the peer's identity from the URL hash. */
 export const peer = (name: string): string => `/#name=${name}&addr=${name}@local.host`;

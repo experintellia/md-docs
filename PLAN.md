@@ -214,7 +214,7 @@ Node's built-in runner with native TS type-stripping (`node --test`, Node 24) �
 no test framework dependency. Yjs's `Awareness` holds a cleanup timer until its
 doc is destroyed, so tests destroy what they create. `--test-force-exit` used to
 paper over that, and it let the runner exit before every file had reported:
-runs silently dropped anywhere from a few to ~50 tests. Coverage by layer:
+a run counted anywhere from about 100 to all 165 tests. Coverage by layer:
 
 - **Pure logic** — `titleFromMarkdown` (chat title parsing).
 - **Collaboration (CRDT)** — peer convergence, the late-joiner *seed invariant*

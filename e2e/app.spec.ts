@@ -1,5 +1,4 @@
-import type { Locator } from '@playwright/test';
-import { test, expect, peer } from './fixtures';
+import { test, expect, peer, press } from './fixtures';
 
 // What the unit tests (happy-dom) cannot see: a real engine's layout, focus and
 // event order. The mobile projects tap instead of click, which is where iOS
@@ -15,9 +14,6 @@ test.beforeEach(async ({ page }) => {
   await page.goto(peer('alice'));
   await page.locator('.cm-content').click();
 });
-
-const press = (target: Locator, isMobile: boolean): Promise<void> =>
-  isMobile ? target.tap() : target.click();
 
 test('renders markdown live as you type', async ({ page }) => {
   await page.keyboard.insertText('# Title\nsome **bold** text');

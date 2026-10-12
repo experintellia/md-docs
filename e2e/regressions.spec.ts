@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs';
-import type { BrowserContext, Locator, Page } from '@playwright/test';
-import { test, expect, peer, MOCK_WEBXDC, UPDATES_KEY } from './fixtures';
+import type { Locator, Page } from '@playwright/test';
+import { test, expect, peer, press, serveMockWebxdc, UPDATES_KEY } from './fixtures';
 
 // Bugs the app has had, pinned where they lived: in the wiring between
 // modules, in CSS, or in how a real engine behaves. Bugs in a single module's
@@ -8,8 +7,7 @@ import { test, expect, peer, MOCK_WEBXDC, UPDATES_KEY } from './fixtures';
 
 const editor = (page: Page): Locator => page.locator('#editor .cm-content');
 
-const press = (target: Locator, isMobile: boolean): Promise<void> =>
-  isMobile ? target.tap() : target.click();
+const DRAFT_KEY = 'md-docs-draft'; // must match src/collab.ts
 
 async function open(page: Page, name = 'alice'): Promise<void> {
   await page.goto(peer(name));
@@ -19,12 +17,6 @@ async function open(page: Page, name = 'alice'): Promise<void> {
 async function write(page: Page, text: string): Promise<void> {
   await editor(page).click();
   await page.keyboard.insertText(text);
-}
-
-/** Serve the mock with `patch` run after it, in place of the plain one. */
-async function serveMock(context: BrowserContext, patch: string): Promise<void> {
-  const body = `${readFileSync(MOCK_WEBXDC, 'utf8')}\n${patch}`;
-  await context.route('**/webxdc.js', (route) => route.fulfill({ body, contentType: 'text/javascript' }));
 }
 
 /** Who has published to the chat so far, one entry per update. */
@@ -38,14 +30,14 @@ test('reopening the app publishes nothing', async ({ page, context }) => {
   // "updated the document" notification. It takes a messenger that hands the
   // log over after setUpdateListener returns, as real ones may; the mock
   // replays synchronously unless told otherwise.
-  await serveMock(context, `{
+  await serveMockWebxdc(context, `{
     const deliver = window.webxdc.setUpdateListener;
     window.webxdc.setUpdateListener = (cb, serial) =>
       new Promise((resolve) => setTimeout(() => resolve(deliver(cb, serial)), 50));
   }`);
   await open(page);
   await write(page, 'hello');
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('md-docs-draft'))).not.toBeNull();
+  await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), DRAFT_KEY)).not.toBeNull();
   await page.reload(); // closing flushes the edit to the chat
   await expect(editor(page)).toContainText('hello');
   const published = await senders(page);
@@ -67,8 +59,15 @@ test('watching someone else type publishes nothing', async ({ page, context }) =
   await bob.waitForTimeout(600); // the mock connects realtime 500ms after joining
   await write(page, 'hello bob');
   await expect(editor(bob)).toContainText('hello bob');
+  // Nobody has published yet, so it came over realtime: the path under test.
+  expect(await senders(page)).toEqual([]);
   await bob.reload(); // closing flushes whatever bob queued
   expect(await senders(page)).not.toContain('bob@local.host');
+
+  // And bob's close does flush: an edit of his own is published under his name.
+  await write(bob, 'hi');
+  await bob.reload();
+  expect(await senders(page)).toContain('bob@local.host');
 });
 
 test('a device that joins an existing document shows it and keeps up', async ({ page, context }) => {
@@ -93,7 +92,7 @@ test('runs on a read-only webxdc object, like the one Delta Chat provides', asyn
   // The history shim once wrapped webxdc in a Proxy. Delta Chat's methods are
   // read-only and non-configurable, which a Proxy may not report differently,
   // so the app died on a real device while the configurable mock was fine.
-  await serveMock(context, 'Object.freeze(window.webxdc);');
+  await serveMockWebxdc(context, 'Object.freeze(window.webxdc);');
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
 
@@ -107,13 +106,13 @@ test('runs on a read-only webxdc object, like the one Delta Chat provides', asyn
 test('a draft that cannot be kept on the device says so', async ({ page, context }) => {
   // #26: with localStorage full or blocked, the crash net failed silently and
   // the status line still read "saved".
-  await context.addInitScript(() => {
+  await context.addInitScript((draftKey) => {
     const setItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key: string, value: string): void {
-      if (key === 'md-docs-draft') throw new DOMException('full', 'QuotaExceededError');
+      if (key === draftKey) throw new DOMException('full', 'QuotaExceededError');
       setItem.call(this, key, value);
     };
-  });
+  }, DRAFT_KEY);
   await open(page);
   await write(page, 'not backed up');
   await expect(page.locator('#status')).toHaveText('no device backup');
@@ -149,6 +148,7 @@ test('a selection inside code is visible', async ({ page }) => {
       const channels = getComputedStyle(el).backgroundColor.match(/[\d.]+/g) ?? [];
       return channels.length === 4 ? Number(channels[3]) : 1;
     });
+    expect(alpha, 'code lost its background').toBeGreaterThan(0);
     expect(alpha, 'an opaque code background hides the selection').toBeLessThan(1);
   }
 });
@@ -162,6 +162,8 @@ test('on a phone the status line clears the toolbar and tasks are big enough to 
   const status = (await page.locator('#status').boundingBox())!;
   const toolbar = (await page.locator('#toolbar').boundingBox())!;
   expect(status.y + status.height, 'status line overlaps the toolbar').toBeLessThanOrEqual(toolbar.y);
-  const box = (await page.locator('.md-task-checkbox').boundingBox())!;
-  expect(box.width, 'checkbox is the desktop size').toBeGreaterThanOrEqual(22);
+  // Scaled against its own line: 1.35 on touch, 1.15 on a desktop.
+  const scale = await page.locator('.md-task-checkbox').evaluate((box) =>
+    parseFloat(getComputedStyle(box).fontSize) / parseFloat(getComputedStyle(box.parentElement!).fontSize));
+  expect(scale, 'checkbox is the desktop size').toBeGreaterThan(1.3);
 });

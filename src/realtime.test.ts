@@ -153,24 +153,7 @@ test('a valid frame still applies after a malformed one', () => {
 test('the catch-up frame carries the existing document, not an empty one', () => {
   // A late joiner blasts its full state on connect; if that were encoded before
   // the doc was populated, peers would learn nothing from it.
-  const sent: Uint8Array[] = [];
-  let listener: Listener = () => {};
-  (globalThis as unknown as { window: { webxdc: unknown } }).window = {
-    webxdc: {
-      selfAddr: 'alice@example.com',
-      selfName: 'Alice',
-      joinRealtimeChannel: () => ({
-        setListener: (l: Listener) => { listener = l; },
-        send: (d: Uint8Array) => { sent.push(d); },
-        leave: () => {},
-      }),
-    },
-  };
-  const ydoc = new Y.Doc();
-  docs.push(ydoc);
-  ydoc.getText('codemirror').insert(0, 'already here');
-  connectRealtime(ydoc, new Awareness(ydoc));
-  void listener;
+  const { sent } = setup(true, 'already here');
 
   const peer = new Y.Doc();
   Y.applyUpdate(peer, sent[0].subarray(1));
