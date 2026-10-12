@@ -1,4 +1,10 @@
 import { WidgetType, type EditorView } from '@codemirror/view';
+import { onPress } from '../../ui/icon.ts';
+
+// The widget each box currently shows. updateDOM hands the same <input> on to
+// the next widget, so a box focused from the keyboard keeps focus when it
+// ticks, instead of being replaced and dropping focus to <body>.
+const shown = new WeakMap<HTMLElement, CheckboxWidget>();
 
 /**
  * A clickable task-list checkbox that replaces the raw `[ ]` / `[x]` marker.
@@ -28,25 +34,27 @@ export class CheckboxWidget extends WidgetType {
     box.checked = this.checked;
     // The task's text follows on the line; this says what ticking means.
     box.setAttribute('aria-label', 'Done');
+    shown.set(box, this);
     // Toggle the underlying `[ ]` <-> `[x]` text without moving the cursor.
-    const toggle = (): void => {
-      if (view.state.readOnly) return; // read mode / history viewer
-      const insert = this.checked ? '[ ]' : '[x]';
-      view.dispatch({ changes: { from: this.from, to: this.to, insert } });
-    };
-    box.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      toggle();
-    });
-    // The document owns the tick. Without this the click after a mousedown
-    // that changed nothing (read mode) still flips the native box, which then
-    // shows a state the document doesn't have. Space on a focused box fires
-    // only this click (detail 0), so that one toggles here.
-    box.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (e.detail === 0) toggle();
+    // The document owns the tick: in read mode nothing changes, and onPress
+    // then stops the native box flipping to a state the document doesn't have.
+    onPress(box, () => {
+      if (view.state.readOnly) return false; // read mode / history viewer
+      const { checked, from, to } = shown.get(box)!;
+      const focused = document.activeElement === box;
+      view.dispatch({ changes: { from, to, insert: checked ? '[ ]' : '[x]' } });
+      // Redrawing its selection, CodeMirror takes focus from a box inside it;
+      // a keyboard user is still on this one, which updateDOM kept.
+      if (focused) box.focus();
+      return true;
     });
     return box;
+  }
+
+  override updateDOM(dom: HTMLElement): boolean {
+    (dom as HTMLInputElement).checked = this.checked;
+    shown.set(dom, this);
+    return true;
   }
 
   override ignoreEvent(): boolean {

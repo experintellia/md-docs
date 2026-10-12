@@ -180,6 +180,9 @@ class HistoryOverlay {
   }
 
   private showMenu(open: boolean): void {
+    // An item had focus (a mode picked, or Escape): hand it to the button
+    // rather than let it drop to <body> with the hidden menu.
+    if (!open && this.menuEl.contains(document.activeElement)) this.btn('mode').focus();
     this.menuEl.hidden = !open;
     this.btn('mode').setAttribute('aria-expanded', String(open));
   }

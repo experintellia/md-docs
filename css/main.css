@@ -70,8 +70,9 @@ html.dark {
    the default setting, Apple's body size), the text-scale meta in index.html
    on Android. Everything else is in rem/em so it follows; only the icon-only
    toolbar buttons stay in px, so the bar keeps its size. The shorthand also
-   sets a family, which html, body below replaces. */
-@supports (font: -apple-system-body) {
+   sets a family, which html, body below replaces. -webkit-touch-callout
+   narrows it to iOS: desktop Safari knows the keyword too, at 13px. */
+@supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
   html { font: -apple-system-body; }
 }
 
@@ -427,9 +428,10 @@ html, body {
 
 /* View-mode menu (Rendered / Source / Diff). */
 .hist-mode { position: relative; }
-.hist-mode > [data-act="mode"] { width: auto; padding: 0 8px; font-size: 0.8125rem; }
-/* It carries text, which grows with the system text size. */
-.hist-mode > [data-act="mode"] { height: auto; min-height: 32px; }
+/* height auto: it carries text, which grows with the system text size. */
+.hist-mode > [data-act="mode"] {
+  width: auto; height: auto; min-height: 32px; padding: 0 8px; font-size: 0.8125rem;
+}
 .hist-menu {
   position: absolute;
   top: 100%;

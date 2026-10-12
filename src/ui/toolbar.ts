@@ -27,7 +27,7 @@ import {
   toggleItalic,
 } from '../commands.ts';
 import { setReadMode } from '../editor.ts';
-import { faSvg, utilButton } from './icon.ts';
+import { faSvg, onPress, utilButton } from './icon.ts';
 import { trapFocus } from './modal.ts';
 import { historyButton } from './history-view.ts';
 import { isMobile } from '../peer-flags.ts';
@@ -63,16 +63,7 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
   for (const action of ACTIONS) {
     const btn = utilButton(action.icon, action.title);
     btn.classList.add('md-tool-cmd'); // hidden in read mode, see readModeButton
-    // Use mousedown + preventDefault so the editor keeps focus/selection.
-    btn.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      action.run(view);
-      view.focus();
-    });
-    // Enter and Space on a focused button fire only click, with no mousedown
-    // before it (detail 0); a pointer's click already ran above.
-    btn.addEventListener('click', (e) => {
-      if (e.detail !== 0) return;
+    onPress(btn, () => {
       action.run(view);
       view.focus();
     });

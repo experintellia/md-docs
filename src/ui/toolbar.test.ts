@@ -94,17 +94,28 @@ test('Italic button wraps the selection in *…*', () => {
   assert.equal(doc(), '*ab*');
 });
 
-test('a command button runs from the keyboard too, once per press', () => {
+test('a command button runs once per press, from a pointer, keyboard or screen reader', () => {
   const container = reset();
   const { view, doc } = makeView('ab', 0, 2);
   mountToolbar(container, view);
   const bold = btnByTitle(container, 'Bold');
-  // Enter / Space: a click with no mousedown before it (detail 0).
-  bold.dispatchEvent(new window.MouseEvent('click', { bubbles: true, detail: 0 }));
+  const down = (): boolean => bold.dispatchEvent(
+    new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }),
+  );
+  const click = (): boolean => bold.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  // Enter / Space: a click alone.
+  click();
   assert.equal(doc(), '**ab**');
-  // A pointer's click follows the mousedown that already ran the command.
-  bold.dispatchEvent(new window.MouseEvent('click', { bubbles: true, detail: 1 }));
-  assert.equal(doc(), '**ab**');
+  // A pointer, or a screen reader's activation (detail 0 as well): mousedown, then click.
+  down();
+  click();
+  assert.equal(doc(), 'ab', 'unbolded once, not toggled back');
+  // Pressed, dragged off, released elsewhere: no click comes, and the next
+  // keyboard press still runs.
+  down();
+  bold.dispatchEvent(new window.MouseEvent('mouseleave'));
+  click();
+  assert.equal(doc(), 'ab');
 });
 
 test('theme toggle adds/removes dark class and persists color-schema', () => {

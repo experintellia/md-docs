@@ -34,3 +34,29 @@ export function utilButton(icon: () => Node, title: string): HTMLButtonElement {
   btn.setAttribute('aria-label', title);
   return btn;
 }
+
+/**
+ * Run `run` when `el` is pressed, without taking focus from the editor.
+ * A pointer acts on mousedown, preventDefault'ed so the caret and selection
+ * stay put. A keyboard press is a click with no mousedown before it. Screen
+ * readers send mousedown and then click, so a click right after a mousedown is
+ * not run again; tracked with a flag, as `detail` is 0 for those too.
+ *
+ * A click that runs nothing is cancelled: that one, or one where `run`
+ * returns false. On a checkbox that keeps the native box from flipping on its
+ * own; a click that does run keeps its flip, which is the new state.
+ */
+export function onPress(el: HTMLElement, run: () => boolean | void): void {
+  let pressed = false;
+  el.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    pressed = true;
+    run();
+  });
+  // Dragged off before letting go: no click follows to clear the flag.
+  el.addEventListener('mouseleave', () => { pressed = false; });
+  el.addEventListener('click', (e) => {
+    if (pressed || run() === false) e.preventDefault();
+    pressed = false;
+  });
+}

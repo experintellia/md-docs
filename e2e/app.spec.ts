@@ -55,6 +55,10 @@ test('the toolbar and checkboxes work from the keyboard', async ({ page, isMobil
   await box.focus();
   await page.keyboard.press('Space');
   await expect(box).toBeChecked();
+  // Focus stays on the box, so Space again unticks it.
+  await expect(box).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(box).not.toBeChecked();
 });
 
 test('a raw <script> block is highlighted like a ```js fence', async ({ page }) => {
