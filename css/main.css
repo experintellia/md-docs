@@ -79,11 +79,15 @@ html, body {
   display: flex;
   align-items: center;
   gap: 2px;
-  height: var(--toolbar-height);
+  /* min-, not height: when the row overflows, a classic (non-overlay)
+     scrollbar adds its height here instead of squeezing the buttons, which
+     overflowed into a vertical scrollbar of their own. */
+  min-height: var(--toolbar-height);
   padding: 0 6px;
   background: var(--toolbar-bg);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
+  overflow-y: hidden;
   flex: 0 0 auto;
 }
 

@@ -66,6 +66,10 @@ All notable changes to MD-Docs are documented here. This project adheres to
 - The history viewer revealed a line's markdown wherever you selected text,
   and ticking a task box there changed the version on screen. A read-only
   view now reveals nothing and leaves its tasks alone. (#32)
+- In a desktop window too narrow for the toolbar, the toolbar showed a
+  vertical scrollbar beside its horizontal one: the horizontal scrollbar took
+  its height out of the bar and squeezed the buttons. The bar now grows by
+  the scrollbar's height instead. (#32)
 
 ## [0.3.1] - 2026-09-19
 
