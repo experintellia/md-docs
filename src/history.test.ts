@@ -142,7 +142,7 @@ test('a batch that cannot be decoded is skipped, not fatal for the timeline', ()
   history.webxdc.setUpdateListener(() => {});
 
   fire({ serializedYjsUpdate: first, t: 1, author: 'Alice' });
-  fire({ serializedYjsUpdate: 'not!!valid!!base64', t: 2, author: 'Mallory' }); // atob throws
+  fire({ serializedYjsUpdate: 'not!!valid!!base64', t: 2, author: 'Mallory' }); // junk bytes, yjs throws
   fire({ serializedYjsUpdate: Buffer.from([9, 9, 9, 9]).toString('base64'), t: 3 }); // yjs throws
   fire({ serializedYjsUpdate: second, t: 4, author: 'Bob' });
 
