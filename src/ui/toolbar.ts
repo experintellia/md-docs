@@ -209,20 +209,26 @@ function buildHelp(): HTMLElement {
          the <strong>first line becomes the document's title</strong> shown in chat.</p>
       <h2>Markdown syntax</h2>
       <table>
-        <tr><td><code># Heading</code></td><td>Heading (use the ${ico(faHeading)} button to cycle levels)</td></tr>
-        <tr><td><code>**bold**</code></td><td>Bold text (${ico(faBold)})</td></tr>
-        <tr><td><code>*italic*</code></td><td>Italic text (${ico(faItalic)})</td></tr>
-        <tr><td><code>~~text~~</code></td><td>Strikethrough</td></tr>
-        <tr><td><code>- item</code></td><td>Bullet list (${ico(faListUl)})</td></tr>
-        <tr><td><code>1. item</code></td><td>Numbered list</td></tr>
-        <tr><td><code>- [ ] task</code></td><td>Checklist item (${ico(faSquareCheck)}); click the box to tick it</td></tr>
-        <tr><td><code>[text](url)</code></td><td>Link</td></tr>
-        <tr><td><code>&gt; quote</code></td><td>Block quote</td></tr>
-        <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
-        <tr><td><pre><code>\`\`\`js&#10;let x = 1&#10;\`\`\`</code></pre></td><td>Code block, highlighted for the language after <code>\`\`\`</code> (js, py, sh, …)</td></tr>
-        <tr><td><pre><code>| a | b |&#10;|---|---|&#10;| 1 | 2 |</code></pre></td><td>Table, with a <code>|---|</code> line under the header row</td></tr>
-        <tr><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX), with <code>$$</code> on the lines above and below</td></tr>
-        <tr><td><code>---</code></td><td>Separator line (three or more minuses on their own line)</td></tr>
+        <tbody>
+          <tr><td><code># Heading</code></td><td>Heading (use the ${ico(faHeading)} button to cycle levels)</td></tr>
+          <tr><td><code>**bold**</code></td><td>Bold text (${ico(faBold)})</td></tr>
+          <tr><td><code>*italic*</code></td><td>Italic text (${ico(faItalic)})</td></tr>
+          <tr><td><code>~~text~~</code></td><td>Strikethrough</td></tr>
+          <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
+          <tr><td><code>[text](url)</code></td><td>Link</td></tr>
+        </tbody>
+        <tbody>
+          <tr><td><code>- item</code></td><td>Bullet list (${ico(faListUl)})</td></tr>
+          <tr><td><code>1. item</code></td><td>Numbered list</td></tr>
+          <tr><td><code>- [ ] task</code></td><td>Checklist item (${ico(faSquareCheck)}); click the box to tick it</td></tr>
+        </tbody>
+        <tbody>
+          <tr><td><code>&gt; quote</code></td><td>Block quote</td></tr>
+          <tr><td><pre><code>\`\`\`js&#10;let x = 1&#10;\`\`\`</code></pre></td><td>Code block, highlighted for the language after <code>\`\`\`</code> (js, py, sh, …)</td></tr>
+          <tr><td><pre><code>| a | b |&#10;|---|---|&#10;| 1 | 2 |</code></pre></td><td>Table, with a <code>|---|</code> line under the header row</td></tr>
+          <tr><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX), with <code>$$</code> on the lines above and below</td></tr>
+          <tr><td><code>---</code></td><td>Separator line (three or more minuses on their own line)</td></tr>
+        </tbody>
       </table>
       <h2>Toolbar</h2>
       <table class="help-tools">

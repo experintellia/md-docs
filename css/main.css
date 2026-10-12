@@ -219,6 +219,8 @@ html, body {
 .help-card table { width: 100%; border-collapse: collapse; }
 .help-card td { padding: 4px 8px 4px 0; vertical-align: top; line-height: 1.4; }
 .help-card td:first-child { white-space: nowrap; }
+/* The syntax table's groups (text, lists, blocks), a little apart. */
+.help-card tbody + tbody tr:first-child td { padding-top: 14px; }
 .help-card svg { width: 1em; height: 1em; vertical-align: -0.125em; }
 /* A multi-line example (the math block) is one block, not a chip per line. */
 .help-card pre {
