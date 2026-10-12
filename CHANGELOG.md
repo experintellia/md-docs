@@ -95,7 +95,11 @@ All notable changes to MD-Docs are documented here. This project adheres to
     keep Tab inside them, and hand focus back when they close.
   - Enter on the confirmation's Cancel button restored the version anyway,
     and Escape there also closed the history screen behind it.
-  - The page can be zoomed again (`user-scalable=no` is gone).
+  - Text follows the system text size instead of a fixed 16px: Dynamic Type
+    in iOS webviews (`font: -apple-system-body`, so 17px at the default
+    setting) and `<meta name="text-scale">` where Android Chrome supports it.
+    Sizes in the help, history, menus and status line moved from px to rem to
+    follow it; the icon toolbar stays fixed. Pinch zoom stays off by design.
   - The editor, the history viewer and task checkboxes have accessible names;
     the app is a `main` landmark; the selected history row is marked current;
     the history view-mode picker is announced by the mode it shows and as

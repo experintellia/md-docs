@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- No pinch zoom, by design: text follows the system text size instead
+       (Dynamic Type on iOS, see main.css; text-scale on Android Chrome). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="text-scale" content="scale">
   <link rel="icon" href="/icon.png">
   <link rel="stylesheet" href="/css/main.css">
   <link rel="stylesheet" href="/css/live-preview.css">

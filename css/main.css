@@ -66,6 +66,15 @@ html.dark {
 
 * { box-sizing: border-box; }
 
+/* The root text size is the system's: Dynamic Type in iOS webviews (17px at
+   the default setting, Apple's body size), the text-scale meta in index.html
+   on Android. Everything else is in rem/em so it follows; only the icon-only
+   toolbar buttons stay in px, so the bar keeps its size. The shorthand also
+   sets a family, which html, body below replaces. */
+@supports (font: -apple-system-body) {
+  html { font: -apple-system-body; }
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -191,7 +200,7 @@ html, body {
     height: auto;
     padding: 10px 14px;
     border-radius: 0;
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 400;
   }
   .md-tool-menu .md-tool-btn::after { content: attr(aria-label); }
@@ -228,8 +237,8 @@ html, body {
 /* Focused on open so a screen reader starts at the top; no ring around the
    whole card for that. */
 .help-card:focus { outline: none; }
-.help-card h1 { margin: 0 0 8px; font-size: 22px; }
-.help-card h2 { margin: 20px 0 8px; font-size: 15px; color: var(--muted); }
+.help-card h1 { margin: 0 0 8px; font-size: 1.375rem; }
+.help-card h2 { margin: 20px 0 8px; font-size: 0.9375rem; color: var(--muted); }
 .help-card p { margin: 8px 0; line-height: 1.5; }
 .help-card table { width: 100%; border-collapse: collapse; }
 .help-card td { padding: 4px 8px 4px 0; vertical-align: top; line-height: 1.4; }
@@ -247,14 +256,14 @@ html, body {
 }
 .help-card pre code { padding: 0; background: none; }
 /* Toolbar section: an icon column, each pair of icons a little apart. */
-.help-tools td:first-child { width: 4em; font-size: 17px; }
+.help-tools td:first-child { width: 4em; font-size: 1.0625rem; }
 .help-tools svg + svg { margin-left: 8px; }
-.help-note { color: var(--muted); font-size: 14px; }
+.help-note { color: var(--muted); font-size: 0.875rem; }
 .help-card code {
   padding: 1px 5px;
   background: var(--code-bg);
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .help-close {
   position: absolute;
@@ -263,7 +272,7 @@ html, body {
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 24px;
+  font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
 }
@@ -296,7 +305,7 @@ html, body {
     background: var(--bg);
     border-bottom: 1px solid var(--border);
   }
-  .help-head h1 { margin: 0; font-size: 16px; }
+  .help-head h1 { margin: 0; font-size: 1rem; }
   .help-back { display: inline-block; }
 }
 
@@ -349,7 +358,7 @@ html, body {
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
 }
-.hist-header h1 { margin: 0; font-size: 16px; }
+.hist-header h1 { margin: 0; font-size: 1rem; }
 .hist-footer {
   display: flex;
   align-items: center;
@@ -360,13 +369,13 @@ html, body {
 .hist-footer-meta {
   flex: 1 1 auto;
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.hist-footer button { font-size: 24px; line-height: 1; padding: 4px 12px; }
+.hist-footer button { font-size: 1.5rem; line-height: 1; padding: 4px 12px; }
 .hist-footer button:disabled { opacity: 0.35; cursor: default; }
 /* Read-only viewer: keep the text selectable but with no blinking caret. */
 .hist-cm .cm-cursor { display: none; }
@@ -389,13 +398,13 @@ html, body {
 }
 .hist-row:hover { background: rgba(127, 127, 127, 0.1); }
 .hist-row.selected { background: rgba(127, 127, 127, 0.2); }
-.hist-when { font-size: 13px; }
+.hist-when { font-size: 0.8125rem; }
 .hist-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .hist-who { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hist-diff { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
@@ -409,7 +418,7 @@ html, body {
 .hist-banner {
   flex: 0 0 auto;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   background: var(--code-bg);
   color: var(--muted);
   border-bottom: 1px solid var(--border);
@@ -418,7 +427,9 @@ html, body {
 
 /* View-mode menu (Rendered / Source / Diff). */
 .hist-mode { position: relative; }
-.hist-mode > [data-act="mode"] { width: auto; padding: 0 8px; font-size: 13px; }
+.hist-mode > [data-act="mode"] { width: auto; padding: 0 8px; font-size: 0.8125rem; }
+/* It carries text, which grows with the system text size. */
+.hist-mode > [data-act="mode"] { height: auto; min-height: 32px; }
 .hist-menu {
   position: absolute;
   top: 100%;
@@ -484,7 +495,7 @@ html, body {
   right: 8px;
   bottom: 6px;
   z-index: 5;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--muted);
   pointer-events: none;
 }
