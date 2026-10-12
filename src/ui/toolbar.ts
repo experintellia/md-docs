@@ -5,14 +5,18 @@ import {
   faSquareCheck,
 } from '@fortawesome/free-regular-svg-icons';
 import {
+  faArrowLeft,
   faBold,
+  faBookOpen,
   faClockRotateLeft,
+  faEllipsisVertical,
   faHeading,
   faIndent,
   faItalic,
   faListUl,
   faMoon,
   faOutdent,
+  faPen,
   faSun,
 } from '@fortawesome/free-solid-svg-icons';
 import {
@@ -22,6 +26,7 @@ import {
   toggleChecklist,
   toggleItalic,
 } from '../commands.ts';
+import { setReadMode } from '../editor.ts';
 import { faSvg } from './icon.ts';
 import { historyButton } from './history-view.ts';
 import type { Collab } from '../collab.ts';
@@ -55,6 +60,7 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
 
   for (const action of ACTIONS) {
     const btn = utilButton(action.icon, action.title);
+    btn.classList.add('md-tool-cmd'); // hidden in read mode, see readModeButton
     // Use mousedown + preventDefault so the editor keeps focus/selection.
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -64,14 +70,17 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
     container.appendChild(btn);
   }
 
-  // Utility buttons (theme + help) pushed to the right; these are not editor
-  // commands, so a plain click is fine — no need to preserve selection.
+  // Utility buttons (read mode, history, theme, help) pushed to the right;
+  // these are not editor commands, so a plain click is fine — no need to
+  // preserve selection.
   const spacer = document.createElement('div');
   spacer.className = 'md-tool-spacer';
-  container.append(spacer);
   // History needs the synced update stream, so only when collaborating.
-  if (collab) container.append(historyButton(collab));
-  container.append(themeButton(), helpButton());
+  const utils = [...(collab ? [historyButton(collab)] : []), themeButton(), helpButton()];
+  const end = document.createElement('div');
+  end.className = 'md-tool-end';
+  end.append(readModeButton(container, view), ...moreMenu(utils));
+  container.append(spacer, end);
 
   if (isMobile()) {
     fitAppToViewport();
@@ -86,6 +95,68 @@ function utilButton(icon: () => Node, title: string): HTMLButtonElement {
   btn.title = title;
   btn.setAttribute('aria-label', title);
   return btn;
+}
+
+/** Toggle read mode: the editor stops taking input and shows no source, so a
+ *  tap on a link opens it. The editing buttons have nothing to act on there,
+ *  so they step aside. Not persisted: every open starts in edit mode. */
+function readModeButton(container: HTMLElement, view: EditorView): HTMLButtonElement {
+  const btn = utilButton(() => faSvg(faBookOpen), 'Toggle read / edit mode');
+  btn.setAttribute('aria-pressed', 'false');
+  btn.addEventListener('click', () => {
+    const reading = container.classList.toggle('reading');
+    setReadMode(view, reading);
+    // Drop the keyboard on the way in. On the way out, leave focus alone: the
+    // next tap puts the caret where the reader wants to edit.
+    if (reading) view.contentDOM.blur();
+    btn.setAttribute('aria-pressed', String(reading));
+    // Like the theme button: show the mode a tap switches to.
+    btn.replaceChildren(faSvg(reading ? faPen : faBookOpen));
+  });
+  return btn;
+}
+
+/**
+ * History, theme and help, plus the "more" button that folds them into a menu.
+ * Whether they sit inline or behind the button is up to CSS (narrow screens and
+ * touch get the menu, see main.css), so the same buttons serve both layouts.
+ */
+function moreMenu(items: HTMLButtonElement[]): HTMLElement[] {
+  const menu = document.createElement('div');
+  menu.className = 'md-tool-menu';
+  menu.append(...items);
+  const more = utilButton(() => faSvg(faEllipsisVertical), 'More');
+  more.classList.add('md-tool-more');
+  more.setAttribute('aria-expanded', 'false');
+
+  const setOpen = (open: boolean): void => {
+    menu.classList.toggle('open', open);
+    more.setAttribute('aria-expanded', String(open));
+  };
+  // Closing from inside hands focus back to the button instead of <body>.
+  const close = (): void => {
+    if (menu.contains(document.activeElement)) more.focus();
+    setOpen(false);
+  };
+  more.addEventListener('click', () => setOpen(!menu.classList.contains('open')));
+  // An item's own handler runs first; then the menu has done its job.
+  menu.addEventListener('click', close);
+  // Tabbing out closes it; focus moving to ⋮ doesn't, or ⋮'s own click
+  // would reopen what the focus change had just closed.
+  menu.addEventListener('focusout', (e) => {
+    const to = e.relatedTarget as Node | null;
+    if (to !== more && !menu.contains(to)) setOpen(false);
+  });
+  // pointerdown, not click: iOS fires no click for a tap on an element that
+  // doesn't listen for one, such as the editor's empty bottom padding.
+  document.addEventListener('pointerdown', (e) => {
+    if (!menu.contains(e.target as Node) && !more.contains(e.target as Node)) setOpen(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && menu.classList.contains('open')) close();
+  });
+  // The button first, so Tab goes from it into the items.
+  return [more, menu];
 }
 
 /** Toggle dark/light and persist it. The load-time bootstrap (index.html) reads
@@ -128,32 +199,54 @@ function buildHelp(): HTMLElement {
   overlay.innerHTML = `
     <div class="help-card" role="dialog" aria-modal="true" aria-label="Help">
       <button class="help-close" type="button" aria-label="Close help" title="Close">×</button>
-      <h1>MD-Docs</h1>
+      <div class="help-head">
+        <button class="md-tool-btn help-back" type="button" aria-label="Back to editor"
+          title="Back to editor">${ico(faArrowLeft)}</button>
+        <h1>MD-Docs</h1>
+      </div>
       <p>A collaborative markdown editor. Everyone who opens this app in the chat
          edits the <strong>same document</strong> — changes sync to all peers, and
          the <strong>first line becomes the document's title</strong> shown in chat.</p>
       <h2>Markdown syntax</h2>
       <table>
-        <tr><td><code># Heading</code></td><td>Heading (use the ${ico(faHeading)} button to cycle levels)</td></tr>
-        <tr><td><code>**bold**</code></td><td>Bold text (${ico(faBold)})</td></tr>
-        <tr><td><code>*italic*</code></td><td>Italic text (${ico(faItalic)})</td></tr>
-        <tr><td><code>- item</code></td><td>Bullet list (${ico(faListUl)})</td></tr>
-        <tr><td><code>- [ ] task</code></td><td>Checklist item (${ico(faSquareCheck)}); click the box to tick it</td></tr>
-        <tr><td><code>&gt; quote</code></td><td>Block quote</td></tr>
-        <tr><td><code>---</code></td><td>Separator line (three or more minuses on their own line)</td></tr>
-        <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
-        <tr><td><code>[text](url)</code></td><td>Link</td></tr>
-        <tr><td><code>$$</code><br><code>x^2</code><br><code>$$</code></td><td>Math (LaTeX), with <code>$$</code> on the lines above and below</td></tr>
+        <tbody>
+          <tr><td><code># Heading</code></td><td>Heading (use the ${ico(faHeading)} button to cycle levels)</td></tr>
+          <tr><td><code>**bold**</code></td><td>Bold text (${ico(faBold)})</td></tr>
+          <tr><td><code>*italic*</code></td><td>Italic text (${ico(faItalic)})</td></tr>
+          <tr><td><code>~~text~~</code></td><td>Strikethrough</td></tr>
+          <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
+          <tr><td><code>[text](url)</code></td><td>Link</td></tr>
+        </tbody>
+        <tbody>
+          <tr><td><code>- item</code></td><td>Bullet list (${ico(faListUl)})</td></tr>
+          <tr><td><code>1. item</code></td><td>Numbered list</td></tr>
+          <tr><td><code>- [ ] task</code></td><td>Checklist item (${ico(faSquareCheck)}); click the box to tick it</td></tr>
+        </tbody>
+        <tbody>
+          <tr><td><code>&gt; quote</code></td><td>Block quote</td></tr>
+          <tr><td><pre><code>\`\`\`js&#10;let x = 1&#10;\`\`\`</code></pre></td><td>Code block, highlighted for the language after <code>\`\`\`</code> (js, py, sh, …)</td></tr>
+          <tr><td><pre><code>| a | b |&#10;|---|---|&#10;| 1 | 2 |</code></pre></td><td>Table, with a <code>|---|</code> line under the header row</td></tr>
+          <tr><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX), with <code>$$</code> on the lines above and below</td></tr>
+          <tr><td><code>---</code></td><td>Separator line (three or more minuses on their own line)</td></tr>
+        </tbody>
       </table>
       <h2>Toolbar</h2>
-      <p>Use ${ico(faIndent)} / ${ico(faOutdent)} to indent or outdent list items,
-         ${ico(faClockRotateLeft)} to browse and restore past versions,
-         ${ico(faMoon)} / ${ico(faSun)} to switch theme, and ${ico(faCircleQuestion)}
-         to reopen this help.</p>
+      <table class="help-tools">
+        <tr><td>${ico(faIndent)}${ico(faOutdent)}</td><td>Indent or outdent a list item</td></tr>
+        <tr><td>${ico(faBookOpen)}${ico(faPen)}</td><td>Read (links open on tap, nothing can change) or edit</td></tr>
+        <tr><td>${ico(faClockRotateLeft)}</td><td>Browse and restore past versions</td></tr>
+        <tr><td>${ico(faMoon)}${ico(faSun)}</td><td>Dark or light theme</td></tr>
+        <tr><td>${ico(faCircleQuestion)}</td><td>This help</td></tr>
+      </table>
+      <p class="help-note">On a phone or in a narrow window, history, theme and
+         help sit behind ${ico(faEllipsisVertical)}.</p>
     </div>`;
 
   const close = (): void => { overlay.hidden = true; };
-  overlay.querySelector('.help-close')!.addEventListener('click', close);
+  // × on the dialog, ← on the full screen a narrow display gets (main.css).
+  for (const btn of overlay.querySelectorAll('.help-close, .help-back')) {
+    btn.addEventListener('click', close);
+  }
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !overlay.hidden) close();

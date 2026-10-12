@@ -1,5 +1,12 @@
-import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView, keymap, drawSelection, dropCursor } from '@codemirror/view';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import {
+  EditorView,
+  keymap,
+  drawSelection,
+  dropCursor,
+  type Command,
+  type KeyBinding,
+} from '@codemirror/view';
 import {
   defaultKeymap,
   history,
@@ -8,12 +15,26 @@ import {
 } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
-import { livePreview } from './live-preview';
-import { codeLanguages } from './live-preview/code-languages';
-import { mathBlock } from './live-preview/math';
-import { markdownKeymap } from './commands';
-import { hidePeerFlagsWhenCovered } from './peer-flags';
-import type { Collab } from './collab';
+import { livePreview } from './live-preview/index.ts';
+import { codeLanguages } from './live-preview/code-languages.ts';
+import { mathBlock } from './live-preview/math.ts';
+import { markdownKeymap } from './commands.ts';
+import { hidePeerFlagsWhenCovered } from './peer-flags.ts';
+import type { Collab } from './collab.ts';
+
+// Read mode is local to this viewer: peers keep editing and their changes keep
+// arriving (readOnly only stops input, not dispatch). The live preview reads
+// the same flag to stop revealing source on the caret's line.
+const readMode = new Compartment();
+
+// CodeMirror's own commands stand down in a read-only state; ours and
+// y-codemirror's undo/redo don't, and in read mode a key can still reach the
+// keymap from a focused task checkbox. Guard every binding that edits.
+function editing(bindings: readonly KeyBinding[]): KeyBinding[] {
+  const guard = (run?: Command): Command | undefined =>
+    run && ((view) => !view.state.readOnly && run(view));
+  return bindings.map((b) => ({ ...b, run: guard(b.run), shift: guard(b.shift) }));
+}
 
 /**
  * Build the base set of CodeMirror extensions shared by every editor instance.
@@ -26,8 +47,16 @@ export function baseExtensions(collab?: Collab): Extension[] {
   const undo = collab
     ? [
       yCollab(collab.ytext, collab.awareness, { undoManager: collab.undoManager }),
-      keymap.of(yUndoManagerKeymap),
+      keymap.of(editing(yUndoManagerKeymap)),
       hidePeerFlagsWhenCovered, // mobile: keep peer flags off the local cursor
+      // y-codemirror publishes our caret while the editor has focus and never
+      // withdraws it. A reader has no caret, so take it off peers' screens on
+      // the way into read mode; the next focus in edit mode publishes it again.
+      EditorView.updateListener.of((u) => {
+        if (u.state.readOnly && !u.startState.readOnly) {
+          collab.awareness.setLocalStateField('cursor', null);
+        }
+      }),
     ]
     : [history(), keymap.of(historyKeymap)];
 
@@ -36,12 +65,22 @@ export function baseExtensions(collab?: Collab): Extension[] {
     drawSelection(),
     dropCursor(),
     EditorView.lineWrapping,
-    keymap.of([...markdownKeymap, ...defaultKeymap, indentWithTab]),
+    keymap.of([...editing(markdownKeymap), ...defaultKeymap, indentWithTab]),
     // addKeymap:false — our markdownKeymap binds Enter/Backspace instead (with
     // tight-list continuation); see commands.ts.
     markdown({ base: markdownLanguage, codeLanguages, addKeymap: false, extensions: [mathBlock] }),
     livePreview(),
+    readMode.of([]),
   ];
+}
+
+/** Switch this viewer between reading and editing. */
+export function setReadMode(view: EditorView, on: boolean): void {
+  view.dispatch({
+    effects: readMode.reconfigure(
+      on ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
+    ),
+  });
 }
 
 /** Create and mount an editor into `parent`. */

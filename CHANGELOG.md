@@ -34,6 +34,12 @@ All notable changes to MD-Docs are documented here. This project adheres to
   by putting its bug back and watching the test fail.
 - A unit test for a large document's realtime catch-up, which once overflowed
   the call stack by spreading the frame into call arguments.
+- Read mode. The book button in the toolbar switches the editor to reading:
+  no keyboard, no caret, and no line turns back into its markdown, so a tap on
+  a link opens it instead of starting an edit. The formatting buttons step
+  aside while reading; the pen button switches back. Read mode is local to
+  you: peers keep editing and their changes keep arriving, and your cursor
+  leaves their screens until you edit again. (#32)
 
 ### Changed
 - The `.xdc` is about half the size: 400 KB → 210 KB, with no feature removed.
@@ -45,6 +51,19 @@ All notable changes to MD-Docs are documented here. This project adheres to
     fences already bundle (−34 KB), so they are highlighted the same way as
     those fences. `<style>` blocks and auto-closing HTML tags are unchanged.
   - The JavaScript is minified with terser instead of esbuild (−5 KB).
+- On a phone, or any screen under 480px wide, history, theme and help fold
+  into a ⋮ menu at the end of the toolbar, so the formatting row fits a 375px
+  iPhone SE again. On an even narrower screen the row scrolls under the menu
+  button, which stays pinned to the edge. (#32)
+- On a screen up to 560px wide, help opens as a full screen with a back
+  button, like the history view, instead of a card over the editor. Wider
+  screens keep the dialog. (#32)
+- Help's syntax list is grouped into text, lists and blocks, a little apart,
+  and adds what the editor already rendered but the help never mentioned:
+  strikethrough, numbered lists, fenced code blocks (with the language name
+  that picks their highlighting) and tables. Multi-line examples (code, tables, math)
+  show as one block, and the toolbar's buttons are a table instead of one
+  long sentence. (#32)
 
 ### Fixed
 - `npm test` dropped unit-test results: each run reported a different subset,
@@ -54,6 +73,13 @@ All notable changes to MD-Docs are documented here. This project adheres to
   realtime tests never destroyed their Yjs `Awareness`, whose timer kept the
   process alive. They do now, and the flag is gone. CI's `check` job now gives
   up after 10 minutes, in case a test leaks a timer again.
+- The history viewer revealed a line's markdown wherever you selected text,
+  and ticking a task box there changed the version on screen. A read-only
+  view now reveals nothing and leaves its tasks alone. (#32)
+- In a desktop window too narrow for the toolbar, the toolbar showed a
+  vertical scrollbar beside its horizontal one: the horizontal scrollbar took
+  its height out of the bar and squeezed the buttons. The bar now grows by
+  the scrollbar's height instead. (#32)
 
 ## [0.3.1] - 2026-09-19
 

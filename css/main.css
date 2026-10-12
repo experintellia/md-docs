@@ -79,11 +79,15 @@ html, body {
   display: flex;
   align-items: center;
   gap: 2px;
-  height: var(--toolbar-height);
+  /* min-, not height: when the row overflows, a classic (non-overlay)
+     scrollbar adds its height here instead of squeezing the buttons, which
+     overflowed into a vertical scrollbar of their own. */
+  min-height: var(--toolbar-height);
   padding: 0 6px;
   background: var(--toolbar-bg);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
+  overflow-y: hidden;
   flex: 0 0 auto;
 }
 
@@ -130,6 +134,61 @@ html, body {
 /* Pushes the trailing utility buttons (theme, help) to the right edge. */
 .md-tool-spacer { flex: 1 1 auto; }
 
+/* Read mode: the editing commands have nothing to act on. */
+#toolbar.reading .md-tool-cmd { display: none; }
+
+/* The trailing group: the read toggle, then history/theme/help — inline here,
+   folded behind the "more" button below. */
+.md-tool-end, .md-tool-menu { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.md-tool-more { display: none; }
+
+/* Fold history/theme/help into a menu on touch, and wherever the full row would
+   not fit (~430px: 11 buttons at 36px plus gaps).
+   ponytail: a fixed breakpoint; raise it when the toolbar gains buttons. */
+@media (pointer: coarse), (max-width: 479px) {
+  /* Pinned to the end, so on a very narrow screen the commands scroll under it.
+     Sticky makes it a stacking context, so its z-index (not the menu's) decides
+     what the menu covers: above #status, a z-index 5 flex item on touch. */
+  .md-tool-end { position: sticky; right: 0; z-index: 10; background: var(--toolbar-bg); }
+  .md-tool-more { display: inline-block; }
+  /* Fixed, because #toolbar scrolls sideways and would clip an absolute menu.
+     On touch #app carries a transform (src/ui/toolbar.ts), which makes it the
+     containing block instead of the viewport; the offsets hold either way. */
+  .md-tool-menu {
+    display: none;
+    position: fixed;
+    top: calc(var(--toolbar-height) + 4px);
+    right: 6px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    /* A short screen (landscape, keyboard up) scrolls the menu, not clips it. */
+    max-height: calc(100% - var(--toolbar-height) - 8px);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .md-tool-menu.open { display: flex; }
+  .md-tool-menu .md-tool-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: auto;
+    padding: 10px 14px;
+    border-radius: 0;
+    font-size: 15px;
+    font-weight: 400;
+  }
+  .md-tool-menu .md-tool-btn::after { content: attr(aria-label); }
+}
+/* On touch the toolbar is at the bottom, so the menu opens upward. */
+@media (pointer: coarse) {
+  .md-tool-menu { top: auto; bottom: calc(var(--toolbar-height) + 4px); }
+}
+
 /* Help overlay — a centered modal card over a dimmed backdrop. */
 #help-overlay {
   position: fixed;
@@ -160,7 +219,22 @@ html, body {
 .help-card table { width: 100%; border-collapse: collapse; }
 .help-card td { padding: 4px 8px 4px 0; vertical-align: top; line-height: 1.4; }
 .help-card td:first-child { white-space: nowrap; }
+/* The syntax table's groups (text, lists, blocks), a little apart. */
+.help-card tbody + tbody tr:first-child td { padding-top: 14px; }
 .help-card svg { width: 1em; height: 1em; vertical-align: -0.125em; }
+/* A multi-line example (the math block) is one block, not a chip per line. */
+.help-card pre {
+  margin: 0;
+  padding: 2px 5px;
+  background: var(--code-bg);
+  border-radius: 4px;
+  line-height: 1.4;
+}
+.help-card pre code { padding: 0; background: none; }
+/* Toolbar section: an icon column, each pair of icons a little apart. */
+.help-tools td:first-child { width: 4em; font-size: 17px; }
+.help-tools svg + svg { margin-left: 8px; }
+.help-note { color: var(--muted); font-size: 14px; }
 .help-card code {
   padding: 1px 5px;
   background: var(--code-bg);
@@ -179,6 +253,37 @@ html, body {
   cursor: pointer;
 }
 .help-close:hover { color: var(--fg); }
+.help-back { display: none; }
+
+/* Narrow screens: a full screen with a back button, like the history view,
+   rather than a card floating over the editor. Same breakpoint as the card's
+   max-width and the history view's list/detail split. */
+@media (max-width: 560px) {
+  #help-overlay { padding: 0; }
+  .help-card {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    padding: 0 16px 16px;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .help-close { display: none; }
+  .help-head {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 -16px 8px;
+    padding: 6px 8px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .help-head h1 { margin: 0; font-size: 16px; }
+  .help-back { display: inline-block; }
+}
 
 /* In-app confirm dialog (replaces window.confirm, suppressed in the iOS webview).
    Reuses .help-card for the card chrome. */
