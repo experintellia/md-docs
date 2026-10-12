@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, afterEach } from 'node:test';
 import { strict as assert } from 'node:assert';
 import * as Y from 'yjs';
 import { Awareness, encodeAwarenessUpdate } from 'y-protocols/awareness';
@@ -10,6 +10,12 @@ import { connectRealtime } from './realtime.ts';
 // `data.subarray(1)`. No production code is touched.
 
 type Listener = (data: Uint8Array) => void;
+
+// An Awareness runs a setInterval until destroy(); left running, it keeps this
+// file's test process alive forever.
+const live: Awareness[] = [];
+const track = (a: Awareness): Awareness => (live.push(a), a);
+afterEach(() => live.splice(0).forEach((a) => a.destroy()));
 
 interface Harness {
   ydoc: Y.Doc;
@@ -38,7 +44,7 @@ function setup(withChannel = true): Harness {
   };
 
   const ydoc = new Y.Doc();
-  const awareness = new Awareness(ydoc);
+  const awareness = track(new Awareness(ydoc));
   connectRealtime(ydoc, awareness);
   return { ydoc, awareness, sent, fire: (data) => listener(data) };
 }
@@ -97,7 +103,7 @@ test('an awareness change is sent as an AWARENESS frame', () => {
 test('an incoming AWARENESS frame is routed without throwing', () => {
   const { awareness, fire } = setup();
   const peerDoc = new Y.Doc();
-  const peer = new Awareness(peerDoc);
+  const peer = track(new Awareness(peerDoc));
   peer.setLocalStateField('user', { name: 'Bob' });
   const frame = Uint8Array.of(1, ...encodeAwarenessUpdate(peer, [peer.clientID]));
 
@@ -159,7 +165,7 @@ test('the catch-up frame carries the existing document, not an empty one', () =>
   };
   const ydoc = new Y.Doc();
   ydoc.getText('codemirror').insert(0, 'already here');
-  connectRealtime(ydoc, new Awareness(ydoc));
+  connectRealtime(ydoc, track(new Awareness(ydoc)));
   void listener;
 
   const peer = new Y.Doc();

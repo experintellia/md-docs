@@ -28,6 +28,14 @@ All notable changes to MD-Docs are documented here. This project adheres to
     those fences. `<style>` blocks and auto-closing HTML tags are unchanged.
   - The JavaScript is minified with terser instead of esbuild (−5 KB).
 
+### Fixed
+- `npm test` silently dropped unit tests: each run reported a different subset
+  of the 165, mostly from the live-preview decoration tests, so a failing one
+  could go unnoticed. `--test-force-exit` ended the run before slower files had
+  reported; it was only there because the realtime tests never destroyed their
+  Yjs `Awareness`, whose timer kept the process alive. They do now, and the
+  flag is gone.
+
 ## [0.3.1] - 2026-09-19
 
 ### Fixed

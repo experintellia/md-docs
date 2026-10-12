@@ -211,9 +211,11 @@ realtime sends.
 
 `npm test` runs typecheck → eslint → unit tests, then CI builds. Unit tests use
 Node's built-in runner with native TS type-stripping (`node --test`, Node 24) —
-no test framework dependency. `--test-force-exit` is set because Yjs's
-`Awareness` holds an internal cleanup timer that otherwise keeps the runner
-alive. Coverage by layer:
+no test framework dependency. A test that creates a Yjs `Awareness` must
+`destroy()` it: its internal cleanup timer otherwise keeps that file's process
+alive and `npm test` hangs. Don't reach for `--test-force-exit` instead — with a
+process per test file it exits as soon as the tests reported *so far* are done,
+silently dropping the rest of a slower file's results. Coverage by layer:
 
 - **Pure logic** — `titleFromMarkdown` (chat title parsing).
 - **Collaboration (CRDT)** — peer convergence, the late-joiner *seed invariant*

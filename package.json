@@ -8,7 +8,7 @@
         "build": "vite build",
         "typecheck": "tsc --noEmit",
         "test": "npm run typecheck && npm run check && npm run test:unit",
-        "test:unit": "node --test --test-force-exit \"src/**/*.test.ts\"",
+        "test:unit": "node --test \"src/**/*.test.ts\"",
         "test:e2e": "playwright test",
         "check": "eslint . --ext .ts",
         "fix": "eslint . --ext .ts --fix",
