@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import { test, expect, jetsam, serveMockWebxdc, UPDATES_KEY } from './fixtures';
-import type { BrowserType } from '@playwright/test';
+import { errors, type BrowserType } from '@playwright/test';
 
 // The poison-batch guard from #18, end to end, with the real 91-byte batch from
 // #19: decoding it makes the engine run out of heap, which aborts the process
@@ -34,7 +34,11 @@ type Outcome = 'opened' | 'aborted' | 'hung';
 /** Start the app on `profile` and report how the launch ended. */
 async function launch(browserType: BrowserType, profile: string, args: string[] = []): Promise<Outcome> {
   const { baseURL, launchOptions } = test.info().project.use;
-  const context = await browserType.launchPersistentContext(profile, { ...launchOptions, baseURL, args });
+  const context = await browserType.launchPersistentContext(profile, {
+    ...launchOptions,
+    baseURL,
+    args: [...(launchOptions?.args ?? []), ...args],
+  });
   await serveMockWebxdc(context);
   // The log belongs to the messenger and outlives any crash of ours, but the
   // mock keeps it in the app's own localStorage: put it back if a crash took
@@ -44,20 +48,22 @@ async function launch(browserType: BrowserType, profile: string, args: string[] 
   }, [UPDATES_KEY, LOG]);
 
   const started = Date.now();
-  let aborted = false;
   const page = context.pages()[0] ?? await context.newPage();
   // A death ends the wait: not every engine fails a pending waitFor on it.
-  const died = new Promise<false>((resolve) => {
-    const die = (): void => { aborted = true; resolve(false); };
-    context.on('close', die); // single-process: the whole browser died
-    page.on('crash', die); // multi-process: just the renderer
+  const died = new Promise<Outcome>((resolve) => {
+    context.on('close', () => resolve('aborted')); // single-process: the whole browser died
+    page.on('crash', () => resolve('aborted')); // multi-process: just the renderer
   });
   await page.goto('/', { waitUntil: 'commit' }).catch(() => {});
-  const opened = await Promise.race([
-    page.getByText(TEXT).waitFor({ timeout: 120_000 }).then(() => true, () => false),
+  const outcome = await Promise.race([
+    // Only a timeout means nothing happened; any other failure is the target
+    // dying, whichever of the two the engine reports first.
+    page.getByText(TEXT).waitFor({ timeout: 120_000 }).then(
+      (): Outcome => 'opened',
+      (err): Outcome => (err instanceof errors.TimeoutError ? 'hung' : 'aborted'),
+    ),
     died,
   ]);
-  const outcome = opened ? 'opened' : aborted ? 'aborted' : 'hung';
   console.log(`${browserType.name()} launch ${outcome} after ${((Date.now() - started) / 1000).toFixed(1)}s`);
   // A graceful close lets a surviving browser process flush storage, as the
   // messenger's would on its own a few seconds later.
@@ -77,7 +83,7 @@ test.describe('poison batch (#19, #22)', () => {
     // survives the abort and commits the note.
     // A small heap makes V8 abort sooner; JavaScriptCore has no such cap, and
     // macOS swaps where iOS would kill the page, so jetsam does it here.
-    const args = browserName === 'chromium' ? ['--js-flags=--max-old-space-size=128'] : [];
+    const args = browserName === 'chromium' ? ['--js-flags=--max-old-space-size=32'] : [];
     const stop = browserName === 'webkit' ? jetsam() : () => {};
     const profile = info.outputPath('profile');
 
@@ -104,8 +110,9 @@ test.describe('poison batch (#19, #22)', () => {
     // The case #22 could not verify off-device. Chromium commits localStorage
     // about 5s after a write (measured: a note survives an abort 5.3s after it
     // was written, not one 4.7s after); out of process, the browser side
-    // commits it anyway, but here it dies with the renderer. With a 128 MB heap
-    // the abort lands ~1.5s after the note, so the note is lost, the relaunch
+    // commits it anyway, but here it dies with the renderer. With a 32 MB heap
+    // the abort lands well under a second after the note locally (slower on
+    // CI runners; the log prints it), so the note is lost, the relaunch
     // replays the poison again, and the document stays bricked. Given a big
     // enough heap (or a slow enough device) to take longer than the window, the
     // note survives and the guard works — it is a race against the commit.
@@ -113,10 +120,12 @@ test.describe('poison batch (#19, #22)', () => {
     // This pins the current behaviour. When it starts failing because the
     // relaunch opens, the guard has been made to hold here too: flip the
     // expectation and close #22.
-    const args = ['--single-process', '--js-flags=--max-old-space-size=128'];
+    const args = ['--single-process', '--js-flags=--max-old-space-size=32'];
     const profile = info.outputPath('profile');
 
     expect(await launch(browserType, profile, args)).toBe('aborted');
+    // If this flips, first check the logged abort time: the premise is an
+    // abort well inside the ~5s window, and a slow enough runner breaks it.
     expect(await launch(browserType, profile, args), 'the note did not survive, so neither did the relaunch')
       .toBe('aborted');
   });

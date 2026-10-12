@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { test as base, type BrowserContext } from '@playwright/test';
 
 export { expect } from '@playwright/test';
@@ -7,17 +8,22 @@ export { expect } from '@playwright/test';
  * Stand in for iOS jetsam: SIGKILL any WebKit content process that outgrows
  * `budgetMB`. iOS has no swap and kills a WebContent process the moment it
  * goes over its memory budget; macOS swaps instead, so a page that allocates
- * without bound grinds on for minutes rather than dying. Returns a stop
- * function.
+ * without bound grinds on for minutes rather than dying. Only Playwright's own
+ * WebKit is touched — never Safari or another app's. Returns a stop function.
  */
 export function jetsam(budgetMB = 1024): () => void {
   const seen = new Set<string>();
   const timer = setInterval(() => {
-    const ps = execFileSync('ps', ['-axo', 'pid=,rss=,command='], { encoding: 'utf8' });
+    let ps: string;
+    try {
+      ps = execFileSync('ps', ['-axo', 'pid=,rss=,command='], { encoding: 'utf8' });
+    } catch {
+      return; // a failed listing just skips this tick
+    }
     for (const line of ps.split('\n')) {
       const [, pid, rss, command] = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/) ?? [];
       // WebContent on macOS, WebKitWebProcess on Linux.
-      if (!command || !/WebContent|WebKitWebProcess/.test(command)) continue;
+      if (!command || !/ms-playwright\/webkit-\S*(WebContent|WebKitWebProcess)/.test(command)) continue;
       if (!seen.has(pid)) {
         seen.add(pid);
         console.log(`jetsam: watching ${pid} ${command}`);
@@ -40,9 +46,12 @@ export function jetsam(budgetMB = 1024): () => void {
 // it keeps the update log in localStorage and relays it between tabs with
 // `storage` events, so every page in one context is a peer on one chat, and a
 // reload replays the log like a relaunch does.
+const MOCK_WEBXDC = fileURLToPath(
+  new URL('../node_modules/@webxdc/vite-plugins/src/webxdc.js', import.meta.url),
+);
 export async function serveMockWebxdc(context: BrowserContext): Promise<void> {
   await context.route('**/webxdc.js', (route) =>
-    route.fulfill({ path: 'node_modules/@webxdc/vite-plugins/src/webxdc.js' }));
+    route.fulfill({ path: MOCK_WEBXDC }));
 }
 
 /** The mock reads the peer's identity from the URL hash. */
