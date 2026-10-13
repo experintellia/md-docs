@@ -41,7 +41,10 @@ export function utilButton(icon: () => Node, title: string): HTMLButtonElement {
  * stay put. A keyboard press is a click with no mousedown before it. Screen
  * readers send mousedown and then click, so a click right after a mousedown is
  * not run again; tracked with a flag, as `detail` is 0 for those too. The
- * flag clears when the press ends elsewhere, since no click follows that.
+ * flag clears when the press ends elsewhere, since no click follows that, and
+ * on a keydown: a press can end without a click even on the element (a
+ * checkbox CodeMirror re-inserts mid-press), and a keyboard press starts with
+ * a keydown where a screen reader's sends none.
  *
  * A click that runs nothing is cancelled: that one, or one where `run`
  * returns false. On a checkbox that keeps the native box from flipping on its
@@ -60,6 +63,7 @@ export function onPress(el: HTMLElement, run: () => boolean | void): void {
       if (!el.contains(up.target as Node)) pressed = false;
     }, { once: true, capture: true });
   });
+  el.addEventListener('keydown', () => { pressed = false; });
   el.addEventListener('click', (e) => {
     if (pressed || run() === false) e.preventDefault();
     pressed = false;

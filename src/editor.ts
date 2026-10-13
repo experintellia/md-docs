@@ -28,8 +28,7 @@ import type { Collab } from './collab.ts';
 const readMode = new Compartment();
 
 // CodeMirror's own commands stand down in a read-only state; ours and
-// y-codemirror's undo/redo don't, and in read mode a key can still reach the
-// keymap from a focused task checkbox. Guard every binding that edits.
+// y-codemirror's undo/redo don't, so guard every binding that edits.
 function editing(bindings: readonly KeyBinding[]): KeyBinding[] {
   const guard = (run?: Command): Command | undefined =>
     run && ((view) => !view.state.readOnly && run(view));

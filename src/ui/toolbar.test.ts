@@ -121,6 +121,13 @@ test('a command button runs once per press, from a pointer, keyboard or screen r
   document.body.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true }));
   click();
   assert.equal(doc(), '**ab**', 'once on mousedown, once on the keyboard');
+  // A press can end with no click even on the button (a checkbox re-inserted
+  // mid-press): the next keyboard press, which starts with a keydown, runs.
+  down();
+  bold.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true }));
+  bold.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  click();
+  assert.equal(doc(), '**ab**', 'once on mousedown, once on the keyboard');
   // A right-click does nothing, and leaves the keyboard working.
   bold.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 2 }));
   assert.equal(doc(), '**ab**');

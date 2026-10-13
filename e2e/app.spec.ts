@@ -59,6 +59,13 @@ test('the toolbar and checkboxes work from the keyboard', async ({ page, isMobil
   await expect(box).toBeFocused();
   await page.keyboard.press('Space');
   await expect(box).not.toBeChecked();
+  // A mouse press ticks on mousedown, and CodeMirror re-inserts the box, so
+  // no click follows. The keyboard must still work on it afterwards.
+  await box.click();
+  await expect(box).toBeChecked();
+  await box.focus();
+  await page.keyboard.press('Space');
+  await expect(box).not.toBeChecked();
   // Tab leaves the box; it doesn't indent the line at the editor's caret.
   const before = await page.locator('.cm-content').innerText();
   await page.keyboard.press('Tab');
