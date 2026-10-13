@@ -34,3 +34,38 @@ export function utilButton(icon: () => Node, title: string): HTMLButtonElement {
   btn.setAttribute('aria-label', title);
   return btn;
 }
+
+/**
+ * Run `run` when `el` is pressed, without taking focus from the editor.
+ * A pointer acts on mousedown, preventDefault'ed so the caret and selection
+ * stay put. A keyboard press is a click with no mousedown before it. Screen
+ * readers send mousedown and then click, so a click right after a mousedown is
+ * not run again; tracked with a flag, as `detail` is 0 for those too. The
+ * flag clears when the press ends elsewhere, since no click follows that, and
+ * on a keydown: a press can end without a click even on the element (a
+ * checkbox CodeMirror re-inserts mid-press), and a keyboard press starts with
+ * a keydown where a screen reader's sends none.
+ *
+ * A click that runs nothing is cancelled: that one, or one where `run`
+ * returns false. On a checkbox that keeps the native box from flipping on its
+ * own; a click that does run keeps its flip, which is the new state.
+ */
+export function onPress(el: HTMLElement, run: () => boolean | void): void {
+  let pressed = false;
+  el.addEventListener('mousedown', (e) => {
+    if (e.button > 0) return; // a right or middle press sends no click
+    e.preventDefault();
+    pressed = true;
+    run();
+    // Released off the element: no click comes. Released on it, even after
+    // wandering off and back, the click does, and must not run again.
+    document.addEventListener('mouseup', (up) => {
+      if (!el.contains(up.target as Node)) pressed = false;
+    }, { once: true, capture: true });
+  });
+  el.addEventListener('keydown', () => { pressed = false; });
+  el.addEventListener('click', (e) => {
+    if (pressed || run() === false) e.preventDefault();
+    pressed = false;
+  });
+}

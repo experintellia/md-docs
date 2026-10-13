@@ -94,6 +94,47 @@ test('Italic button wraps the selection in *…*', () => {
   assert.equal(doc(), '*ab*');
 });
 
+test('a command button runs once per press, from a pointer, keyboard or screen reader', () => {
+  const container = reset();
+  const { view, doc } = makeView('ab', 0, 2);
+  mountToolbar(container, view);
+  const bold = btnByTitle(container, 'Bold');
+  const down = (): boolean => bold.dispatchEvent(
+    new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }),
+  );
+  const click = (): boolean => bold.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  // Enter / Space: a click alone.
+  click();
+  assert.equal(doc(), '**ab**');
+  // A pointer, or a screen reader's activation (detail 0 as well): mousedown, then click.
+  down();
+  click();
+  assert.equal(doc(), 'ab', 'unbolded once, not toggled back');
+  // Pressed, wandered off and back, released on the button: one run.
+  down();
+  bold.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true }));
+  click();
+  assert.equal(doc(), '**ab**');
+  // Pressed, released elsewhere: no click comes, and the next keyboard press
+  // still runs.
+  down();
+  document.body.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true }));
+  click();
+  assert.equal(doc(), '**ab**', 'once on mousedown, once on the keyboard');
+  // A press can end with no click even on the button (a checkbox re-inserted
+  // mid-press): the next keyboard press, which starts with a keydown, runs.
+  down();
+  bold.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true }));
+  bold.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  click();
+  assert.equal(doc(), '**ab**', 'once on mousedown, once on the keyboard');
+  // A right-click does nothing, and leaves the keyboard working.
+  bold.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 2 }));
+  assert.equal(doc(), '**ab**');
+  click();
+  assert.equal(doc(), 'ab');
+});
+
 test('theme toggle adds/removes dark class and persists color-schema', () => {
   const container = reset();
   const { view } = makeView('hi', 0, 0);
@@ -277,4 +318,26 @@ test('Escape keydown closes an open help overlay', () => {
 
   document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(overlay.hidden, true);
+});
+
+test('help holds focus while open and hands it back to ⋮ when it closes', () => {
+  const container = reset();
+  document.body.append(container);
+  try {
+    const { view } = makeView('hi', 0, 0);
+    mountToolbar(container, view);
+    const help = btnByTitle(container, 'Help & markdown syntax');
+    help.focus();
+    help.click();
+    const overlay = document.querySelector<HTMLElement>('#help-overlay')!;
+    assert.ok(document.activeElement === overlay.querySelector('.help-card'), 'focus moves in');
+    assert.equal(container.inert, true, 'the page behind is out of reach');
+
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(container.inert, false);
+    // The menu folded away behind ⋮ when help opened; ⋮ is what is left to land on.
+    assert.ok(document.activeElement === btnByTitle(container, 'More'), 'focus comes back');
+  } finally {
+    container.remove();
+  }
 });

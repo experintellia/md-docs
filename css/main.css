@@ -2,7 +2,9 @@
   color-scheme: light;
   --bg: #ffffff;
   --fg: #1f2328;
-  --muted: #6e7781;
+  /* 4.5:1 or better on every background it lands on (code blocks, the
+     selected history row); #6e7781 was 4.0 on code. */
+  --muted: #59636e;
   --border: #d0d7de;
   --accent: #2563eb;
   --toolbar-bg: #f6f8fa;
@@ -19,14 +21,19 @@
      theme swap has to happen here. */
   --tok-keyword: #cf222e;
   --tok-string: #0a3069;
-  --tok-comment: #6e7781;
+  --tok-comment: #59636e;
   --tok-number: #0550ae;
   --tok-function: #8250df;
   --tok-type: #953800;
   --tok-property: #0550ae;
   --tok-operator: #0550ae;
-  --tok-meta: #6e7781;
+  --tok-meta: #59636e;
   --tok-invalid: #82071e;
+  --add: #116329;
+  --del: #a40e26;
+  --restored: #bc4c00;
+  /* Text and ticks drawn on --accent. */
+  --on-accent: #ffffff;
 }
 
 html.dark {
@@ -50,9 +57,24 @@ html.dark {
   --tok-operator: #79c0ff;
   --tok-meta: #9aa0a6;
   --tok-invalid: #ffa198;
+  --add: #3fb950;
+  --del: #ff7b72;
+  --restored: #e8830c;
+  /* White on the light-blue accent is 2.4:1. */
+  --on-accent: #1e1e1e;
 }
 
 * { box-sizing: border-box; }
+
+/* The root text size is the system's: Dynamic Type in iOS webviews (17px at
+   the default setting, Apple's body size), the text-scale meta in index.html
+   on Android. Everything else is in rem/em so it follows; only the icon-only
+   toolbar buttons stay in px, so the bar keeps its size. The shorthand also
+   sets a family, which html, body below replaces. -webkit-touch-callout
+   narrows it to iOS: desktop Safari knows the keyword too, at 13px. */
+@supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
+  html { font: -apple-system-body; }
+}
 
 html, body {
   margin: 0;
@@ -179,7 +201,7 @@ html, body {
     height: auto;
     padding: 10px 14px;
     border-radius: 0;
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 400;
   }
   .md-tool-menu .md-tool-btn::after { content: attr(aria-label); }
@@ -213,8 +235,11 @@ html, body {
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
-.help-card h1 { margin: 0 0 8px; font-size: 22px; }
-.help-card h2 { margin: 20px 0 8px; font-size: 15px; color: var(--muted); }
+/* Focused on open so a screen reader starts at the top; no ring around the
+   whole card for that. */
+.help-card:focus { outline: none; }
+.help-card h1 { margin: 0 0 8px; font-size: 1.375rem; }
+.help-card h2 { margin: 20px 0 8px; font-size: 0.9375rem; color: var(--muted); }
 .help-card p { margin: 8px 0; line-height: 1.5; }
 .help-card table { width: 100%; border-collapse: collapse; }
 .help-card td { padding: 4px 8px 4px 0; vertical-align: top; line-height: 1.4; }
@@ -232,14 +257,14 @@ html, body {
 }
 .help-card pre code { padding: 0; background: none; }
 /* Toolbar section: an icon column, each pair of icons a little apart. */
-.help-tools td:first-child { width: 4em; font-size: 17px; }
+.help-tools td:first-child { width: 4em; font-size: 1.0625rem; }
 .help-tools svg + svg { margin-left: 8px; }
-.help-note { color: var(--muted); font-size: 14px; }
+.help-note { color: var(--muted); font-size: 0.875rem; }
 .help-card code {
   padding: 1px 5px;
   background: var(--code-bg);
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .help-close {
   position: absolute;
@@ -248,7 +273,7 @@ html, body {
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 24px;
+  font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
 }
@@ -281,7 +306,7 @@ html, body {
     background: var(--bg);
     border-bottom: 1px solid var(--border);
   }
-  .help-head h1 { margin: 0; font-size: 16px; }
+  .help-head h1 { margin: 0; font-size: 1rem; }
   .help-back { display: inline-block; }
 }
 
@@ -309,7 +334,7 @@ html, body {
   font: inherit;
   cursor: pointer;
 }
-.confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
 #editor {
   flex: 1 1 auto;
@@ -334,7 +359,7 @@ html, body {
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
 }
-.hist-header h1 { margin: 0; font-size: 16px; }
+.hist-header h1 { margin: 0; font-size: 1rem; }
 .hist-footer {
   display: flex;
   align-items: center;
@@ -345,12 +370,13 @@ html, body {
 .hist-footer-meta {
   flex: 1 1 auto;
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* px, like the toolbar's icons: the glyphs are icons, in a fixed-height button. */
 .hist-footer button { font-size: 24px; line-height: 1; padding: 4px 12px; }
 .hist-footer button:disabled { opacity: 0.35; cursor: default; }
 /* Read-only viewer: keep the text selectable but with no blinking caret. */
@@ -374,19 +400,19 @@ html, body {
 }
 .hist-row:hover { background: rgba(127, 127, 127, 0.1); }
 .hist-row.selected { background: rgba(127, 127, 127, 0.2); }
-.hist-when { font-size: 13px; }
+.hist-when { font-size: 0.8125rem; }
 .hist-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .hist-who { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hist-diff { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-.hist-add { color: #1a7f37; }
-.hist-del { color: #cf222e; }
-.hist-restored-ico { color: #e8830c; }
+.hist-add { color: var(--add); }
+.hist-del { color: var(--del); }
+.hist-restored-ico { color: var(--restored); }
 .hist-restored-ico svg { width: 0.9em; height: 0.9em; vertical-align: -0.12em; }
 .hist-viewer { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .hist-cm { flex: 1 1 auto; min-height: 0; overflow: auto; }
@@ -394,7 +420,7 @@ html, body {
 .hist-banner {
   flex: 0 0 auto;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   background: var(--code-bg);
   color: var(--muted);
   border-bottom: 1px solid var(--border);
@@ -403,7 +429,10 @@ html, body {
 
 /* View-mode menu (Rendered / Source / Diff). */
 .hist-mode { position: relative; }
-.hist-mode > [data-act="mode"] { width: auto; padding: 0 8px; font-size: 13px; }
+/* height auto: it carries text, which grows with the system text size. */
+.hist-mode > [data-act="mode"] {
+  width: auto; height: auto; min-height: 32px; padding: 0 8px; font-size: 0.8125rem;
+}
 .hist-menu {
   position: absolute;
   top: 100%;
@@ -447,8 +476,8 @@ html, body {
   line-height: 1.6;
 }
 .hist-diff-pane[hidden] { display: none; }
-.hist-diff-pane del { background: rgba(207, 34, 46, 0.15); color: #cf222e; text-decoration: line-through; }
-.hist-diff-pane ins { background: rgba(26, 127, 55, 0.15); color: #1a7f37; text-decoration: none; }
+.hist-diff-pane del { background: rgba(207, 34, 46, 0.15); color: var(--del); text-decoration: line-through; }
+.hist-diff-pane ins { background: rgba(26, 127, 55, 0.15); color: var(--add); text-decoration: none; }
 
 /* Narrow screens: one pane at a time. Show the list; a picked row flips the
    panel to .detail, swapping in the content pane (with its footer). The header
@@ -469,7 +498,7 @@ html, body {
   right: 8px;
   bottom: 6px;
   z-index: 5;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--muted);
   pointer-events: none;
 }

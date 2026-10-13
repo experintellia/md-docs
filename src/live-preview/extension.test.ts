@@ -205,3 +205,30 @@ test('a formula too long to typeset quickly stays as its source', () => {
   assert.equal(el.textContent, tex);
   assert.equal(el.querySelector('.katex'), null);
 });
+
+test('a task checkbox ticks once per press, and keeps keyboard focus', () => {
+  const view = editor('first\n- [ ] task');
+  try {
+    const box = view.contentDOM.querySelector<HTMLInputElement>('.md-task-checkbox')!;
+    assert.equal(box.getAttribute('aria-label'), 'Done');
+    const click = (): boolean => box.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+    // Space on the focused box: a click alone.
+    box.focus();
+    click();
+
+    assert.equal(view.state.doc.toString(), 'first\n- [x] task');
+    assert.ok(view.contentDOM.querySelector('.md-task-checkbox') === box, 'the same box, updated');
+    assert.equal(box.checked, true);
+    assert.ok(document.activeElement === box, 'focus stays, so Space can untick it');
+    click();
+    assert.equal(view.state.doc.toString(), 'first\n- [ ] task');
+    // A tap or a screen reader's activation: mousedown, then click. Once.
+    box.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    click();
+    assert.equal(view.state.doc.toString(), 'first\n- [x] task');
+  } finally {
+    view.destroy();
+  }
+});

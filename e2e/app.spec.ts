@@ -40,6 +40,39 @@ test('a checkbox toggles its task', async ({ page, isMobile }) => {
   await expect(box).toBeChecked();
 });
 
+test('the toolbar and checkboxes work from the keyboard', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'no hardware keyboard to Tab with');
+  await page.keyboard.insertText('word');
+  await page.keyboard.press('ControlOrMeta+a');
+  // Enter on a focused button fires only click, never the mousedown a pointer sends.
+  await page.getByRole('button', { name: 'Bold' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.md-strong')).toContainText('word');
+
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.insertText('\n- [ ] task\n');
+  const box = page.getByRole('checkbox', { name: 'Done' });
+  await box.focus();
+  await page.keyboard.press('Space');
+  await expect(box).toBeChecked();
+  // Focus stays on the box, so Space again unticks it.
+  await expect(box).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(box).not.toBeChecked();
+  // A mouse press ticks on mousedown, and CodeMirror re-inserts the box, so
+  // no click follows. The keyboard must still work on it afterwards.
+  await box.click();
+  await expect(box).toBeChecked();
+  await box.focus();
+  await page.keyboard.press('Space');
+  await expect(box).not.toBeChecked();
+  // Tab leaves the box; it doesn't indent the line at the editor's caret.
+  const before = await page.locator('.cm-content').innerText();
+  await page.keyboard.press('Tab');
+  await expect(box).not.toBeFocused();
+  expect(await page.locator('.cm-content').innerText()).toBe(before);
+});
+
 test('a raw <script> block is highlighted like a ```js fence', async ({ page }) => {
   // lang-html highlights <script> through src/lang-javascript-lite.ts, which
   // stands in for lang-javascript (see AGENTS.md). If an upgraded lang-html
