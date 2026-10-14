@@ -130,6 +130,26 @@ after`);
   await expect(page.locator('.cm-content')).toContainText(String.raw`\Omega = \{ (1,2)`);
 });
 
+test('$$ in the middle of a line typesets below the text, as in Obsidian', async ({ page, isMobile }) => {
+  // The second runs over three lines of its paragraph, closed by a `$$` alone.
+  await page.keyboard.insertText('hello $$ E = mc^2 $$\n\nWe get $$\na^2\n$$\n\nafter');
+  const math = page.locator('.md-math');
+  await expect(math.locator('.katex')).toHaveCount(2);
+  await expect(math.locator('.katex-error')).toHaveCount(0);
+  for (const [i, word] of ['hello', 'We get'].entries()) {
+    const line = page.locator('.cm-line', { hasText: word });
+    const bottom = await line.evaluate((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el.firstChild!);
+      return range.getBoundingClientRect().bottom;
+    });
+    expect((await math.nth(i).boundingBox())!.y).toBeGreaterThanOrEqual(bottom - 1);
+  }
+  await press(math.nth(1).locator('.katex'), isMobile);
+  await expect(math).toHaveCount(1);
+  await expect(page.locator('.cm-content')).toContainText('a^2');
+});
+
 test('arrow keys move the caret the way a right-to-left line reads', async ({ page }) => {
   // The caret ends at the Arabic word's logical end, which is its left edge, so
   // ArrowRight steps back into the word and ArrowLeft forward. Without

@@ -176,3 +176,74 @@ test('an escaped dollar does not close a block, an escaped backslash does', () =
 test('`$$$` opens nothing', () => {
   assert.deepEqual(tree('$$$\na\n$$'), ['Paragraph', 'MathBlock', 'MathMark:$$']);
 });
+
+// Every TeX typeset, in order.
+function allRendered(doc: string, cursor = doc.length): string[] {
+  const s = state(doc, cursor);
+  const out: string[] = [];
+  buildMath(s).between(0, s.doc.length, (_f, _t, deco) => {
+    const widget = (deco.spec as { widget?: unknown }).widget;
+    if (widget instanceof MathWidget) out.push(widget.tex.trim());
+  });
+  return out;
+}
+
+// What Obsidian typesets as display math, with the cursor out of the way.
+test('`$$` in the middle of a paragraph is typeset there, as in Obsidian', () => {
+  const cases: [string, string[]][] = [
+    ['hello $$ E = mc^2 $$', ['E = mc^2']],
+    ['hello $$x$$ world', ['x']],
+    ['$$a$$ and $$b$$ are equal', ['a', 'b']],
+    ['- item $$x$$', ['x']],
+    ['# Title $$x$$', ['x']],
+    ['We get $$ a +\nb $$ here', ['a +\nb']],
+    ['We get $$\nE = mc^2\n$$', ['E = mc^2']],
+    ['> We get $$\n> a\n> $$', ['a']],
+    ['- We get $$\n  a\n  $$', ['a']],
+    ['a $$x \\$$ b', []],
+    ['a $$$x$$ b', []],
+    ['We get $$ f(x)\n    > 0 $$', ['f(x)\n    > 0']],
+    ['> We get $$ f(x)\n>     > 0 $$', ['f(x)\n     > 0']],
+    ['a `$$x$$` b', []],
+    ['a $$ $$ b', []],
+    ['| a | b |\n|---|---|\n| $$x$$ | y |', []],
+  ];
+  for (const [doc, tex] of cases) {
+    assert.deepEqual(allRendered(`${doc}\n\nend`), tex, JSON.stringify(doc));
+  }
+});
+
+test('its source shows while the cursor is in it', () => {
+  const doc = 'hello $$ E = mc^2 $$\n\nafter';
+  assert.deepEqual(allRendered(doc, 10), []);
+  assert.deepEqual(allRendered(doc, 1), ['E = mc^2'], 'beside it is not in it');
+});
+
+test('a `$$` alone after a paragraph still opens a block, unless it closes one', () => {
+  const block = ['Paragraph', 'MathBlock', 'MathMark:$$', 'MathText:y', 'MathMark:$$'];
+  assert.deepEqual(tree('text $$x$$\n$$\ny\n$$'), block);
+  assert.deepEqual(tree('text $$\ny\n$$'), ['Paragraph']);
+  // Typing on after the close keeps it the close, not the start of a block.
+  assert.deepEqual(tree('text $$\ny\n$$ and more\nbelow'), ['Paragraph']);
+  assert.deepEqual(allRendered('text $$\ny\n$$.\n\nend'), ['y']);
+  // A `$$` the paragraph's inline parse does not open is not one to close.
+  assert.deepEqual(tree('Wrap TeX in `$$`, like this:\n$$\ny\n$$'), block);
+  assert.deepEqual(tree('See <span title="$$">a</span>\n$$\ny\n$$'), block);
+  assert.deepEqual(tree('See [a](http://a/$$)\n$$\ny\n$$'), block);
+});
+
+test('a `$$` in a table cell does not swallow a `$$` block right under the table', () => {
+  // A price tier in a cell, then a formula with no blank line between.
+  const doc = '| Place | Price |\n|---|---|\n| Foo | $$ |\n$$\nx^2\n$$\n\nafter';
+  assert.deepEqual(tree(doc), ['Table', 'MathBlock', 'MathMark:$$', 'MathText:x^2', 'MathMark:$$', 'Paragraph']);
+  assert.deepEqual(tree('a | b\n--|--\nc | $$\n$$ y $$'), ['Table', 'MathBlock', 'MathMark:$$', 'MathText: y ', 'MathMark:$$']);
+});
+
+test('a paragraph of many `$$` lines still parses in linear time', () => {
+  // Each `$$` alone asks the inline parser about the paragraph so far.
+  for (const doc of ['a $$\n' + '$$\n'.repeat(20_000), 'a $$\n' + '$$ x $$\n'.repeat(20_000)]) {
+    const started = performance.now();
+    state(doc);
+    assert.ok(performance.now() - started < 2000, `${doc.slice(0, 12)}…: ${performance.now() - started} ms`);
+  }
+});
