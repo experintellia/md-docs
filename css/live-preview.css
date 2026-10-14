@@ -196,6 +196,27 @@
   width: 0;
   min-width: 100%;
   padding: 0.4em 6px;
+  /* KaTeX caps a size given in the TeX at maxSize, but not a negative one:
+     `\raisebox{-99999999em}{X}` made its line 33 million px tall, and the
+     rest of the note unreachable. */
+  max-height: 50em;
 }
 /* KaTeX's 1em display margins, on top of the padding above. */
 .md-math .katex-display { margin: 0; }
+/* In a table cell, a `$$` formula sizes its column like any content: zero
+   width squashed it to the column's other cells and hid it behind a scrollbar.
+   A wide table still scrolls in .md-table-wrap. */
+.md-table .md-math { width: auto; }
+/* `$x$` in the text; monospace only until KaTeX has loaded, as above. A
+   formula wider than the line scrolls on its own, as a `$$` one does, instead
+   of widening the editor on a phone; .cm-content may then shrink to the line. */
+.md-math-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: bottom;
+  max-height: 50em; /* as .md-math */
+}
+.cm-content { min-width: 0; }

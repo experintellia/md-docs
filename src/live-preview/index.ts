@@ -68,9 +68,11 @@ function intoBlock(forward: boolean) {
 export function livePreview(): Extension {
   return [
     Prec.high(keymap.of([{ key: 'ArrowUp', run: intoBlock(false) }, { key: 'ArrowDown', run: intoBlock(true) }])),
-    livePreviewPlugin,
+    // The widget fields first, so a link's mark wraps the math inside it and a
+    // tap on the formula can follow the link.
     tableField,
     mathField,
+    livePreviewPlugin,
     linkClickHandler,
     syntaxHighlighting(mdHighlight),
     // Read each line's own direction instead of assuming one for the whole

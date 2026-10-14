@@ -13,7 +13,7 @@ const { markdown, markdownLanguage } = await import('@codemirror/lang-markdown')
 const { ensureSyntaxTree } = await import('@codemirror/language');
 const { tableField } = await import('./decorations.ts');
 const { mathBlock } = await import('./math.ts');
-const { render, MAX_TEX } = await import('./widgets/math.ts');
+const { render, MAX_TEX, typeset: typesetMath } = await import('./widgets/math.ts');
 const katex = (await import('katex')).default;
 after(() => GlobalRegistrator.unregister());
 
@@ -204,6 +204,139 @@ test('a formula too long to typeset quickly stays as its source', () => {
   const el = typesetInto(tex);
   assert.equal(el.textContent, tex);
   assert.equal(el.querySelector('.katex'), null);
+});
+
+test('`\\tag` and `\\nonumber` stay refused: they would define a macro a note can call', () => {
+  // KaTeX implements both with an internal `\gdef\df@tag{…}`, and `\df@tag`
+  // can be typed: `\tag{\df@tag\df@tag…}` is the macro blow-up the ban is for.
+  for (const tex of ['E = mc^2 \\tag{1}', '\\begin{align} a &= b \\nonumber \\\\ c &= d \\end{align}']) {
+    const error = typesetInto(tex).querySelector('.katex-error')?.getAttribute('title');
+    assert.match(error ?? '', /cannot define macros/, tex);
+  }
+});
+
+test('deeply nested TeX is refused or typeset quickly, not seconds of work', () => {
+  // 4.5 KB, under MAX_TEX: four seconds in Chromium, on every peer, each time
+  // it scrolls into view — and a line or a table can hold any number of them.
+  const tex = `${'\\cancel{'.repeat(500)}x${'}'.repeat(500)}`;
+  const started = performance.now();
+  typesetInto(tex);
+  const ms = performance.now() - started;
+  assert.ok(ms < 2000, `${Math.round(ms)} ms`);
+});
+
+test('only real nesting counts against the depth limit', () => {
+  // `\leftarrow` is not `\left`, and `\{` opens no group.
+  for (const tex of ['\\leftarrow '.repeat(60), '\\{'.repeat(60), `${'{'.repeat(40)}x${'}'.repeat(40)}`]) {
+    assert.equal(typesetInto(tex).title, '', tex.slice(0, 20));
+  }
+  assert.match(typesetInto(`${'\\left('.repeat(60)}x${'\\right)'.repeat(60)}`).title, /Nested too deeply/);
+  // Environments and `\bgroup` nest without braces of their own: 160 arrays
+  // deep (4.3 KB) crashed Chromium's renderer.
+  for (const tex of [
+    `${'\\begin{array}{c}'.repeat(60)}x${'\\end{array}'.repeat(60)}`,
+    `${'\\sqrt\\bgroup '.repeat(60)}x${'\\egroup '.repeat(60)}`,
+    `${'\\begingroup '.repeat(60)}x${'\\endgroup '.repeat(60)}`,
+  ]) {
+    assert.match(typesetInto(tex).title, /Nested too deeply/, tex.slice(0, 20));
+  }
+  // Nor does `\color`, or a style switch: each is a group to the end of its
+  // own, which 900 deep froze Chromium's layout for 22 s.
+  for (const tex of ['\\color{red}'.repeat(300) + 'x', '\\displaystyle '.repeat(300) + 'x']) {
+    assert.match(typesetInto(tex).title, /Nested too deeply/, tex.slice(0, 20));
+  }
+  assert.equal(typesetInto(`${'\\color{red}'.repeat(20)}x`).title, '', 'a few are fine');
+  assert.ok(typesetInto(`${'\\frac{1}{'.repeat(50)}x${'}'.repeat(50)}`).querySelector('.katex'), 'and 50 groups deep');
+  // Side by side, they are no nesting at all.
+  assert.equal(typesetInto('\\begin{array}{c}x\\end{array}'.repeat(60)).title, '');
+});
+
+// Wait for the lazy KaTeX import that `typeset` starts.
+async function katexLoaded(): Promise<void> {
+  const el = document.createElement('span');
+  typesetMath({} as InstanceType<typeof EditorView>, el, 'x', false);
+  for (let tick = 0; tick < 100 && !el.firstElementChild; tick++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
+// How much TeX, in characters, `run` hands KaTeX — counted, not typeset.
+async function texTypeset(run: () => void): Promise<number> {
+  await katexLoaded();
+  const real = katex.render;
+  let chars = 0;
+  katex.render = (tex: string) => { chars += tex.length; };
+  try {
+    run();
+  } finally {
+    katex.render = real;
+  }
+  return chars;
+}
+
+// 300 formulas of 400 characters: pasted in, Chromium typeset all of them in
+// one go (6 s, the page frozen), where 300 `$$` blocks typeset only the dozen
+// in view. MAX_TEX bounds one formula; nothing bounds a line or a table.
+const FORMULA = `$${'x+'.repeat(200)}x$`;
+
+test('one table typesets a bounded amount of TeX, however many formulas it holds', async () => {
+  let view: InstanceType<typeof EditorView> | undefined;
+  const chars = await texTypeset(() => {
+    view = editor(`x\n\n| a |\n|---|\n${`| ${FORMULA} |\n`.repeat(300)}\nend`);
+  });
+  try {
+    assert.ok(view!.contentDOM.querySelector('.md-table'), 'the table is rendered');
+    assert.ok(chars <= 2 * MAX_TEX, `${chars} characters typeset at once`);
+  } finally {
+    view!.destroy();
+  }
+});
+
+test('one line typesets a bounded amount of TeX, however many formulas it holds', async () => {
+  let view: InstanceType<typeof EditorView> | undefined;
+  const chars = await texTypeset(() => {
+    view = editor(`x\n\n${`${FORMULA} `.repeat(300)}\n\nend`);
+  });
+  try {
+    assert.ok(chars > 0, 'some of it is typeset');
+    assert.ok(chars <= 2 * MAX_TEX, `${chars} characters typeset at once`);
+  } finally {
+    view!.destroy();
+  }
+});
+
+test('`$$` chained from line to line typesets a bounded amount of TeX too', async () => {
+  // Each `$$` closes on the next line and a new one opens after it: rendered,
+  // they join every line into one drawn line, which a per-line count missed.
+  const tex = FORMULA.slice(1, -1);
+  let view: InstanceType<typeof EditorView> | undefined;
+  const chars = await texTypeset(() => {
+    view = editor(`x\n\nstart $$${tex}\n${`$$ m $$${tex}\n`.repeat(300)}$$ end\n\nend`);
+  });
+  try {
+    assert.ok(chars > 0, 'some of it is typeset');
+    assert.ok(chars <= 2 * MAX_TEX, `${chars} characters typeset at once`);
+  } finally {
+    view!.destroy();
+  }
+});
+
+test('math in a table cell is locked down as a block is', async () => {
+  await katexLoaded();
+  const cells = [
+    '\\href{javascript:alert(1)}{a}', '\\url{javascript:alert(1)}', '\\includegraphics{http://evil.example/x.png}',
+    '\\htmlId{evil}{x}', '\\htmlClass{evil}{x}', '\\htmlStyle{position:fixed}{x}', '\\text{<img src=x>}',
+    '\\def\\a{x}\\a',
+  ];
+  const view = editor(`x\n\n| a |\n|---|\n${cells.map((tex) => `| $${tex}$ |\n`).join('')}\nend`);
+  try {
+    const table = view.contentDOM.querySelector('.md-table')!;
+    assert.equal(table.querySelectorAll('.md-math-inline').length, cells.length, 'every cell is typeset');
+    assert.equal(table.querySelector('a, img, #evil, .evil, [style*="fixed"]')?.outerHTML, undefined);
+    assert.match(table.querySelector('.katex-error')?.getAttribute('title') ?? '', /cannot define macros/);
+  } finally {
+    view.destroy();
+  }
 });
 
 test('a task checkbox ticks once per press, and keeps keyboard focus', () => {
