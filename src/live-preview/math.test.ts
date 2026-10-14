@@ -233,6 +233,13 @@ test('a `$$` alone after a paragraph still opens a block, unless it closes one',
   assert.deepEqual(tree('See [a](http://a/$$)\n$$\ny\n$$'), block);
 });
 
+test('a `$$` in a table cell does not swallow a `$$` block right under the table', () => {
+  // A price tier in a cell, then a formula with no blank line between.
+  const doc = '| Place | Price |\n|---|---|\n| Foo | $$ |\n$$\nx^2\n$$\n\nafter';
+  assert.deepEqual(tree(doc), ['Table', 'MathBlock', 'MathMark:$$', 'MathText:x^2', 'MathMark:$$', 'Paragraph']);
+  assert.deepEqual(tree('a | b\n--|--\nc | $$\n$$ y $$'), ['Table', 'MathBlock', 'MathMark:$$', 'MathText: y ', 'MathMark:$$']);
+});
+
 test('a paragraph of many `$$` lines still parses in linear time', () => {
   // Each `$$` alone asks the inline parser about the paragraph so far.
   for (const doc of ['a $$\n' + '$$\n'.repeat(20_000), 'a $$\n' + '$$ x $$\n'.repeat(20_000)]) {
