@@ -150,6 +150,23 @@ test('$$ in the middle of a line typesets below the text, as in Obsidian', async
   await expect(page.locator('.cm-content')).toContainText('a^2');
 });
 
+test('$ … $ typesets in the line, and money stays text', async ({ page, isMobile }) => {
+  await page.keyboard.insertText(String.raw`the area is $\pi r^2$, roughly` + '\n\nfrom $5 to $10\n\nafter');
+  const math = page.locator('.md-math-inline');
+  await expect(math.locator('.katex')).toHaveCount(1);
+  await expect(math.locator('.katex-error')).toHaveCount(0);
+  const line = page.locator('.cm-line', { hasText: 'the area is' });
+  await expect(line).toContainText('roughly');
+  // On the line, not below it: the formula is within the line's own box.
+  const [box, lineBox] = [await math.boundingBox(), await line.boundingBox()];
+  expect(box!.y).toBeGreaterThanOrEqual(lineBox!.y - 1);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(lineBox!.y + lineBox!.height + 1);
+  await expect(page.locator('.cm-content')).toContainText('from $5 to $10');
+  await press(math.locator('.katex'), isMobile);
+  await expect(math).toHaveCount(0);
+  await expect(page.locator('.cm-content')).toContainText(String.raw`$\pi r^2$`);
+});
+
 test('arrow keys move the caret the way a right-to-left line reads', async ({ page }) => {
   // The caret ends at the Arabic word's logical end, which is its left edge, so
   // ArrowRight steps back into the word and ArrowLeft forward. Without

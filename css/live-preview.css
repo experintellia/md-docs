@@ -199,3 +199,5 @@
 }
 /* KaTeX's 1em display margins, on top of the padding above. */
 .md-math .katex-display { margin: 0; }
+/* `$x$` in the text; monospace only until KaTeX has loaded, as above. */
+.md-math-inline { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }

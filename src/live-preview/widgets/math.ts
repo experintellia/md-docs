@@ -29,7 +29,7 @@ const DEFINERS = [
 // formula comes near it.
 export const MAX_TEX = 10_000;
 
-export function render(k: Katex, el: HTMLElement, tex: string): void {
+export function render(k: Katex, el: HTMLElement, tex: string, displayMode = true): void {
   if (tex.length > MAX_TEX) {
     el.textContent = tex;
     el.title = `Too long to typeset (over ${MAX_TEX} characters)`;
@@ -37,7 +37,7 @@ export function render(k: Katex, el: HTMLElement, tex: string): void {
   }
   try {
     k.render(tex, el, {
-      displayMode: true,
+      displayMode,
       // Half-typed TeX renders as red source with the error in its tooltip
       // instead of throwing.
       throwOnError: false,
@@ -59,25 +59,28 @@ export function render(k: Katex, el: HTMLElement, tex: string): void {
 }
 
 /**
- * A `$$ … $$` block, typeset. Replaces the block while the cursor is elsewhere,
+ * A `$$ … $$` block or `$ … $` in the text, typeset. Replaces the block while the cursor is elsewhere,
  * like a table; `buildMath` leaves the source as soon as the selection touches
  * it.
  */
 export class MathWidget extends WidgetType {
   readonly tex: string;
+  // Display math (`$$`), on a row of its own, or inline math (`$`) in the text.
+  readonly display: boolean;
 
-  constructor(tex: string) {
+  constructor(tex: string, display = true) {
     super();
     this.tex = tex;
+    this.display = display;
   }
 
   override eq(other: MathWidget): boolean {
-    return other.tex === this.tex;
+    return other.tex === this.tex && other.display === this.display;
   }
 
   override toDOM(view: EditorView): HTMLElement {
-    const el = document.createElement('div');
-    el.className = 'md-math';
+    const el: HTMLElement = document.createElement(this.display ? 'div' : 'span');
+    el.className = this.display ? 'md-math' : 'md-math-inline';
     // TeX lays itself out left to right, whatever the text around it reads in.
     el.dir = 'ltr';
     // A widget swallows its events, so a tap would never reach the source —
@@ -86,16 +89,16 @@ export class MathWidget extends WidgetType {
     // an equal widget keeps this element.
     el.addEventListener('mousedown', (event) => {
       // Not on the scrollbar of a formula too wide for the line: that scrolls.
-      if (event.target === el && event.offsetY >= el.clientHeight) return;
+      if (this.display && event.target === el && event.offsetY >= el.clientHeight) return;
       event.preventDefault();
       view.dispatch({ selection: { anchor: view.posAtDOM(el) } });
     });
     if (katex) {
-      render(katex, el, this.tex);
+      render(katex, el, this.tex, this.display);
     } else {
       el.textContent = this.tex;
       loadKatex().then((k) => {
-        render(k, el, this.tex);
+        render(k, el, this.tex, this.display);
         // The block just changed height under CodeMirror's feet.
         if (el.isConnected) view.requestMeasure();
       }, () => { /* the source stays up */ });

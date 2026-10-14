@@ -220,3 +220,49 @@ test('a `$$` alone after a paragraph still opens a block, unless it closes one',
   assert.deepEqual(tree('text $$x$$\n$$\ny\n$$'), ['Paragraph', 'MathBlock', 'MathMark:$$', 'MathText:y', 'MathMark:$$']);
   assert.deepEqual(tree('text $$\ny\n$$'), ['Paragraph']);
 });
+
+// Every `$ … $` typeset in the text, in order.
+function inlineRendered(doc: string, cursor = doc.length): string[] {
+  const s = state(doc, cursor);
+  const out: string[] = [];
+  buildMath(s).between(0, s.doc.length, (_f, _t, deco) => {
+    const widget = (deco.spec as { widget?: unknown }).widget;
+    if (widget instanceof MathWidget && !widget.display) out.push(widget.tex);
+  });
+  return out;
+}
+
+// Obsidian's (and Pandoc's) rules for a single `$`, which keep money prose.
+test('`$ … $` is math in the text, and money is not', () => {
+  const cases: [string, string[]][] = [
+    ['the area is $\\pi r^2$, roughly', ['\\pi r^2']],
+    ['$a$ and $b$', ['a', 'b']],
+    ['**bold $x$** and [link $y$](u)', ['x', 'y']],
+    ['- [ ] task $x$', ['x']],
+    ['> quote $x$', ['x']],
+    ['it costs $5 and $10 today', []],
+    ['from $5 to $6.', []],
+    ['$x$5', []],
+    ['$ x$ and $x $', []],
+    ['$$', []],
+    ['a \\$x$ b', []],
+    ['$a \\$ b$', ['a \\$ b']],
+    ['`$x$`', []],
+    ['$x\ny$', []],
+    ['hello $$x$$', []],
+    ['| $x$ | y |\n|---|---|\n| 1 | 2 |', []],
+  ];
+  for (const [doc, tex] of cases) {
+    assert.deepEqual(inlineRendered(`${doc}\n\nend`), tex, JSON.stringify(doc));
+  }
+});
+
+test('`$ … $` shows its source while the cursor is in it', () => {
+  assert.deepEqual(inlineRendered('a $x$ b', 4), []);
+  assert.deepEqual(inlineRendered('a $x$ b', 1), ['x']);
+});
+
+test('`$ … $` keeps markdown out of its TeX', () => {
+  assert.deepEqual(tree('$a_1 * b_2 * c$')[0], 'Paragraph');
+  assert.deepEqual(inlineRendered('$a_1 * b_2 * c$\n\nz'), ['a_1 * b_2 * c']);
+});

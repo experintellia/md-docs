@@ -17,6 +17,9 @@ function closing(text: string, from: number): number {
   return slashes % 2 === 0 ? end : -1;
 }
 
+// Space, tab or line break (-1, past the end, counts as one).
+const space = (c: number): boolean => c === 32 || c === 9 || c === 10 || c === -1;
+
 // Where a `$$` opens on this line, or -1. Four columns in is indented code.
 // Only a `$$` alone, or one closed at the end of the same line: a line of prose
 // that merely starts with inline math (`$$a$$ and $$b$$ …`, `$$5 to $$10`) is
@@ -46,6 +49,7 @@ export const mathBlock: MarkdownConfig = {
     { name: 'MathMark', style: tags.processingInstruction },
     { name: 'MathText', style: tags.monospace },
     { name: 'DisplayMath' },
+    { name: 'InlineMath' },
   ],
   parseInline: [{
     name: 'DisplayMath',
@@ -62,6 +66,26 @@ export const mathBlock: MarkdownConfig = {
           const children = [cx.elt('MathMark', pos, pos + 2), cx.elt('MathMark', i, i + 2)];
           if (i > pos + 2) children.splice(1, 0, cx.elt('MathText', pos + 2, i));
           return cx.addElement(cx.elt('DisplayMath', pos, i + 2, children));
+        }
+      }
+      return -1;
+    },
+  }, {
+    name: 'InlineMath',
+    // `$x^2$`, in the text, on Pandoc's and Obsidian's rules so that money is
+    // not math: no space just inside either `$`, and a closing `$` is not one
+    // when a digit follows it (`$5 and $10`). One line only, as in Obsidian.
+    parse(cx, next, pos) {
+      // Nor half of a `$$` that found no close.
+      if (next !== 36 || cx.char(pos - 1) === 36 || cx.char(pos + 1) === 36 || space(cx.char(pos + 1))) return -1;
+      for (let i = pos + 1; i < cx.end; i++) {
+        const c = cx.char(i);
+        if (c === 10) return -1;
+        if (c === 92) i++; // `\$` is an escaped dollar, not a close
+        else if (c === 36 && !space(cx.char(i - 1)) && !(cx.char(i + 1) >= 48 && cx.char(i + 1) <= 57)) {
+          return cx.addElement(cx.elt('InlineMath', pos, i + 1, [
+            cx.elt('MathMark', pos, pos + 1), cx.elt('MathText', pos + 1, i), cx.elt('MathMark', i, i + 1),
+          ]));
         }
       }
       return -1;
