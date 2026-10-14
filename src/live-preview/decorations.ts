@@ -10,7 +10,7 @@ import {
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
-import { MathWidget } from './widgets/math.ts';
+import { MAX_TEX, MathWidget, mathCost } from './widgets/math.ts';
 import { type Segment, type TableSpec, TableWidget } from './widgets/table.ts';
 
 /**
@@ -96,12 +96,33 @@ function blockDirection(state: EditorState, from: number, to: number): 'ltr' | '
   for (let pos = from, seen = 0; pos <= to && seen < 200; seen++) {
     const line = doc.lineAt(pos);
     if (!isCode(state, line)) {
-      const dir = lineDirection(line.text);
+      const dir = lineDirection(proseText(state, line));
       if (dir) return dir;
     }
     pos = line.to + 1;
   }
   return null;
+}
+
+// A line's text with its math blanked out: TeX letters are not prose.
+function proseText(state: EditorState, line: Line): string {
+  // Built in one pass: rebuilding the line per formula was quadratic, seconds
+  // a keystroke on a long line of them.
+  let text = '';
+  let at = 0;
+  syntaxTree(state).iterate({
+    from: line.from,
+    to: line.to,
+    enter: (n) => {
+      if (n.name !== 'InlineMath' && n.name !== 'DisplayMath') return;
+      const a = Math.max(n.from, line.from) - line.from;
+      const b = Math.min(n.to, line.to) - line.from;
+      text += line.text.slice(at, a) + ' '.repeat(b - a);
+      at = b;
+      return false;
+    },
+  });
+  return text + line.text.slice(at);
 }
 
 export function lineDirection(text: string): 'ltr' | 'rtl' | null {
@@ -122,7 +143,7 @@ export function lineDirection(text: string): 'ltr' | 'rtl' | null {
 // directions. The quote bar copes with that — its side comes from the quote,
 // not from the line (see the md-quote-ltr / md-quote-rtl classes above).
 function directionAt(state: EditorState, line: Line): 'ltr' | 'rtl' | null {
-  let own = lineDirection(line.text);
+  let own = lineDirection(proseText(state, line));
   // Resolved at the line's end, not its start: an indented code block begins
   // after the indent, so the first column is not inside it.
   for (let n = syntaxTree(state).resolveInner(line.to, -1); ; n = n.parent) {
@@ -219,15 +240,28 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
       out.push({ text, cls: 'md-link', href: safeHref(text) ?? undefined });
       continue;
     }
+    if (child.name === 'InlineMath' || child.name === 'DisplayMath') {
+      // As for code in a cell, `\|` is how the TeX holds a pipe: GFM takes
+      // the `\` off before anything else reads the cell.
+      const tex = mathTex(child, doc)?.replace(/\\\|/g, '|');
+      const text = doc.sliceString(child.from, child.to);
+      out.push(tex ? { text, math: { tex, display: child.name === 'DisplayMath' } } : { text, cls });
+      continue;
+    }
     if (child.name === 'Escape') {
       // `\|` is the only way to put a pipe in a cell; show the pipe, not both.
       out.push({ text: doc.sliceString(child.from + 1, child.to), cls });
       continue;
     }
     if (child.name === 'Link') {
-      const url = linkDestination(child, doc);
-      const text = cellSegments(child, doc, cls).map((s) => s.text).join('');
-      out.push({ text, cls: 'md-link', href: safeHref(url ?? '') ?? undefined });
+      const href = safeHref(linkDestination(child, doc) ?? '') ?? undefined;
+      const inner = cellSegments(child, doc, cls);
+      // Math in the link text is typeset, the text around it still the link.
+      if (inner.some((seg) => seg.math)) {
+        out.push(...inner.map((seg) => (seg.math ? seg : { text: seg.text, cls: 'md-link', href })));
+        continue;
+      }
+      out.push({ text: inner.map((seg) => seg.text).join(''), cls: 'md-link', href });
       continue;
     }
     out.push(...cellSegments(child, doc, INLINE_MARK_CLASS[child.name] ?? cls));
@@ -647,6 +681,11 @@ export const tableField = blockField(buildTables);
 // is still being typed would hide what is being typed), and while it is empty.
 function renderedTex(state: EditorState, block: SyntaxNodeLike): string | null {
   if (rangeHasSelection(state, block.from, block.to)) return null;
+  return mathTex(block, state.doc);
+}
+
+// The TeX of a closed math node, or null if it is unclosed or empty.
+function mathTex(block: SyntaxNodeLike, doc: Text): string | null {
   if (block.getChildren('MathMark').length < 2) return null;
   // `$$` mid-paragraph is one MathText over all its lines, with the `>` of a
   // quote on each inside it; a block has one per line, the marks outside.
@@ -654,35 +693,49 @@ function renderedTex(state: EditorState, block: SyntaxNodeLike): string | null {
     let text = '';
     let at = part.from;
     for (const mark of part.getChildren('QuoteMark')) {
-      text += state.doc.sliceString(at, mark.from);
+      text += doc.sliceString(at, mark.from);
       at = mark.to;
     }
-    return text + state.doc.sliceString(at, part.to);
+    return text + doc.sliceString(at, part.to);
   }).join('\n');
   return tex.trim() ? tex : null;
 }
 
+// The blocks whose text holds inline math.
+const TEXT_BLOCK = /^(?:Paragraph|ATXHeading\d|SetextHeading\d)$/;
+
 /**
- * Rendered `$$` blocks — block widgets (and `$$` inside a paragraph, inline
- * ones over the same element), so a state field, like tables above and
+ * Rendered `$$` blocks — block widgets (and `$$` or `$` inside a paragraph,
+ * inline ones), so a state field, like tables above and
  * with the same full-document rebuild. The widget compares by its TeX, so a
  * rebuild re-typesets only a block whose TeX changed.
  */
 export function buildMath(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
+  const blockTex = new Map<number, number>();
   syntaxTree(state).iterate({
     enter: (node) => {
-      // A table typesets nothing in its cells; its own widget replaces them.
+      // A table's own widget typesets the math in its cells.
       if (node.name === 'Table') return false;
       const block = node.name === 'MathBlock';
-      if (!block && node.name !== 'DisplayMath') return;
+      if (!block && node.name !== 'DisplayMath' && node.name !== 'InlineMath') return;
       const tex = renderedTex(state, node.node);
+      // MAX_TEX bounds one formula; this bounds a paragraph of them. A line is
+      // drawn whole, and a rendered `$$` over several lines joins them into
+      // one, so no smaller unit holds. Past it, the rest stays source.
+      if (tex !== null && !block) {
+        let para = node.node.parent;
+        while (para && !TEXT_BLOCK.test(para.name)) para = para.parent;
+        const key = para?.from ?? node.from;
+        const spent = (blockTex.get(key) ?? 0) + mathCost(tex);
+        blockTex.set(key, spent);
+        if (spent > MAX_TEX) return false;
+      }
       if (tex !== null) {
-        // Mid-paragraph, the widget is still a block-level element in the
-        // line, so it sits below the text before it, as in Obsidian.
-        ranges.push(
-          Decoration.replace({ widget: new MathWidget(tex), block }).range(node.from, node.to),
-        );
+        // Mid-paragraph, `$$` is still a block-level element in the line, so
+        // it sits below the text before it, as in Obsidian. `$` is in the text.
+        const widget = new MathWidget(tex, node.name !== 'InlineMath');
+        ranges.push(Decoration.replace({ widget, block }).range(node.from, node.to));
       }
       return false;
     },

@@ -1,4 +1,5 @@
 import { type EditorView, WidgetType } from '@codemirror/view';
+import { MAX_TEX, mathCost, typeset } from './math.ts';
 
 /** A run of cell text, carrying the class the live preview paints it with. */
 export interface Segment {
@@ -6,6 +7,8 @@ export interface Segment {
   cls?: string;
   /** Set on a link; the widget opens it rather than showing its source. */
   href?: string;
+  /** Set on math (`$x$`, `$$x$$`): the TeX, typeset in place of `text`. */
+  math?: { tex: string; display: boolean };
 }
 
 export interface TableSpec {
@@ -64,26 +67,40 @@ export class TableWidget extends WidgetType {
     const table = wrap.appendChild(document.createElement('table'));
     table.className = 'md-table';
 
+    // MAX_TEX bounds one formula; this bounds the table's, all drawn at once.
+    // Past it, the rest of its math stays source.
+    const budget = { left: MAX_TEX };
     const head = table.appendChild(document.createElement('thead'));
-    head.appendChild(this.row(header, align, 'th'));
+    head.appendChild(this.row(view, budget, header, align, 'th'));
     const body = table.appendChild(document.createElement('tbody'));
-    for (const row of rows) body.appendChild(this.row(row, align, 'td'));
+    for (const row of rows) body.appendChild(this.row(view, budget, row, align, 'td'));
     return wrap;
   }
 
-  private row(cells: Segment[][], align: TableSpec['align'], tag: 'th' | 'td'): HTMLElement {
+  private row(
+    view: EditorView, budget: { left: number }, cells: Segment[][], align: TableSpec['align'], tag: 'th' | 'td',
+  ): HTMLElement {
     const tr = document.createElement('tr');
     cells.forEach((segments, column) => {
       const cell = tr.appendChild(document.createElement(tag));
       // Logical, so a right-to-left table's "start" is its right-hand edge.
       if (align[column]) cell.style.textAlign = align[column]!;
-      for (const segment of segments) cell.append(node(segment));
+      for (const segment of segments) cell.append(node(segment, view, budget));
     });
     return tr;
   }
 }
 
-function node(segment: Segment): Node {
+function node(segment: Segment, view: EditorView, budget: { left: number }): Node {
+  if (segment.math && mathCost(segment.math.tex) <= budget.left) {
+    budget.left -= mathCost(segment.math.tex);
+    const { tex, display } = segment.math;
+    const el = document.createElement(display ? 'div' : 'span');
+    el.className = display ? 'md-math' : 'md-math-inline';
+    el.dir = 'ltr';
+    typeset(view, el, tex, display);
+    return el;
+  }
   if (segment.href === undefined && segment.cls === undefined) {
     return document.createTextNode(segment.text);
   }

@@ -210,6 +210,7 @@ function buildHelp(): HTMLElement {
           <tr><td><code>~~text~~</code></td><td>Strikethrough</td></tr>
           <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
           <tr><td><code>[text](url)</code></td><td>Link</td></tr>
+          <tr><td><code>$x^2$</code></td><td>Math (LaTeX) in the text</td></tr>
         </tbody>
         <tbody>
           <tr><td><code>- item</code></td><td>Bullet list (${ico(faListUl)})</td></tr>
@@ -220,7 +221,7 @@ function buildHelp(): HTMLElement {
           <tr><td><code>&gt; quote</code></td><td>Block quote</td></tr>
           <tr><td><pre><code>\`\`\`js&#10;let x = 1&#10;\`\`\`</code></pre></td><td>Code block, highlighted for the language after <code>\`\`\`</code> (js, py, sh, …)</td></tr>
           <tr><td><pre><code>| a | b |&#10;|---|---|&#10;| 1 | 2 |</code></pre></td><td>Table, with a <code>|---|</code> line under the header row</td></tr>
-          <tr><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX), with <code>$$</code> on the lines above and below</td></tr>
+          <tr><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX) on a line of its own, between <code>$$</code></td></tr>
           <tr><td><code>---</code></td><td>Separator line (three or more minuses on their own line)</td></tr>
         </tbody>
       </table>
