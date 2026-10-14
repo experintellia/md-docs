@@ -175,6 +175,30 @@ test('math in a table cell typesets in the table', async ({ page }) => {
   await expect(table.locator('td').nth(1)).toHaveText('$5');
 });
 
+test('tapping a formula while the editor is not focused focuses it, so typing lands', async ({ page, isMobile }) => {
+  // On a phone this is how the keyboard opens: there is no caret to tap beside.
+  await page.keyboard.insertText(String.raw`the area is $\pi r^2$, roughly` + '\n\nafter');
+  const math = page.locator('.md-math-inline');
+  await expect(math.locator('.katex')).toHaveCount(1);
+  await page.locator('.cm-content').blur();
+  await expect(page.locator('.cm-editor')).not.toHaveClass(/cm-focused/);
+  await press(math.locator('.katex'), isMobile);
+  await expect(math).toHaveCount(0);
+  await expect(page.locator('.cm-editor')).toHaveClass(/cm-focused/);
+  await page.keyboard.insertText('2');
+  await expect(page.locator('.cm-content')).toContainText(String.raw`the area is 2$\pi r^2$`);
+});
+
+test('a wide inline formula scrolls on its own, not the whole editor', async ({ page }) => {
+  // Nothing like `+` or `=` to break at, so KaTeX cannot wrap it.
+  const tex = Array.from({ length: 40 }, (_, i) => `a_{${i}}`).join('');
+  await page.keyboard.insertText(`wide $${tex}$ end\n\nafter`);
+  await expect(page.locator('.md-math-inline .katex')).toHaveCount(1);
+  const { scrollWidth, clientWidth } = await page.locator('.cm-scroller')
+    .evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+});
+
 test('arrow keys move the caret the way a right-to-left line reads', async ({ page }) => {
   // The caret ends at the Arabic word's logical end, which is its left edge, so
   // ArrowRight steps back into the word and ArrowLeft forward. Without

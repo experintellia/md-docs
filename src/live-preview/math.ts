@@ -149,7 +149,7 @@ export const mathBlock: MarkdownConfig = {
     // But a `$$` alone does not when it closes the paragraph's own `$$`
     // (`text $$`, TeX, `$$`), as in Obsidian.
     endLeaf: (cx, line, leaf) => opening(line) >= 0 && !(
-      line.text.slice(line.pos).trim() === '$$' && closesDisplayMath(cx, leaf.content)
+      closesDisplayMath(cx, leaf.content)
     ),
   }],
 };

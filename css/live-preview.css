@@ -199,5 +199,15 @@
 }
 /* KaTeX's 1em display margins, on top of the padding above. */
 .md-math .katex-display { margin: 0; }
-/* `$x$` in the text; monospace only until KaTeX has loaded, as above. */
-.md-math-inline { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+/* `$x$` in the text; monospace only until KaTeX has loaded, as above. A
+   formula wider than the line scrolls on its own, as a `$$` one does, instead
+   of widening the editor on a phone; .cm-content may then shrink to the line. */
+.md-math-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: bottom;
+}
+.cm-content { min-width: 0; }

@@ -96,12 +96,29 @@ function blockDirection(state: EditorState, from: number, to: number): 'ltr' | '
   for (let pos = from, seen = 0; pos <= to && seen < 200; seen++) {
     const line = doc.lineAt(pos);
     if (!isCode(state, line)) {
-      const dir = lineDirection(line.text);
+      const dir = lineDirection(proseText(state, line));
       if (dir) return dir;
     }
     pos = line.to + 1;
   }
   return null;
+}
+
+// A line's text with its math blanked out: TeX letters are not prose.
+function proseText(state: EditorState, line: Line): string {
+  let text = line.text;
+  syntaxTree(state).iterate({
+    from: line.from,
+    to: line.to,
+    enter: (n) => {
+      if (n.name !== 'InlineMath' && n.name !== 'DisplayMath') return;
+      const a = Math.max(n.from, line.from) - line.from;
+      const b = Math.min(n.to, line.to) - line.from;
+      text = text.slice(0, a) + ' '.repeat(b - a) + text.slice(b);
+      return false;
+    },
+  });
+  return text;
 }
 
 export function lineDirection(text: string): 'ltr' | 'rtl' | null {
@@ -122,7 +139,7 @@ export function lineDirection(text: string): 'ltr' | 'rtl' | null {
 // directions. The quote bar copes with that — its side comes from the quote,
 // not from the line (see the md-quote-ltr / md-quote-rtl classes above).
 function directionAt(state: EditorState, line: Line): 'ltr' | 'rtl' | null {
-  let own = lineDirection(line.text);
+  let own = lineDirection(proseText(state, line));
   // Resolved at the line's end, not its start: an indented code block begins
   // after the indent, so the first column is not inside it.
   for (let n = syntaxTree(state).resolveInner(line.to, -1); ; n = n.parent) {

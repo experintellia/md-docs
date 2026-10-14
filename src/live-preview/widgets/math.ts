@@ -88,9 +88,22 @@ export class MathWidget extends WidgetType {
     // remembered from when it was built: text typed above moves the block, and
     // an equal widget keeps this element.
     el.addEventListener('mousedown', (event) => {
+      // Math in a link's text is the link too.
+      const href = el.closest<HTMLElement>('.md-link[data-href]')?.dataset.href;
+      if (href) {
+        event.preventDefault();
+        window.open(href, '_blank');
+        return;
+      }
+      // Read mode reveals no source, so a tap has nothing to open.
+      if (view.state.readOnly) return;
       // Not on the scrollbar of a formula too wide for the line: that scrolls.
       if (this.display && event.target === el && event.offsetY >= el.clientHeight) return;
       event.preventDefault();
+      // preventDefault also kept the focus away, and the keyboard closed on a
+      // phone. Before the dispatch: after it this element is gone, and Chrome
+      // ignores the focus.
+      view.focus();
       view.dispatch({ selection: { anchor: view.posAtDOM(el) } });
     });
     typeset(view, el, this.tex, this.display);
