@@ -167,6 +167,14 @@ test('$ … $ typesets in the line, and money stays text', async ({ page, isMobi
   await expect(page.locator('.cm-content')).toContainText(String.raw`$\pi r^2$`);
 });
 
+test('math in a table cell typesets in the table', async ({ page }) => {
+  await page.keyboard.insertText('| a | b |\n|---|---|\n| $x^2$ | $5 |\n\nafter');
+  const table = page.locator('.md-table');
+  await expect(table.locator('.md-math-inline .katex')).toHaveCount(1);
+  await expect(table.locator('.katex-error')).toHaveCount(0);
+  await expect(table.locator('td').nth(1)).toHaveText('$5');
+});
+
 test('arrow keys move the caret the way a right-to-left line reads', async ({ page }) => {
   // The caret ends at the Arabic word's logical end, which is its left edge, so
   // ArrowRight steps back into the word and ArrowLeft forward. Without

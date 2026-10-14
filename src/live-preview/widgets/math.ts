@@ -59,9 +59,9 @@ export function render(k: Katex, el: HTMLElement, tex: string, displayMode = tru
 }
 
 /**
- * A `$$ … $$` block or `$ … $` in the text, typeset. Replaces the block while the cursor is elsewhere,
- * like a table; `buildMath` leaves the source as soon as the selection touches
- * it.
+ * A `$$ … $$` block or `$ … $` in the text, typeset. Replaces the source
+ * while the cursor is elsewhere, like a table; `buildMath` leaves the source as
+ * soon as the selection touches it.
  */
 export class MathWidget extends WidgetType {
   readonly tex: string;
@@ -93,16 +93,21 @@ export class MathWidget extends WidgetType {
       event.preventDefault();
       view.dispatch({ selection: { anchor: view.posAtDOM(el) } });
     });
-    if (katex) {
-      render(katex, el, this.tex, this.display);
-    } else {
-      el.textContent = this.tex;
-      loadKatex().then((k) => {
-        render(k, el, this.tex, this.display);
-        // The block just changed height under CodeMirror's feet.
-        if (el.isConnected) view.requestMeasure();
-      }, () => { /* the source stays up */ });
-    }
+    typeset(view, el, this.tex, this.display);
     return el;
   }
+}
+
+/** Typeset `tex` into `el`, now if KaTeX is loaded, else once it is. */
+export function typeset(view: EditorView, el: HTMLElement, tex: string, display: boolean): void {
+  if (katex) {
+    render(katex, el, tex, display);
+    return;
+  }
+  el.textContent = tex;
+  loadKatex().then((k) => {
+    render(k, el, tex, display);
+    // It just changed size under CodeMirror's feet.
+    if (el.isConnected) view.requestMeasure();
+  }, () => { /* the source stays up */ });
 }

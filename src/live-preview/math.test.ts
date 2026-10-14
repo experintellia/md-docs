@@ -5,7 +5,8 @@ import type { EditorView } from '@codemirror/view';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { mathBlock } from './math.ts';
-import { buildDecorations, buildMath } from './decorations.ts';
+import { buildDecorations, buildMath, buildTables } from './decorations.ts';
+import { TableWidget } from './widgets/table.ts';
 import { MathWidget } from './widgets/math.ts';
 
 // `$$` blocks: the parser extension, then what the live preview makes of the
@@ -286,4 +287,27 @@ test('`$ … $` shows its source while the cursor is in it', () => {
 test('`$ … $` keeps markdown out of its TeX', () => {
   assert.deepEqual(tree('$a_1 * b_2 * c$')[0], 'Paragraph');
   assert.deepEqual(inlineRendered('$a_1 * b_2 * c$\n\nz'), ['a_1 * b_2 * c']);
+});
+
+// The math in a rendered table's body cells, per cell, as `tex` or `$$tex`.
+function cellMath(doc: string): string[][] {
+  const s = state(doc, doc.length);
+  let widget: TableWidget | undefined;
+  buildTables(s).between(0, s.doc.length, (_f, _t, deco) => {
+    const w = (deco.spec as { widget?: unknown }).widget;
+    if (w instanceof TableWidget) widget = w;
+  });
+  return widget!.spec.rows[0].map((cell) => cell.flatMap((seg) => (
+    seg.math ? [`${seg.math.display ? '$$' : ''}${seg.math.tex}`] : []
+  )));
+}
+
+test('math in a table cell is typeset by the table', () => {
+  const table = (row: string): string => `| a | b |\n|---|---|\n${row}\n\nend`;
+  assert.deepEqual(cellMath(table('| $x^2$ | y |')), [['x^2'], []]);
+  assert.deepEqual(cellMath(table('| $$x$$ | $a$ and $b$ |')), [['$$x'], ['a', 'b']]);
+  assert.deepEqual(cellMath(table('| $5 | $10 |')), [[], []], 'money stays text');
+  // A pipe in a cell is written `\|`, in math as in code.
+  assert.deepEqual(cellMath(table('| $\\|x\\|$ | y |')), [['|x|'], []]);
+  assert.deepEqual(cellMath(table('| `$x$` | y |')), [[], []], 'code stays code');
 });

@@ -219,6 +219,14 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
       out.push({ text, cls: 'md-link', href: safeHref(text) ?? undefined });
       continue;
     }
+    if (child.name === 'InlineMath' || child.name === 'DisplayMath') {
+      // As for code in a cell, `\|` is how the TeX holds a pipe: GFM takes
+      // the `\` off before anything else reads the cell.
+      const tex = mathTex(child, doc)?.replace(/\\\|/g, '|');
+      const text = doc.sliceString(child.from, child.to);
+      out.push(tex ? { text, math: { tex, display: child.name === 'DisplayMath' } } : { text, cls });
+      continue;
+    }
     if (child.name === 'Escape') {
       // `\|` is the only way to put a pipe in a cell; show the pipe, not both.
       out.push({ text: doc.sliceString(child.from + 1, child.to), cls });
@@ -647,6 +655,11 @@ export const tableField = blockField(buildTables);
 // is still being typed would hide what is being typed), and while it is empty.
 function renderedTex(state: EditorState, block: SyntaxNodeLike): string | null {
   if (rangeHasSelection(state, block.from, block.to)) return null;
+  return mathTex(block, state.doc);
+}
+
+// The TeX of a closed math node, or null if it is unclosed or empty.
+function mathTex(block: SyntaxNodeLike, doc: Text): string | null {
   if (block.getChildren('MathMark').length < 2) return null;
   // `$$` mid-paragraph is one MathText over all its lines, with the `>` of a
   // quote on each inside it; a block has one per line, the marks outside.
@@ -654,10 +667,10 @@ function renderedTex(state: EditorState, block: SyntaxNodeLike): string | null {
     let text = '';
     let at = part.from;
     for (const mark of part.getChildren('QuoteMark')) {
-      text += state.doc.sliceString(at, mark.from);
+      text += doc.sliceString(at, mark.from);
       at = mark.to;
     }
-    return text + state.doc.sliceString(at, part.to);
+    return text + doc.sliceString(at, part.to);
   }).join('\n');
   return tex.trim() ? tex : null;
 }
@@ -672,7 +685,7 @@ export function buildMath(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
   syntaxTree(state).iterate({
     enter: (node) => {
-      // A table typesets nothing in its cells; its own widget replaces them.
+      // A table's own widget typesets the math in its cells.
       if (node.name === 'Table') return false;
       const block = node.name === 'MathBlock';
       if (!block && node.name !== 'DisplayMath' && node.name !== 'InlineMath') return;
