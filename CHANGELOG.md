@@ -5,12 +5,17 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-14
+
 ### Added
 - Playwright end-to-end tests (`e2e/`, `npm run test:e2e`) against the built
   bundle: live preview, highlighting in raw `<script>` blocks, toolbar and
   checkboxes under touch, persistence across a relaunch, and two peers syncing.
   `.github/workflows/e2e.yml` runs them on Chromium (desktop and Android
   emulation) on Linux and on WebKit (desktop and iPhone emulation) on macOS.
+- End-to-end tests for right-to-left text, which happy-dom cannot lay out:
+  arrow keys follow a line's visual order, and right-to-left lines, quotes and
+  tables sit against the right edge with the quote bar on the right. (#37)
 - An end-to-end test of the poison-batch guard with the real batch from #19,
   and one that settles #22 for single-process engines: Chromium commits
   `localStorage` about 5 s after a write, so an abort sooner than that after
@@ -43,6 +48,7 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ### Changed
 - The `.xdc` is about half the size: 400 KB → 210 KB, with no feature removed.
+  Math blocks then add 239 KB, so this release's `.xdc` is 452 KB.
   - The app icon was a 1254 px truecolor PNG taking 40% of the file. It is now
     512 px with a 64-colour palette (165 KB → 9 KB) and looks the same.
   - Raw `<script>` blocks in a note were highlighted with the full Lezer
