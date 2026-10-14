@@ -149,3 +149,22 @@ test('in read mode, a tap on a formula is a reader’s tap', () => {
     }
   });
 });
+
+test('pressing a wide inline formula\'s scrollbar scrolls it, not open its source', () => {
+  withEditor('a $x$ b\n\nend', (view) => {
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+    const [el] = inlineMath(view);
+    // happy-dom lays nothing out: give the formula an overflow and a press
+    // below its content box, where the scrollbar is.
+    Object.defineProperties(el, {
+      scrollWidth: { value: 500 }, clientWidth: { value: 100 }, clientHeight: { value: 20 },
+    });
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    Object.defineProperty(press, 'offsetY', { value: 25 });
+    el.dispatchEvent(press);
+    assert.equal(view.state.selection.main.head, view.state.doc.length, 'the caret stays');
+    assert.equal(inlineMath(view).length, 1, 'still typeset');
+    tap(el);
+    assert.equal(inlineMath(view).length, 0, 'a press on the formula itself opens it');
+  });
+});

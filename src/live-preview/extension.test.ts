@@ -231,6 +231,17 @@ test('only real nesting counts against the depth limit', () => {
     assert.equal(typesetInto(tex).title, '', tex.slice(0, 20));
   }
   assert.match(typesetInto(`${'\\left('.repeat(60)}x${'\\right)'.repeat(60)}`).title, /Nested too deeply/);
+  // Environments and `\bgroup` nest without braces of their own: 160 arrays
+  // deep (4.3 KB) crashed Chromium's renderer.
+  for (const tex of [
+    `${'\\begin{array}{c}'.repeat(60)}x${'\\end{array}'.repeat(60)}`,
+    `${'\\sqrt\\bgroup '.repeat(60)}x${'\\egroup '.repeat(60)}`,
+    `${'\\begingroup '.repeat(60)}x${'\\endgroup '.repeat(60)}`,
+  ]) {
+    assert.match(typesetInto(tex).title, /Nested too deeply/, tex.slice(0, 20));
+  }
+  // Side by side, they are no nesting at all.
+  assert.equal(typesetInto('\\begin{array}{c}x\\end{array}'.repeat(60)).title, '');
 });
 
 // Wait for the lazy KaTeX import that `typeset` starts.
@@ -278,6 +289,22 @@ test('one line typesets a bounded amount of TeX, however many formulas it holds'
   let view: InstanceType<typeof EditorView> | undefined;
   const chars = await texTypeset(() => {
     view = editor(`x\n\n${`${FORMULA} `.repeat(300)}\n\nend`);
+  });
+  try {
+    assert.ok(chars > 0, 'some of it is typeset');
+    assert.ok(chars <= 2 * MAX_TEX, `${chars} characters typeset at once`);
+  } finally {
+    view!.destroy();
+  }
+});
+
+test('`$$` chained from line to line typesets a bounded amount of TeX too', async () => {
+  // Each `$$` closes on the next line and a new one opens after it: rendered,
+  // they join every line into one drawn line, which a per-line count missed.
+  const tex = FORMULA.slice(1, -1);
+  let view: InstanceType<typeof EditorView> | undefined;
+  const chars = await texTypeset(() => {
+    view = editor(`x\n\nstart $$${tex}\n${`$$ m $$${tex}\n`.repeat(300)}$$ end\n\nend`);
   });
   try {
     assert.ok(chars > 0, 'some of it is typeset');

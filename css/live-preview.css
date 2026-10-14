@@ -199,6 +199,10 @@
 }
 /* KaTeX's 1em display margins, on top of the padding above. */
 .md-math .katex-display { margin: 0; }
+/* In a table cell, a `$$` formula sizes its column like any content: zero
+   width squashed it to the column's other cells and hid it behind a scrollbar.
+   A wide table still scrolls in .md-table-wrap. */
+.md-table .md-math { width: auto; }
 /* `$x$` in the text; monospace only until KaTeX has loaded, as above. A
    formula wider than the line scrolls on its own, as a `$$` one does, instead
    of widening the editor on a phone; .cm-content may then shrink to the line. */

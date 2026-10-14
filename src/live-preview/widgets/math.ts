@@ -30,9 +30,13 @@ const DEFINERS = [
 export const MAX_TEX = 10_000;
 
 // Past this, nesting is the cost: `\cancel{` 500 deep is 4.5 KB and took four
-// seconds to lay out in Chromium. Without braces KaTeX nests nothing deeply —
-// it errors out at once — so braces and `\left` are what is counted.
+// seconds to lay out in Chromium, and `\begin{array}` 160 deep crashed its
+// renderer. Groups are what nest: braces, `\left`, environments, `\bgroup`.
+// A command given no group as its argument errors out at once instead.
 export const MAX_DEPTH = 50;
+
+const OPENS = new Set(['{', '\\left', '\\begin', '\\bgroup', '\\begingroup']);
+const CLOSES = new Set(['}', '\\right', '\\end', '\\egroup', '\\endgroup']);
 
 function depth(tex: string): number {
   let deepest = 0;
@@ -40,8 +44,8 @@ function depth(tex: string): number {
   // A command (`\left`, not `\leftarrow`), an escaped character (`\{` is no
   // group), or a brace.
   for (const [token] of tex.matchAll(/\\[a-zA-Z]+|\\.|[{}]/g)) {
-    if (token === '{' || token === '\\left') at++;
-    else if (token === '}' || token === '\\right') at--;
+    if (OPENS.has(token)) at++;
+    else if (CLOSES.has(token)) at--;
     deepest = Math.max(deepest, at);
   }
   return deepest;
@@ -121,7 +125,9 @@ export class MathWidget extends WidgetType {
       // Read mode reveals no source, so a tap has nothing to open.
       if (view.state.readOnly) return;
       // Not on the scrollbar of a formula too wide for the line: that scrolls.
-      if (this.display && event.target === el && event.offsetY >= el.clientHeight) return;
+      // Inline ones have one too, since they scroll rather than widen a phone.
+      const scrollbar = el.scrollWidth > el.clientWidth && event.offsetY >= el.clientHeight;
+      if (event.target === el && scrollbar) return;
       event.preventDefault();
       // preventDefault also kept the focus away, and the keyboard closed on a
       // phone. Before the dispatch: after it this element is gone, and Chrome

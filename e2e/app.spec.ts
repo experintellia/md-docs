@@ -175,6 +175,19 @@ test('math in a table cell typesets in the table', async ({ page }) => {
   await expect(table.locator('td').nth(1)).toHaveText('$5');
 });
 
+test('a $$ formula in a table cell gets the width it needs', async ({ page }) => {
+  await page.keyboard.insertText(String.raw`| a | b |
+|---|---|
+| x | $$\int_0^1 f(x)\,dx = F(1)-F(0)$$ |
+| y | ok |
+
+after`);
+  const math = page.locator('.md-table .md-math');
+  await expect(math.locator('.katex')).toHaveCount(1);
+  // Not squashed to the column's other content behind a scrollbar.
+  expect(await math.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+});
+
 test('tapping a formula while the editor is not focused focuses it, so typing lands', async ({ page, isMobile }) => {
   // On a phone this is how the keyboard opens: there is no caret to tap beside.
   await page.keyboard.insertText(String.raw`the area is $\pi r^2$, roughly` + '\n\nafter');

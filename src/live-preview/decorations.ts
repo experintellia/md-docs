@@ -697,6 +697,9 @@ function mathTex(block: SyntaxNodeLike, doc: Text): string | null {
   return tex.trim() ? tex : null;
 }
 
+// The blocks whose text holds inline math.
+const TEXT_BLOCK = /^(?:Paragraph|ATXHeading\d|SetextHeading\d)$/;
+
 /**
  * Rendered `$$` blocks — block widgets (and `$$` or `$` inside a paragraph,
  * inline ones), so a state field, like tables above and
@@ -705,7 +708,7 @@ function mathTex(block: SyntaxNodeLike, doc: Text): string | null {
  */
 export function buildMath(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
-  const lineTex = new Map<number, number>();
+  const blockTex = new Map<number, number>();
   syntaxTree(state).iterate({
     enter: (node) => {
       // A table's own widget typesets the math in its cells.
@@ -713,12 +716,15 @@ export function buildMath(state: EditorState): DecorationSet {
       const block = node.name === 'MathBlock';
       if (!block && node.name !== 'DisplayMath' && node.name !== 'InlineMath') return;
       const tex = renderedTex(state, node.node);
-      // MAX_TEX bounds one formula; this bounds a line of them, which is
-      // drawn whole. Past it, the rest of the line's math stays source.
+      // MAX_TEX bounds one formula; this bounds a paragraph of them. A line is
+      // drawn whole, and a rendered `$$` over several lines joins them into
+      // one, so no smaller unit holds. Past it, the rest stays source.
       if (tex !== null && !block) {
-        const line = state.doc.lineAt(node.from).number;
-        const spent = (lineTex.get(line) ?? 0) + tex.length;
-        lineTex.set(line, spent);
+        let para = node.node.parent;
+        while (para && !TEXT_BLOCK.test(para.name)) para = para.parent;
+        const key = para?.from ?? node.from;
+        const spent = (blockTex.get(key) ?? 0) + tex.length;
+        blockTex.set(key, spent);
         if (spent > MAX_TEX) return false;
       }
       if (tex !== null) {
