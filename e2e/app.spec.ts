@@ -130,6 +130,29 @@ after`);
   await expect(page.locator('.cm-content')).toContainText(String.raw`\Omega = \{ (1,2)`);
 });
 
+for (const [kind, source, rendered] of [
+  ['$$ block', '$$\na^2\n$$', '.md-math'],
+  ['table', '| a | b |\n|---|---|\n| 1 | 2 |', '.md-table'],
+] as const) {
+  test(`ArrowUp and ArrowDown stop at a ${kind} instead of jumping over it`, async ({ page, isMobile }) => {
+    test.skip(isMobile, 'no hardware keyboard');
+    await page.keyboard.insertText(`top\n\n${source}\n\nbelow`);
+    const block = page.locator(rendered);
+    await page.keyboard.press('ControlOrMeta+Home');
+    await expect(block).toHaveCount(1);
+    // Down from `top`: the blank line, then the block, whose source opens.
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await expect(block).toHaveCount(0);
+    // Up from `below`: the blank line, then the block again.
+    await page.keyboard.press('ControlOrMeta+End');
+    await expect(block).toHaveCount(1);
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+    await expect(block).toHaveCount(0);
+  });
+}
+
 test('arrow keys move the caret the way a right-to-left line reads', async ({ page }) => {
   // The caret ends at the Arabic word's logical end, which is its left edge, so
   // ArrowRight steps back into the word and ArrowLeft forward. Without

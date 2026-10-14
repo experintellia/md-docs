@@ -1,6 +1,6 @@
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { type Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { type Extension, Prec } from '@codemirror/state';
+import { EditorView, keymap } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { linkClickHandler, livePreviewPlugin, mathField, tableField } from './decorations.ts';
 
@@ -29,12 +29,38 @@ const mdHighlight = HighlightStyle.define([
   { tag: tags.invalid, color: 'var(--tok-invalid)' },
 ]);
 
+// CodeMirror moves vertically by the drawn lines, and a rendered table or `$$`
+// block is one tall widget it steps right over: its source could only be
+// reached with the horizontal arrows. Stop on the block's near edge instead,
+// which reveals its source as the horizontal arrows already do.
+function intoBlock(forward: boolean) {
+  return (view: EditorView): boolean => {
+    const sel = view.state.selection.main;
+    if (!sel.empty) return false;
+    const moved = view.moveVertically(sel, forward);
+    const lo = Math.min(sel.head, moved.head);
+    const hi = Math.max(sel.head, moved.head);
+    let target = -1;
+    for (const field of [mathField, tableField]) {
+      view.state.field(field).between(lo, hi, (from, to, deco) => {
+        if (!deco.spec.block || from <= lo || to >= hi) return;
+        const edge = forward ? from : to;
+        if (target < 0 || (forward ? edge < target : edge > target)) target = edge;
+      });
+    }
+    if (target < 0) return false;
+    view.dispatch({ selection: { anchor: target }, scrollIntoView: true });
+    return true;
+  };
+}
+
 /**
  * Our clean-room Obsidian-style live-preview layer. Compose this into the
  * editor to render markdown formatting inline while keeping the source text.
  */
 export function livePreview(): Extension {
   return [
+    Prec.high(keymap.of([{ key: 'ArrowUp', run: intoBlock(false) }, { key: 'ArrowDown', run: intoBlock(true) }])),
     livePreviewPlugin,
     tableField,
     mathField,
