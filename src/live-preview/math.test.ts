@@ -223,6 +223,9 @@ test('a `$$` alone after a paragraph still opens a block, unless it closes one',
   const block = ['Paragraph', 'MathBlock', 'MathMark:$$', 'MathText:y', 'MathMark:$$'];
   assert.deepEqual(tree('text $$x$$\n$$\ny\n$$'), block);
   assert.deepEqual(tree('text $$\ny\n$$'), ['Paragraph']);
+  // Typing on after the close keeps it the close, not the start of a block.
+  assert.deepEqual(tree('text $$\ny\n$$ and more\nbelow'), ['Paragraph']);
+  assert.deepEqual(allRendered('text $$\ny\n$$.\n\nend'), ['y']);
   // A `$$` the paragraph's inline parse does not open is not one to close.
   assert.deepEqual(tree('Wrap TeX in `$$`, like this:\n$$\ny\n$$'), block);
   assert.deepEqual(tree('See <span title="$$">a</span>\n$$\ny\n$$'), block);

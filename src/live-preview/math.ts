@@ -28,7 +28,7 @@ function opening(line: Line): number {
   return line.text.indexOf('$$', line.pos + 2) === (close < 0 ? -1 : close) ? line.pos : -1;
 }
 
-// Past this length a paragraph's `$$` alone starts a block, as before. Each
+// Past this length a paragraph's `$$` line starts a block, as before. Each
 // such line asks the inline parser about the whole paragraph so far.
 const MAX_OPEN_PARAGRAPH = 2000;
 
@@ -112,10 +112,8 @@ export const mathBlock: MarkdownConfig = {
       return true;
     },
     // Like a fence, `$$` starts its block without a blank line above it.
-    // But a `$$` alone does not when it closes the paragraph's own `$$`
-    // (`text $$`, TeX, `$$`), as in Obsidian.
-    endLeaf: (cx, line, leaf) => opening(line) >= 0 && !(
-      line.text.slice(line.pos).trim() === '$$' && closesDisplayMath(cx, leaf.content)
-    ),
+    // But not when it closes the paragraph's own `$$` (`text $$`, TeX, `$$`),
+    // as in Obsidian — text typed on after that `$$` included.
+    endLeaf: (cx, line, leaf) => opening(line) >= 0 && !closesDisplayMath(cx, leaf.content),
   }],
 };
