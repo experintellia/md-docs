@@ -5,6 +5,12 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- Clicking or tapping in the empty space below the end of the document did
+  nothing in WebKit webviews (iOS among them). That space sits outside the
+  editable text, where CodeMirror doesn't listen. It now puts the cursor at
+  the end of the document, as Chromium already did.
+
 ## [0.4.0] - 2026-10-14
 
 ### Added
