@@ -201,6 +201,9 @@ test('`$$` in the middle of a paragraph is typeset there, as in Obsidian', () =>
     ['> We get $$\n> a\n> $$', ['a']],
     ['- We get $$\n  a\n  $$', ['a']],
     ['a $$x \\$$ b', []],
+    ['a $$$x$$ b', []],
+    ['We get $$ f(x)\n    > 0 $$', ['f(x)\n    > 0']],
+    ['> We get $$ f(x)\n>     > 0 $$', ['f(x)\n     > 0']],
     ['a `$$x$$` b', []],
     ['a $$ $$ b', []],
     ['| a | b |\n|---|---|\n| $$x$$ | y |', []],
@@ -217,8 +220,22 @@ test('its source shows while the cursor is in it', () => {
 });
 
 test('a `$$` alone after a paragraph still opens a block, unless it closes one', () => {
-  assert.deepEqual(tree('text $$x$$\n$$\ny\n$$'), ['Paragraph', 'MathBlock', 'MathMark:$$', 'MathText:y', 'MathMark:$$']);
+  const block = ['Paragraph', 'MathBlock', 'MathMark:$$', 'MathText:y', 'MathMark:$$'];
+  assert.deepEqual(tree('text $$x$$\n$$\ny\n$$'), block);
   assert.deepEqual(tree('text $$\ny\n$$'), ['Paragraph']);
+  // A `$$` the paragraph's inline parse does not open is not one to close.
+  assert.deepEqual(tree('Wrap TeX in `$$`, like this:\n$$\ny\n$$'), block);
+  assert.deepEqual(tree('See <span title="$$">a</span>\n$$\ny\n$$'), block);
+  assert.deepEqual(tree('See [a](http://a/$$)\n$$\ny\n$$'), block);
+});
+
+test('a paragraph of many `$$` lines still parses in linear time', () => {
+  // Each `$$` alone asks the inline parser about the paragraph so far.
+  for (const doc of ['a $$\n' + '$$\n'.repeat(20_000), 'a $$\n' + '$$ x $$\n'.repeat(20_000)]) {
+    const started = performance.now();
+    state(doc);
+    assert.ok(performance.now() - started < 2000, `${doc.slice(0, 12)}…: ${performance.now() - started} ms`);
+  }
 });
 
 // Every `$ … $` typeset in the text, in order.

@@ -648,18 +648,23 @@ export const tableField = blockField(buildTables);
 function renderedTex(state: EditorState, block: SyntaxNodeLike): string | null {
   if (rangeHasSelection(state, block.from, block.to)) return null;
   if (block.getChildren('MathMark').length < 2) return null;
-  let tex = block.getChildren('MathText')
-    .map((part) => state.doc.sliceString(part.from, part.to))
-    .join('\n');
-  // `$$` mid-paragraph is one MathText over all its lines, with the `> ` of a
-  // quote on each. A line of a paragraph never starts with a `>` of its own:
-  // that would start a quote. (A block's TeX line can, so not there.)
-  if (block.name === 'DisplayMath') tex = tex.replace(/\n[ \t>]*/g, '\n');
+  // `$$` mid-paragraph is one MathText over all its lines, with the `>` of a
+  // quote on each inside it; a block has one per line, the marks outside.
+  const tex = block.getChildren('MathText').map((part) => {
+    let text = '';
+    let at = part.from;
+    for (const mark of part.getChildren('QuoteMark')) {
+      text += state.doc.sliceString(at, mark.from);
+      at = mark.to;
+    }
+    return text + state.doc.sliceString(at, part.to);
+  }).join('\n');
   return tex.trim() ? tex : null;
 }
 
 /**
- * Rendered `$$` blocks — block widgets (and `$$` or `$` inside a paragraph, inline ones), so a state field, like tables above and
+ * Rendered `$$` blocks — block widgets (and `$$` or `$` inside a paragraph,
+ * inline ones), so a state field, like tables above and
  * with the same full-document rebuild. The widget compares by its TeX, so a
  * rebuild re-typesets only a block whose TeX changed.
  */

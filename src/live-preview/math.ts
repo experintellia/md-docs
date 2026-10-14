@@ -1,5 +1,5 @@
 import { tags } from '@lezer/highlight';
-import type { Element, Line, MarkdownConfig } from '@lezer/markdown';
+import type { BlockContext, Element, Line, MarkdownConfig } from '@lezer/markdown';
 
 // `@lezer/markdown`'s own FencedCode reads both of these; they are just not in
 // its typings. `depth` is how many of the open containers (quote, list item)
@@ -31,6 +31,19 @@ function opening(line: Line): number {
   return line.text.indexOf('$$', line.pos + 2) === (close < 0 ? -1 : close) ? line.pos : -1;
 }
 
+// Past this length a paragraph's `$$` alone starts a block, as before. Each
+// such line asks the inline parser about the whole paragraph so far.
+const MAX_OPEN_PARAGRAPH = 2000;
+
+// Would a `$$` after this paragraph text close a `$$` open in it? Asked of the
+// inline parser itself, so a `$$` in code, a URL or an attribute is not one.
+function closesDisplayMath(cx: BlockContext, text: string): boolean {
+  if (text.length > MAX_OPEN_PARAGRAPH) return false;
+  const id = cx.parser.nodeSet.types.find((type) => type.name === 'DisplayMath')!.id;
+  const withClose = `${text}\n$$`;
+  return cx.parser.parseInline(withClose, 0).some((elt) => elt.type === id && elt.to === withClose.length);
+}
+
 /**
  * `$$ … $$` display math as a block, the way Obsidian, GitHub and Pandoc read
  * it: `$$` opens a line, the block runs until a line ending in `$$`, and either
@@ -58,7 +71,8 @@ export const mathBlock: MarkdownConfig = {
     // run on over the paragraph's next lines (`endLeaf` below keeps a `$$`
     // alone on one of them as its close).
     parse(cx, next, pos) {
-      if (next !== 36 || cx.char(pos + 1) !== 36 || cx.char(pos + 2) === 36) return -1;
+      // `$$$` is no opener, as for a block: not at its first `$`, nor its second.
+      if (next !== 36 || cx.char(pos + 1) !== 36 || cx.char(pos + 2) === 36 || cx.char(pos - 1) === 36) return -1;
       for (let i = pos + 2; i < cx.end; i++) {
         const c = cx.char(i);
         if (c === 92) i++; // `\$` is an escaped dollar, not a close
@@ -125,11 +139,10 @@ export const mathBlock: MarkdownConfig = {
       return true;
     },
     // Like a fence, `$$` starts its block without a blank line above it.
-    // But not inside a paragraph whose own `$$` is still open: there it is
-    // that one's close (`text $$`, TeX, `$$`), as in Obsidian.
-    // ponytail: counts `$$` in inline code too; a parse of the paragraph so far
-    // if that ever matters.
-    endLeaf: (_cx, line, leaf) => opening(line) >= 0
-      && (leaf.content.match(/(?<![\\$])\$\$(?!\$)/g) ?? []).length % 2 === 0,
+    // But a `$$` alone does not when it closes the paragraph's own `$$`
+    // (`text $$`, TeX, `$$`), as in Obsidian.
+    endLeaf: (cx, line, leaf) => opening(line) >= 0 && !(
+      line.text.slice(line.pos).trim() === '$$' && closesDisplayMath(cx, leaf.content)
+    ),
   }],
 };
