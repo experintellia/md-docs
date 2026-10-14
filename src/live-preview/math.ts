@@ -32,6 +32,12 @@ function opening(line: Line): number {
 // such line asks the inline parser about the whole paragraph so far.
 const MAX_OPEN_PARAGRAPH = 2000;
 
+// Is this leaf a GFM table so far? Its second line is the `|---|` row.
+function isTable(text: string): boolean {
+  const delimiter = text.split('\n', 2)[1] ?? '';
+  return delimiter.includes('|') && delimiter.includes('-') && /^[\s|:-]*$/.test(delimiter);
+}
+
 // Would a `$$` after this paragraph text close a `$$` open in it? Asked of the
 // inline parser itself, so a `$$` in code, a URL or an attribute is not one.
 function closesDisplayMath(cx: BlockContext, text: string): boolean {
@@ -114,6 +120,9 @@ export const mathBlock: MarkdownConfig = {
     // Like a fence, `$$` starts its block without a blank line above it.
     // But not when it closes the paragraph's own `$$` (`text $$`, TeX, `$$`),
     // as in Obsidian — text typed on after that `$$` included.
-    endLeaf: (cx, line, leaf) => opening(line) >= 0 && !closesDisplayMath(cx, leaf.content),
+    // A table is no such paragraph: its cells are parsed one by one, so no
+    // later line can close a `$$` in one.
+    endLeaf: (cx, line, leaf) => opening(line) >= 0
+      && (isTable(leaf.content) || !closesDisplayMath(cx, leaf.content)),
   }],
 };
