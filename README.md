@@ -12,7 +12,8 @@ renders formatting inline as you type), Yjs CRDT collaboration via
 toolbar. See [`CREDITS.md`](./CREDITS.md) for inspiration and attribution and
 [`PLAN.md`](./PLAN.md) for the design and roadmap.
 
-> Status: early development. See `PLAN.md` for the phased plan.
+> Status: usable for everyday editing and collaboration. Still pre-1.0, so
+> expect rough edges; see `PLAN.md` for what's next.
 
 ## Development
 
