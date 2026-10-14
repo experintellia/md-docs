@@ -45,23 +45,23 @@ export const mathBlock: MarkdownConfig = {
     { name: 'MathBlock', block: true },
     { name: 'MathMark', style: tags.processingInstruction },
     { name: 'MathText', style: tags.monospace },
-    { name: 'InlineMath' },
+    { name: 'DisplayMath' },
   ],
   parseInline: [{
-    name: 'InlineMath',
+    name: 'DisplayMath',
     // `hello $$ x^2 $$`: display math in the middle of a paragraph, which
-    // Obsidian typesets on a line of its own below the text before it.
-    // ponytail: one line only — a `$$` alone on the next line opens a block.
+    // Obsidian typesets on a line of its own below the text before it. It may
+    // run on over the paragraph's next lines (`endLeaf` below keeps a `$$`
+    // alone on one of them as its close).
     parse(cx, next, pos) {
       if (next !== 36 || cx.char(pos + 1) !== 36 || cx.char(pos + 2) === 36) return -1;
       for (let i = pos + 2; i < cx.end; i++) {
         const c = cx.char(i);
-        if (c === 10) return -1;
         if (c === 92) i++; // `\$` is an escaped dollar, not a close
         else if (c === 36 && cx.char(i + 1) === 36) {
           const children = [cx.elt('MathMark', pos, pos + 2), cx.elt('MathMark', i, i + 2)];
           if (i > pos + 2) children.splice(1, 0, cx.elt('MathText', pos + 2, i));
-          return cx.addElement(cx.elt('InlineMath', pos, i + 2, children));
+          return cx.addElement(cx.elt('DisplayMath', pos, i + 2, children));
         }
       }
       return -1;
@@ -98,6 +98,11 @@ export const mathBlock: MarkdownConfig = {
       return true;
     },
     // Like a fence, `$$` starts its block without a blank line above it.
-    endLeaf: (_cx, line) => opening(line) >= 0,
+    // But not inside a paragraph whose own `$$` is still open: there it is
+    // that one's close (`text $$`, TeX, `$$`), as in Obsidian.
+    // ponytail: counts `$$` in inline code too; a parse of the paragraph so far
+    // if that ever matters.
+    endLeaf: (_cx, line, leaf) => opening(line) >= 0
+      && (leaf.content.match(/(?<![\\$])\$\$(?!\$)/g) ?? []).length % 2 === 0,
   }],
 };

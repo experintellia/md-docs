@@ -177,13 +177,46 @@ test('`$$$` opens nothing', () => {
   assert.deepEqual(tree('$$$\na\n$$'), ['Paragraph', 'MathBlock', 'MathMark:$$']);
 });
 
+// Every TeX typeset, in order.
+function allRendered(doc: string, cursor = doc.length): string[] {
+  const s = state(doc, cursor);
+  const out: string[] = [];
+  buildMath(s).between(0, s.doc.length, (_f, _t, deco) => {
+    const widget = (deco.spec as { widget?: unknown }).widget;
+    if (widget instanceof MathWidget) out.push(widget.tex.trim());
+  });
+  return out;
+}
+
+// What Obsidian typesets as display math, with the cursor out of the way.
 test('`$$` in the middle of a paragraph is typeset there, as in Obsidian', () => {
-  const doc = 'hello $$ E = mc^2 $$';
-  assert.equal(rendered(`${doc}\n\nafter`, doc.length + 2), ' E = mc^2 ');
-  assert.equal(rendered(`${doc}\n\nafter`, 10), undefined, 'not while the cursor is in it');
-  assert.equal(rendered('a $$x$$ b', 1), 'x', 'the cursor beside it, not in it');
-  assert.equal(rendered('a $$x \\$$ b', 0), undefined, 'an escaped dollar does not close it');
-  assert.equal(rendered('a $$x\ny$$ b', 0), undefined, 'nor does a later line');
-  assert.equal(rendered('a `$$x$$` b', 0), undefined, 'inline code stays code');
-  assert.equal(rendered('| a | b |\n|---|---|\n| $$x$$ | y |\n\nz', 0), undefined, 'a table renders its own cells');
+  const cases: [string, string[]][] = [
+    ['hello $$ E = mc^2 $$', ['E = mc^2']],
+    ['hello $$x$$ world', ['x']],
+    ['$$a$$ and $$b$$ are equal', ['a', 'b']],
+    ['- item $$x$$', ['x']],
+    ['# Title $$x$$', ['x']],
+    ['We get $$ a +\nb $$ here', ['a +\nb']],
+    ['We get $$\nE = mc^2\n$$', ['E = mc^2']],
+    ['> We get $$\n> a\n> $$', ['a']],
+    ['- We get $$\n  a\n  $$', ['a']],
+    ['a $$x \\$$ b', []],
+    ['a `$$x$$` b', []],
+    ['a $$ $$ b', []],
+    ['| a | b |\n|---|---|\n| $$x$$ | y |', []],
+  ];
+  for (const [doc, tex] of cases) {
+    assert.deepEqual(allRendered(`${doc}\n\nend`), tex, JSON.stringify(doc));
+  }
+});
+
+test('its source shows while the cursor is in it', () => {
+  const doc = 'hello $$ E = mc^2 $$\n\nafter';
+  assert.deepEqual(allRendered(doc, 10), []);
+  assert.deepEqual(allRendered(doc, 1), ['E = mc^2'], 'beside it is not in it');
+});
+
+test('a `$$` alone after a paragraph still opens a block, unless it closes one', () => {
+  assert.deepEqual(tree('text $$x$$\n$$\ny\n$$'), ['Paragraph', 'MathBlock', 'MathMark:$$', 'MathText:y', 'MathMark:$$']);
+  assert.deepEqual(tree('text $$\ny\n$$'), ['Paragraph']);
 });

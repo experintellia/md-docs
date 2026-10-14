@@ -648,14 +648,18 @@ export const tableField = blockField(buildTables);
 function renderedTex(state: EditorState, block: SyntaxNodeLike): string | null {
   if (rangeHasSelection(state, block.from, block.to)) return null;
   if (block.getChildren('MathMark').length < 2) return null;
-  const tex = block.getChildren('MathText')
+  let tex = block.getChildren('MathText')
     .map((part) => state.doc.sliceString(part.from, part.to))
     .join('\n');
+  // `$$` mid-paragraph is one MathText over all its lines, with the `> ` of a
+  // quote on each. A line of a paragraph never starts with a `>` of its own:
+  // that would start a quote. (A block's TeX line can, so not there.)
+  if (block.name === 'DisplayMath') tex = tex.replace(/\n[ \t>]*/g, '\n');
   return tex.trim() ? tex : null;
 }
 
 /**
- * Rendered `$$` blocks — block widgets (and `$$` inside a paragraph, inline ones), so a state field, like tables above and
+ * Rendered `$$` blocks — block widgets (and `$$` inside a paragraph, inline ones over the same element), so a state field, like tables above and
  * with the same full-document rebuild. The widget compares by its TeX, so a
  * rebuild re-typesets only a block whose TeX changed.
  */
@@ -666,11 +670,11 @@ export function buildMath(state: EditorState): DecorationSet {
       // A table typesets nothing in its cells; its own widget replaces them.
       if (node.name === 'Table') return false;
       const block = node.name === 'MathBlock';
-      if (!block && node.name !== 'InlineMath') return;
+      if (!block && node.name !== 'DisplayMath') return;
       const tex = renderedTex(state, node.node);
       if (tex !== null) {
-        // Inline, the widget is still a block-level element in the line, so it
-        // sits below the text before it, as in Obsidian.
+        // Mid-paragraph, the widget is still a block-level element in the
+        // line, so it sits below the text before it, as in Obsidian.
         ranges.push(
           Decoration.replace({ widget: new MathWidget(tex), block }).range(node.from, node.to),
         );
