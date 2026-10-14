@@ -489,3 +489,19 @@ test('lines full of `$` parse and decorate in linear time', () => {
     assert.ok(ms < 3000, `${JSON.stringify(doc.slice(0, 16))}…: ${Math.round(ms)} ms`);
   }
 });
+
+test('a paragraph typesets a bounded number of formulas, however short', () => {
+  // 10,000 `$a$` are 10,000 characters of TeX, but 72,000 nodes of KaTeX.
+  const count = allRendered(`${'$a$ '.repeat(10_000)}\n\nend`).length;
+  assert.ok(count > 0 && count <= 200, `${count} formulas typeset`);
+});
+
+test('a long line of math still decorates in linear time', () => {
+  // Reading the line's direction around its math was quadratic: 5 s here.
+  const s = state(`${'$a$ '.repeat(40_000)}\n\nend`, 0);
+  const view = { state: s, visibleRanges: [{ from: 0, to: s.doc.length }] } as unknown as EditorView;
+  const started = performance.now();
+  buildDecorations(view);
+  const ms = performance.now() - started;
+  assert.ok(ms < 1500, `${Math.round(ms)} ms`);
+});

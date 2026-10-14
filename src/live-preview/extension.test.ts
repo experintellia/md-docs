@@ -240,6 +240,13 @@ test('only real nesting counts against the depth limit', () => {
   ]) {
     assert.match(typesetInto(tex).title, /Nested too deeply/, tex.slice(0, 20));
   }
+  // Nor does `\color`, or a style switch: each is a group to the end of its
+  // own, which 900 deep froze Chromium's layout for 22 s.
+  for (const tex of ['\\color{red}'.repeat(300) + 'x', '\\displaystyle '.repeat(300) + 'x']) {
+    assert.match(typesetInto(tex).title, /Nested too deeply/, tex.slice(0, 20));
+  }
+  assert.equal(typesetInto(`${'\\color{red}'.repeat(20)}x`).title, '', 'a few are fine');
+  assert.ok(typesetInto(`${'\\frac{1}{'.repeat(50)}x${'}'.repeat(50)}`).querySelector('.katex'), 'and 50 groups deep');
   // Side by side, they are no nesting at all.
   assert.equal(typesetInto('\\begin{array}{c}x\\end{array}'.repeat(60)).title, '');
 });

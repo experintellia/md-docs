@@ -1,5 +1,5 @@
 import { type EditorView, WidgetType } from '@codemirror/view';
-import { MAX_TEX, typeset } from './math.ts';
+import { MAX_TEX, mathCost, typeset } from './math.ts';
 
 /** A run of cell text, carrying the class the live preview paints it with. */
 export interface Segment {
@@ -92,8 +92,8 @@ export class TableWidget extends WidgetType {
 }
 
 function node(segment: Segment, view: EditorView, budget: { left: number }): Node {
-  if (segment.math && segment.math.tex.length <= budget.left) {
-    budget.left -= segment.math.tex.length;
+  if (segment.math && mathCost(segment.math.tex) <= budget.left) {
+    budget.left -= mathCost(segment.math.tex);
     const { tex, display } = segment.math;
     const el = document.createElement(display ? 'div' : 'span');
     el.className = display ? 'md-math' : 'md-math-inline';

@@ -175,6 +175,15 @@ test('math in a table cell typesets in the table', async ({ page }) => {
   await expect(table.locator('td').nth(1)).toHaveText('$5');
 });
 
+test('a negative size in TeX cannot make its line endlessly tall', async ({ page }) => {
+  // KaTeX caps positive sizes only: this made a line 33 million px tall.
+  await page.keyboard.insertText(String.raw`a $\raisebox{-99999999em}{X}$ b` + '\n\n$$\\rule[-99999em]{1em}{1em}$$\n\nafter');
+  await expect(page.locator('.md-math-inline .katex')).toHaveCount(1);
+  await expect(page.locator('.md-math .katex')).toHaveCount(1);
+  const tallest = await page.locator('.cm-line').evaluateAll((lines) => Math.max(...lines.map((l) => l.clientHeight)));
+  expect(tallest).toBeLessThan(2000);
+});
+
 test('a $$ formula in a table cell gets the width it needs', async ({ page }) => {
   await page.keyboard.insertText(String.raw`| a | b |
 |---|---|

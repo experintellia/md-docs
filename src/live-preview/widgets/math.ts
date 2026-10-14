@@ -29,6 +29,11 @@ const DEFINERS = [
 // formula comes near it.
 export const MAX_TEX = 10_000;
 
+// What a formula counts against a paragraph's or a table's MAX_TEX: its TeX,
+// and a widget's worth of DOM. 10,000 `$a$` were 72,000 nodes and 4 s a
+// keystroke, though only 10,000 characters of TeX.
+export const mathCost = (tex: string): number => tex.length + 50;
+
 // Past this, nesting is the cost: `\cancel{` 500 deep is 4.5 KB and took four
 // seconds to lay out in Chromium, and `\begin{array}` 160 deep crashed its
 // renderer. Groups are what nest: braces, `\left`, environments, `\bgroup`.
@@ -62,8 +67,11 @@ export function render(k: Katex, el: HTMLElement, tex: string, displayMode = tru
     el.title = `Nested too deeply to typeset (over ${MAX_DEPTH} levels)`;
     return;
   }
+  // Into a detached element first: what is too deep is caught before any
+  // layout, which is where the cost is.
+  const out = document.createElement('span');
   try {
-    k.render(tex, el, {
+    k.render(tex, out, {
       displayMode,
       // Half-typed TeX renders as red source with the error in its tooltip
       // instead of throwing.
@@ -73,6 +81,7 @@ export function render(k: Katex, el: HTMLElement, tex: string, displayMode = tru
       strict: 'ignore',
       // `trust` stays off, which keeps links, images and raw HTML classes out;
       // and a size given in the TeX (`\rule{500em}{500em}`) is capped at 50em.
+      // A negative one is not: the stylesheet caps the formula's height.
       maxSize: 50,
       // Fresh per render: KaTeX writes into this object.
       macros: Object.fromEntries(DEFINERS.map((name) => [name, () => {
@@ -82,7 +91,29 @@ export function render(k: Katex, el: HTMLElement, tex: string, displayMode = tru
   } catch {
     // Not a parse error (those are rendered, above) — leave the source up.
     el.textContent = tex;
+    return;
   }
+  const html = out.querySelector('.katex-html');
+  const mathml = out.querySelector('.katex-mathml');
+  if ((html && treeDepth(html) > MAX_HTML_DEPTH) || (mathml && treeDepth(mathml) > MAX_MATHML_DEPTH)) {
+    el.textContent = tex;
+    el.title = 'Nested too deeply to typeset';
+    return;
+  }
+  el.replaceChildren(...out.childNodes);
+}
+
+// What KaTeX builds can nest deeper than the TeX shows: each `\color` or
+// `\displaystyle` opens a group to the end of its own, without a brace, and
+// 900 of them froze Chromium's layout for 22 s. Formulas within MAX_DEPTH reach
+// about 360 (HTML) and 55 (MathML); `\color` 300 deep, 0.9 s, reaches 304.
+const MAX_HTML_DEPTH = 400;
+const MAX_MATHML_DEPTH = 160;
+
+function treeDepth(el: Element): number {
+  let deepest = 0;
+  for (const child of el.children) deepest = Math.max(deepest, treeDepth(child));
+  return deepest + 1;
 }
 
 /**

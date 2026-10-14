@@ -10,7 +10,7 @@ import {
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
-import { MAX_TEX, MathWidget } from './widgets/math.ts';
+import { MAX_TEX, MathWidget, mathCost } from './widgets/math.ts';
 import { type Segment, type TableSpec, TableWidget } from './widgets/table.ts';
 
 /**
@@ -106,7 +106,10 @@ function blockDirection(state: EditorState, from: number, to: number): 'ltr' | '
 
 // A line's text with its math blanked out: TeX letters are not prose.
 function proseText(state: EditorState, line: Line): string {
-  let text = line.text;
+  // Built in one pass: rebuilding the line per formula was quadratic, seconds
+  // a keystroke on a long line of them.
+  let text = '';
+  let at = 0;
   syntaxTree(state).iterate({
     from: line.from,
     to: line.to,
@@ -114,11 +117,12 @@ function proseText(state: EditorState, line: Line): string {
       if (n.name !== 'InlineMath' && n.name !== 'DisplayMath') return;
       const a = Math.max(n.from, line.from) - line.from;
       const b = Math.min(n.to, line.to) - line.from;
-      text = text.slice(0, a) + ' '.repeat(b - a) + text.slice(b);
+      text += line.text.slice(at, a) + ' '.repeat(b - a);
+      at = b;
       return false;
     },
   });
-  return text;
+  return text + line.text.slice(at);
 }
 
 export function lineDirection(text: string): 'ltr' | 'rtl' | null {
@@ -723,7 +727,7 @@ export function buildMath(state: EditorState): DecorationSet {
         let para = node.node.parent;
         while (para && !TEXT_BLOCK.test(para.name)) para = para.parent;
         const key = para?.from ?? node.from;
-        const spent = (blockTex.get(key) ?? 0) + tex.length;
+        const spent = (blockTex.get(key) ?? 0) + mathCost(tex);
         blockTex.set(key, spent);
         if (spent > MAX_TEX) return false;
       }
