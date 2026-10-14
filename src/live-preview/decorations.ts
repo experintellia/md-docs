@@ -10,7 +10,7 @@ import {
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
-import { MathWidget } from './widgets/math.ts';
+import { MAX_TEX, MathWidget } from './widgets/math.ts';
 import { type Segment, type TableSpec, TableWidget } from './widgets/table.ts';
 
 /**
@@ -250,9 +250,14 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
       continue;
     }
     if (child.name === 'Link') {
-      const url = linkDestination(child, doc);
-      const text = cellSegments(child, doc, cls).map((s) => s.text).join('');
-      out.push({ text, cls: 'md-link', href: safeHref(url ?? '') ?? undefined });
+      const href = safeHref(linkDestination(child, doc) ?? '') ?? undefined;
+      const inner = cellSegments(child, doc, cls);
+      // Math in the link text is typeset, the text around it still the link.
+      if (inner.some((seg) => seg.math)) {
+        out.push(...inner.map((seg) => (seg.math ? seg : { text: seg.text, cls: 'md-link', href })));
+        continue;
+      }
+      out.push({ text: inner.map((seg) => seg.text).join(''), cls: 'md-link', href });
       continue;
     }
     out.push(...cellSegments(child, doc, INLINE_MARK_CLASS[child.name] ?? cls));
@@ -700,6 +705,7 @@ function mathTex(block: SyntaxNodeLike, doc: Text): string | null {
  */
 export function buildMath(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
+  const lineTex = new Map<number, number>();
   syntaxTree(state).iterate({
     enter: (node) => {
       // A table's own widget typesets the math in its cells.
@@ -707,6 +713,14 @@ export function buildMath(state: EditorState): DecorationSet {
       const block = node.name === 'MathBlock';
       if (!block && node.name !== 'DisplayMath' && node.name !== 'InlineMath') return;
       const tex = renderedTex(state, node.node);
+      // MAX_TEX bounds one formula; this bounds a line of them, which is
+      // drawn whole. Past it, the rest of the line's math stays source.
+      if (tex !== null && !block) {
+        const line = state.doc.lineAt(node.from).number;
+        const spent = (lineTex.get(line) ?? 0) + tex.length;
+        lineTex.set(line, spent);
+        if (spent > MAX_TEX) return false;
+      }
       if (tex !== null) {
         // Mid-paragraph, `$$` is still a block-level element in the line, so
         // it sits below the text before it, as in Obsidian. `$` is in the text.

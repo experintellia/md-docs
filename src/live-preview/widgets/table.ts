@@ -1,5 +1,5 @@
 import { type EditorView, WidgetType } from '@codemirror/view';
-import { typeset } from './math.ts';
+import { MAX_TEX, typeset } from './math.ts';
 
 /** A run of cell text, carrying the class the live preview paints it with. */
 export interface Segment {
@@ -67,27 +67,33 @@ export class TableWidget extends WidgetType {
     const table = wrap.appendChild(document.createElement('table'));
     table.className = 'md-table';
 
+    // MAX_TEX bounds one formula; this bounds the table's, all drawn at once.
+    // Past it, the rest of its math stays source.
+    const budget = { left: MAX_TEX };
     const head = table.appendChild(document.createElement('thead'));
-    head.appendChild(this.row(view, header, align, 'th'));
+    head.appendChild(this.row(view, budget, header, align, 'th'));
     const body = table.appendChild(document.createElement('tbody'));
-    for (const row of rows) body.appendChild(this.row(view, row, align, 'td'));
+    for (const row of rows) body.appendChild(this.row(view, budget, row, align, 'td'));
     return wrap;
   }
 
-  private row(view: EditorView, cells: Segment[][], align: TableSpec['align'], tag: 'th' | 'td'): HTMLElement {
+  private row(
+    view: EditorView, budget: { left: number }, cells: Segment[][], align: TableSpec['align'], tag: 'th' | 'td',
+  ): HTMLElement {
     const tr = document.createElement('tr');
     cells.forEach((segments, column) => {
       const cell = tr.appendChild(document.createElement(tag));
       // Logical, so a right-to-left table's "start" is its right-hand edge.
       if (align[column]) cell.style.textAlign = align[column]!;
-      for (const segment of segments) cell.append(node(segment, view));
+      for (const segment of segments) cell.append(node(segment, view, budget));
     });
     return tr;
   }
 }
 
-function node(segment: Segment, view: EditorView): Node {
-  if (segment.math) {
+function node(segment: Segment, view: EditorView, budget: { left: number }): Node {
+  if (segment.math && segment.math.tex.length <= budget.left) {
+    budget.left -= segment.math.tex.length;
     const { tex, display } = segment.math;
     const el = document.createElement(display ? 'div' : 'span');
     el.className = display ? 'md-math' : 'md-math-inline';

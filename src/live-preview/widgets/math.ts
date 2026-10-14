@@ -29,10 +29,33 @@ const DEFINERS = [
 // formula comes near it.
 export const MAX_TEX = 10_000;
 
+// Past this, nesting is the cost: `\cancel{` 500 deep is 4.5 KB and took four
+// seconds to lay out in Chromium. Without braces KaTeX nests nothing deeply —
+// it errors out at once — so braces and `\left` are what is counted.
+export const MAX_DEPTH = 50;
+
+function depth(tex: string): number {
+  let deepest = 0;
+  let at = 0;
+  // A command (`\left`, not `\leftarrow`), an escaped character (`\{` is no
+  // group), or a brace.
+  for (const [token] of tex.matchAll(/\\[a-zA-Z]+|\\.|[{}]/g)) {
+    if (token === '{' || token === '\\left') at++;
+    else if (token === '}' || token === '\\right') at--;
+    deepest = Math.max(deepest, at);
+  }
+  return deepest;
+}
+
 export function render(k: Katex, el: HTMLElement, tex: string, displayMode = true): void {
   if (tex.length > MAX_TEX) {
     el.textContent = tex;
     el.title = `Too long to typeset (over ${MAX_TEX} characters)`;
+    return;
+  }
+  if (depth(tex) > MAX_DEPTH) {
+    el.textContent = tex;
+    el.title = `Nested too deeply to typeset (over ${MAX_DEPTH} levels)`;
     return;
   }
   try {

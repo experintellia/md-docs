@@ -396,3 +396,86 @@ test('a non-breaking space next to `$` is a space', () => {
   assert.deepEqual(inlineRendered('de 5 $ à 10 $.\n\nend'), []);
   assert.deepEqual(inlineRendered('$ x$ and $x $\n\nend'), []);
 });
+
+// The rendered table's widget spec, the cursor below it unless given.
+function tableSpec(doc: string, cursor = doc.length, readOnly = false): TableWidget['spec'] | undefined {
+  const s = EditorState.create({
+    doc,
+    selection: { anchor: cursor },
+    extensions: [markdown({ base: markdownLanguage, extensions: [mathBlock] }), EditorState.readOnly.of(readOnly)],
+  });
+  ensureSyntaxTree(s, s.doc.length, 5000);
+  let spec: TableWidget['spec'] | undefined;
+  buildTables(s).between(0, s.doc.length, (_f, _t, deco) => {
+    const w = (deco.spec as { widget?: unknown }).widget;
+    if (w instanceof TableWidget) spec = w.spec;
+  });
+  return spec;
+}
+
+test('math in a header cell is typeset by the table too', () => {
+  const { header } = tableSpec('| $x^2$ | $$y$$ |\n|---|---|\n| 1 | 2 |\n\nend')!;
+  assert.deepEqual(header.map((cell) => cell.map((seg) => seg.math)), [
+    [{ tex: 'x^2', display: false }], [{ tex: 'y', display: true }],
+  ]);
+});
+
+test('math beside an empty cell keeps its column, and unclosed math stays text', () => {
+  const table = (row: string): string => `| a | b |\n|---|---|\n${row}\n\nend`;
+  assert.deepEqual(cellMath(table('| | $x$ |')), [[], ['x']]);
+  assert.deepEqual(cellMath(table('| $x$ | |')), [['x'], []]);
+  assert.deepEqual(
+    tableSpec(table('| $x | $$y |'))!.rows[0].map((cell) => cell.map((seg) => seg.text).join('')),
+    ['$x', '$$y'],
+  );
+});
+
+test('math in a table in a quote or a list item is typeset by that table', () => {
+  for (const doc of ['> | a |\n> |---|\n> | $x$ |\n\nend', '- | a |\n  |---|\n  | $x$ |\n\nend']) {
+    assert.deepEqual(cellMath(doc), [['x']], JSON.stringify(doc));
+  }
+});
+
+test('math in a cell\'s link text is typeset, as it is in the text', () => {
+  // In the text `[a $y$](u)` typesets `y`; a cell flattens a link's text to
+  // its source, so the reader would see `$y$`.
+  assert.deepEqual(inlineRendered('[a $y$](http://a)\n\nend'), ['y']);
+  const [cell] = tableSpec('| a |\n|---|\n| [a $y$](http://a) |\n\nend')!.rows[0];
+  assert.deepEqual(cell.flatMap((seg) => (seg.math ? [seg.math.tex] : [])), ['y'], JSON.stringify(cell));
+  assert.ok(!cell.some((seg) => !seg.math && seg.text.includes('$')), JSON.stringify(cell));
+});
+
+test('read mode typesets math even under the caret', () => {
+  // There is no editing to show the source for (see rangeHasSelection).
+  const doc = '| a |\n|---|\n| $x$ |\n\nend';
+  assert.deepEqual(tableSpec(doc, doc.indexOf('$x') + 1, true)!.rows[0][0][0].math, { tex: 'x', display: false });
+  const s = EditorState.create({
+    doc: 'a $x$ b',
+    selection: { anchor: 3 },
+    extensions: [markdown({ base: markdownLanguage, extensions: [mathBlock] }), EditorState.readOnly.of(true)],
+  });
+  ensureSyntaxTree(s, s.doc.length, 5000);
+  assert.equal(buildMath(s).size, 1);
+});
+
+test('lines full of `$` parse and decorate in linear time', () => {
+  // Each `$` makes the inline parsers scan ahead; none may scan the rest of the
+  // paragraph for every one. 50,000 characters each, from another peer.
+  const docs = [
+    '$a$ '.repeat(12_500), // 12,500 formulas in one paragraph
+    '$a $'.repeat(12_500), // openers that never close
+    'it costs $5 and '.repeat(3_125), // money
+    '$$a\\'.repeat(12_500), // `$$` whose close is escaped
+    'a $$\nb\n'.repeat(6_250), // `$$` over lines
+    '`$$`$$'.repeat(8_333), // `$$` in code between real ones
+    '| a | b |\n|---|---|\n' + '| $x$ | $$y$$ |\n'.repeat(3_125), // a long table
+  ];
+  for (const doc of docs) {
+    const started = performance.now();
+    const s = state(doc);
+    buildMath(s);
+    buildTables(s);
+    const ms = performance.now() - started;
+    assert.ok(ms < 3000, `${JSON.stringify(doc.slice(0, 16))}…: ${Math.round(ms)} ms`);
+  }
+});
