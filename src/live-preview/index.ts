@@ -1,5 +1,5 @@
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { type Extension, Prec } from '@codemirror/state';
+import { EditorSelection, type Extension, Prec } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { linkClickHandler, livePreviewPlugin, mathField, tableField } from './decorations.ts';
@@ -43,13 +43,20 @@ function intoBlock(forward: boolean) {
     let target = -1;
     for (const field of [mathField, tableField]) {
       view.state.field(field).between(lo, hi, (from, to, deco) => {
-        if (!deco.spec.block || from <= lo || to >= hi) return;
+        if (!deco.spec.block) return;
+        // The edge the caret meets first must lie past it and within the
+        // move. The far edge may end the move: a block at the document's end,
+        // or after the `> ` of a quote, which motion would otherwise cross.
         const edge = forward ? from : to;
+        if (forward ? edge <= sel.head || edge > moved.head : edge >= sel.head || edge < moved.head) return;
         if (target < 0 || (forward ? edge < target : edge > target)) target = edge;
       });
     }
     if (target < 0) return false;
-    view.dispatch({ selection: { anchor: target }, scrollIntoView: true });
+    // Keep the goal column, so the next press carries on in the column the
+    // caret came from. A bare range spec would drop it.
+    const cursor = EditorSelection.cursor(target, forward ? 1 : -1, undefined, moved.goalColumn);
+    view.dispatch({ selection: EditorSelection.create([cursor]), scrollIntoView: true });
     return true;
   };
 }
