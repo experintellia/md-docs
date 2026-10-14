@@ -100,8 +100,14 @@ export function createEditor(
   // Below the last line is .cm-scroller's padding (room to scroll past the
   // end), outside .cm-content where CodeMirror listens. Chromium snaps a click
   // there to the nearest caret position; WebKit does nothing. Put it at the end.
+  // Only when the press started there too: a drag from the text into the
+  // padding also ends in a click on the scroller, and must keep its selection.
+  let downOnScroller = false;
+  view.scrollDOM.addEventListener('pointerdown', (e) => {
+    downOnScroller = e.target === view.scrollDOM;
+  });
   view.scrollDOM.addEventListener('click', (e) => {
-    if (e.target !== view.scrollDOM) return;
+    if (!downOnScroller || e.target !== view.scrollDOM) return;
     if (e.clientY < view.contentDOM.getBoundingClientRect().bottom) return;
     view.dispatch({ selection: { anchor: view.state.doc.length } });
     view.focus();

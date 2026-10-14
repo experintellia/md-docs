@@ -188,3 +188,18 @@ test('a click in the space below the text puts the cursor at the end', async ({ 
   await page.keyboard.insertText('!');
   await expect(page.locator('.cm-content')).toContainText('last!');
 });
+
+test('a drag from the text into the space below keeps its selection', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'a touch drag scrolls instead of selecting');
+  await page.keyboard.insertText('line\n'.repeat(60) + 'last');
+  await page.locator('.cm-scroller').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  const from = (await page.locator('.cm-line', { hasText: 'last' }).boundingBox())!;
+  const box = (await page.locator('#editor').boundingBox())!;
+  await page.mouse.move(from.x + 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height - 20, { steps: 5 });
+  await page.mouse.up();
+  // Typing replaces the selected "last"; a caret at the end would append.
+  await page.keyboard.insertText('!');
+  await expect(page.locator('.cm-content')).not.toContainText('last');
+});
