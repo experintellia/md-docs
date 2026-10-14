@@ -17,8 +17,15 @@ function closing(text: string, from: number): number {
   return slashes % 2 === 0 ? end : -1;
 }
 
-// Space, tab or line break (-1, past the end, counts as one).
-const space = (c: number): boolean => c === 32 || c === 9 || c === 10 || c === -1;
+// Any white space, a no-break space included (-1, past the end, counts too).
+const space = (c: number): boolean => c === -1 || /\s/.test(String.fromCharCode(c));
+
+// Is the character before `pos` a `$` of its own, not an escaped one?
+function dollarBefore(cx: { char(pos: number): number }, pos: number): boolean {
+  let slashes = 0;
+  while (cx.char(pos - 2 - slashes) === 92) slashes++;
+  return cx.char(pos - 1) === 36 && slashes % 2 === 0;
+}
 
 // Where a `$$` opens on this line, or -1. Four columns in is indented code.
 // Only a `$$` alone, or one closed at the end of the same line: a line of prose
@@ -72,7 +79,7 @@ export const mathBlock: MarkdownConfig = {
     // alone on one of them as its close).
     parse(cx, next, pos) {
       // `$$$` is no opener, as for a block: not at its first `$`, nor its second.
-      if (next !== 36 || cx.char(pos + 1) !== 36 || cx.char(pos + 2) === 36 || cx.char(pos - 1) === 36) return -1;
+      if (next !== 36 || cx.char(pos + 1) !== 36 || cx.char(pos + 2) === 36 || dollarBefore(cx, pos)) return -1;
       for (let i = pos + 2; i < cx.end; i++) {
         const c = cx.char(i);
         if (c === 92) i++; // `\$` is an escaped dollar, not a close
@@ -92,7 +99,7 @@ export const mathBlock: MarkdownConfig = {
     // the first `$` is text. One line only, as in Obsidian.
     parse(cx, next, pos) {
       // Nor half of a `$$` that found no close.
-      if (next !== 36 || cx.char(pos - 1) === 36 || cx.char(pos + 1) === 36 || space(cx.char(pos + 1))) return -1;
+      if (next !== 36 || dollarBefore(cx, pos) || cx.char(pos + 1) === 36 || space(cx.char(pos + 1))) return -1;
       for (let i = pos + 1; i < cx.end; i++) {
         const c = cx.char(i);
         // A `\` at the end of the line is a hard break, not an escape.

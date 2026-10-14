@@ -311,3 +311,88 @@ test('math in a table cell is typeset by the table', () => {
   assert.deepEqual(cellMath(table('| $\\|x\\|$ | y |')), [['|x|'], []]);
   assert.deepEqual(cellMath(table('| `$x$` | y |')), [[], []], 'code stays code');
 });
+
+// Beside the rest of markdown, `$` behaves like a code span: whichever of math
+// and its neighbour starts first wins, and nothing inside math is markdown —
+// Pandoc's order.
+test('`$ … $` beside emphasis, links, code, HTML and escapes', () => {
+  const cases: [string, string[]][] = [
+    ['*$a*b$* and **$x$**', ['a*b', 'x']],
+    ['~~$x$~~ and _$a_b$_', ['x', 'a_b']],
+    ['~~a $x~~ b$', ['x~~ b']],
+    ['[$a]$](u)', ['a]']],
+    ['[a](http://x/$y$)', []],
+    ['<http://a/$x$>', []],
+    ['see http://a.com/$x$ or www.a.com/$y$', []],
+    ['<span title="$">a</span> b$', []],
+    ['a <!-- $x$ --> b', []],
+    ['<b>$x$</b>', ['x']],
+    ['&#36;x$ and $y&#36;', []],
+    ['$x &amp; y$', ['x &amp; y']],
+    ['\\\\$x$', ['x']],
+    ['\\\\\\$x$', []],
+    ['$x\\\\$', ['x\\\\']],
+    ['`a`$x$`b`', ['x']],
+    ['$`a`$', ['`a`']],
+    ['`$`x$', []],
+    ['a $x$  \nb $y$\\\nc', ['x', 'y']],
+  ];
+  for (const [doc, tex] of cases) {
+    assert.deepEqual(inlineRendered(`${doc}\n\nend`), tex, JSON.stringify(doc));
+  }
+});
+
+test('`$ … $` in headings, lists and code blocks, and among any text', () => {
+  const cases: [string, string[]][] = [
+    ['# $x$', ['x']],
+    ['$x$\n---', ['x']],
+    ['1. $x$', ['x']],
+    ['    $x$', []],
+    ['```\n$x$\n```', []],
+    ['<div>$x$</div>', []],
+    ['a$x$b 日本$y$語 é$z$é', ['x', 'y', 'z']],
+    ['مرحبا $x$ عالم', ['x']],
+    ['($x$), $y$. "$z$" «$w$»', ['x', 'y', 'z', 'w']],
+    ['$x$y$', ['x']],
+    ['$x$\t$y$ and $\t$', ['x', 'y']],
+  ];
+  for (const [doc, tex] of cases) {
+    assert.deepEqual(inlineRendered(`${doc}\n\nend`), tex, JSON.stringify(doc));
+  }
+  assert.deepEqual(inlineRendered('$x$ and $y$', 4), ['x', 'y'], 'at the very start and end');
+  // CodeMirror splits lines on `\r\n` too, so Windows files read the same.
+  assert.deepEqual(allRendered('a $x$\r\nb\r\n\r\n$$\r\ny\r\n$$', 0), ['x', 'y']);
+});
+
+test('`$$` mid-paragraph beside emphasis, tasks, quotes and what ends a paragraph', () => {
+  const cases: [string, string[]][] = [
+    ['**a $$x$$ b**', ['x']],
+    ['- [x] $$y$$', ['y']],
+    ['a $$ <b> [l](u) $$', ['<b> [l](u)']],
+    ['> > a $$\n> > b\n> > $$', ['b']],
+    // A lazy continuation line is still the quote's paragraph.
+    ['> a $$\nb $$', ['b']],
+    ['a $$ b\n    c $$', ['b\n    c']],
+    // A heading, quote, list or fence ends the paragraph, and the `$$` with it.
+    ['a $$ b\n# c $$', []],
+    ['a $$ b\n> c $$', []],
+    ['a $$ b\n- c $$', []],
+    ['a $$ b\n```\nc $$', []],
+  ];
+  for (const [doc, tex] of cases) {
+    assert.deepEqual(allRendered(`${doc}\n\nend`), tex, JSON.stringify(doc));
+  }
+});
+
+test('an escaped dollar is text, not half of a `$$`', () => {
+  // `\$$p$` is a dollar sign and then math, as in LaTeX and Pandoc.
+  assert.deepEqual(inlineRendered('price is \\$$p$ each\n\nend'), ['p']);
+  assert.deepEqual(inlineRendered('\\\\\\$$x$\n\nend'), ['x']);
+  assert.deepEqual(allRendered('a \\$$$x$$ b\n\nend'), ['x']);
+});
+
+test('a non-breaking space next to `$` is a space', () => {
+  // French puts one before the currency sign: `5 $` is money, not math.
+  assert.deepEqual(inlineRendered('de 5 $ à 10 $.\n\nend'), []);
+  assert.deepEqual(inlineRendered('$ x$ and $x $\n\nend'), []);
+});
