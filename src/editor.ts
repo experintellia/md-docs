@@ -90,11 +90,21 @@ export function createEditor(
   extra: Extension[] = [],
   collab?: Collab,
 ): EditorView {
-  return new EditorView({
+  const view = new EditorView({
     parent,
     state: EditorState.create({
       doc,
       extensions: [...baseExtensions(collab), ...extra],
     }),
   });
+  // Below the last line is .cm-scroller's padding (room to scroll past the
+  // end), outside .cm-content where CodeMirror listens. Chromium snaps a click
+  // there to the nearest caret position; WebKit does nothing. Put it at the end.
+  view.scrollDOM.addEventListener('click', (e) => {
+    if (e.target !== view.scrollDOM) return;
+    if (e.clientY < view.contentDOM.getBoundingClientRect().bottom) return;
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+    view.focus();
+  });
+  return view;
 }

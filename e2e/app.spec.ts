@@ -173,3 +173,18 @@ test('right-to-left lines, quotes and tables sit on the right edge', async ({ pa
     ths.map((th) => th.getBoundingClientRect().left));
   expect(first).toBeGreaterThan(second);
 });
+
+test('a click in the space below the text puts the cursor at the end', async ({ page, isMobile }) => {
+  // Taller than the screen, so the room below it is the scroller's padding to
+  // scroll past the end, not .cm-content stretched to fill the editor.
+  await page.keyboard.insertText('line\n'.repeat(60) + 'last');
+  await page.keyboard.press('ControlOrMeta+Home');
+  const editor = page.locator('#editor');
+  await page.locator('.cm-scroller').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  const box = (await editor.boundingBox())!;
+  const point = { x: box.x + box.width / 2, y: box.y + box.height - 20 };
+  if (isMobile) await page.touchscreen.tap(point.x, point.y);
+  else await page.mouse.click(point.x, point.y);
+  await page.keyboard.insertText('!');
+  await expect(page.locator('.cm-content')).toContainText('last!');
+});
