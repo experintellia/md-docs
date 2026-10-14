@@ -45,7 +45,28 @@ export const mathBlock: MarkdownConfig = {
     { name: 'MathBlock', block: true },
     { name: 'MathMark', style: tags.processingInstruction },
     { name: 'MathText', style: tags.monospace },
+    { name: 'InlineMath' },
   ],
+  parseInline: [{
+    name: 'InlineMath',
+    // `hello $$ x^2 $$`: display math in the middle of a paragraph, which
+    // Obsidian typesets on a line of its own below the text before it.
+    // ponytail: one line only — a `$$` alone on the next line opens a block.
+    parse(cx, next, pos) {
+      if (next !== 36 || cx.char(pos + 1) !== 36 || cx.char(pos + 2) === 36) return -1;
+      for (let i = pos + 2; i < cx.end; i++) {
+        const c = cx.char(i);
+        if (c === 10) return -1;
+        if (c === 92) i++; // `\$` is an escaped dollar, not a close
+        else if (c === 36 && cx.char(i + 1) === 36) {
+          const children = [cx.elt('MathMark', pos, pos + 2), cx.elt('MathMark', i, i + 2)];
+          if (i > pos + 2) children.splice(1, 0, cx.elt('MathText', pos + 2, i));
+          return cx.addElement(cx.elt('InlineMath', pos, i + 2, children));
+        }
+      }
+      return -1;
+    },
+  }],
   parseBlock: [{
     name: 'MathBlock',
     before: 'FencedCode',

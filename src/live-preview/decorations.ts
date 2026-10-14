@@ -655,7 +655,7 @@ function renderedTex(state: EditorState, block: SyntaxNodeLike): string | null {
 }
 
 /**
- * Rendered `$$` blocks — block widgets, so a state field, like tables above and
+ * Rendered `$$` blocks — block widgets (and `$$` inside a paragraph, inline ones), so a state field, like tables above and
  * with the same full-document rebuild. The widget compares by its TeX, so a
  * rebuild re-typesets only a block whose TeX changed.
  */
@@ -663,11 +663,16 @@ export function buildMath(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
   syntaxTree(state).iterate({
     enter: (node) => {
-      if (node.name !== 'MathBlock') return;
+      // A table typesets nothing in its cells; its own widget replaces them.
+      if (node.name === 'Table') return false;
+      const block = node.name === 'MathBlock';
+      if (!block && node.name !== 'InlineMath') return;
       const tex = renderedTex(state, node.node);
       if (tex !== null) {
+        // Inline, the widget is still a block-level element in the line, so it
+        // sits below the text before it, as in Obsidian.
         ranges.push(
-          Decoration.replace({ widget: new MathWidget(tex), block: true }).range(node.from, node.to),
+          Decoration.replace({ widget: new MathWidget(tex), block }).range(node.from, node.to),
         );
       }
       return false;

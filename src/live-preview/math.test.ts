@@ -176,3 +176,14 @@ test('an escaped dollar does not close a block, an escaped backslash does', () =
 test('`$$$` opens nothing', () => {
   assert.deepEqual(tree('$$$\na\n$$'), ['Paragraph', 'MathBlock', 'MathMark:$$']);
 });
+
+test('`$$` in the middle of a paragraph is typeset there, as in Obsidian', () => {
+  const doc = 'hello $$ E = mc^2 $$';
+  assert.equal(rendered(`${doc}\n\nafter`, doc.length + 2), ' E = mc^2 ');
+  assert.equal(rendered(`${doc}\n\nafter`, 10), undefined, 'not while the cursor is in it');
+  assert.equal(rendered('a $$x$$ b', 1), 'x', 'the cursor beside it, not in it');
+  assert.equal(rendered('a $$x \\$$ b', 0), undefined, 'an escaped dollar does not close it');
+  assert.equal(rendered('a $$x\ny$$ b', 0), undefined, 'nor does a later line');
+  assert.equal(rendered('a `$$x$$` b', 0), undefined, 'inline code stays code');
+  assert.equal(rendered('| a | b |\n|---|---|\n| $$x$$ | y |\n\nz', 0), undefined, 'a table renders its own cells');
+});

@@ -130,6 +130,19 @@ after`);
   await expect(page.locator('.cm-content')).toContainText(String.raw`\Omega = \{ (1,2)`);
 });
 
+test('$$ in the middle of a line typesets below the text, as in Obsidian', async ({ page }) => {
+  await page.keyboard.insertText('hello $$ E = mc^2 $$\n\nafter');
+  const math = page.locator('.md-math');
+  await expect(math.locator('.katex')).toHaveCount(1);
+  await expect(page.locator('.cm-line').first()).toContainText('hello');
+  const text = await page.locator('.cm-line').first().evaluate((line) => {
+    const range = document.createRange();
+    range.selectNodeContents(line.firstChild!);
+    return range.getBoundingClientRect().bottom;
+  });
+  expect((await math.boundingBox())!.y).toBeGreaterThanOrEqual(text - 1);
+});
+
 test('arrow keys move the caret the way a right-to-left line reads', async ({ page }) => {
   // The caret ends at the Arabic word's logical end, which is its left edge, so
   // ArrowRight steps back into the word and ArrowLeft forward. Without
