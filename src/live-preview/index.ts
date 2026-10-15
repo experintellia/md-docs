@@ -1,6 +1,6 @@
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { type Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorSelection, type Extension, Prec } from '@codemirror/state';
+import { EditorView, keymap } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { linkClickHandler, livePreviewPlugin, mathField, tableField } from './decorations.ts';
 
@@ -29,12 +29,45 @@ const mdHighlight = HighlightStyle.define([
   { tag: tags.invalid, color: 'var(--tok-invalid)' },
 ]);
 
+// CodeMirror moves vertically by the drawn lines, and a rendered table or `$$`
+// block is one tall widget it steps right over: its source could only be
+// reached with the horizontal arrows. Stop on the block's near edge instead,
+// which reveals its source as the horizontal arrows already do.
+function intoBlock(forward: boolean) {
+  return (view: EditorView): boolean => {
+    const sel = view.state.selection.main;
+    if (!sel.empty) return false;
+    const moved = view.moveVertically(sel, forward);
+    const lo = Math.min(sel.head, moved.head);
+    const hi = Math.max(sel.head, moved.head);
+    let target = -1;
+    for (const field of [mathField, tableField]) {
+      view.state.field(field).between(lo, hi, (from, to, deco) => {
+        if (!deco.spec.block) return;
+        // The edge the caret meets first must lie past it and within the
+        // move. The far edge may end the move: a block at the document's end,
+        // or after the `> ` of a quote, which motion would otherwise cross.
+        const edge = forward ? from : to;
+        if (forward ? edge <= sel.head || edge > moved.head : edge >= sel.head || edge < moved.head) return;
+        if (target < 0 || (forward ? edge < target : edge > target)) target = edge;
+      });
+    }
+    if (target < 0) return false;
+    // Keep the goal column, so the next press carries on in the column the
+    // caret came from. A bare range spec would drop it.
+    const cursor = EditorSelection.cursor(target, forward ? 1 : -1, undefined, moved.goalColumn);
+    view.dispatch({ selection: EditorSelection.create([cursor]), scrollIntoView: true });
+    return true;
+  };
+}
+
 /**
  * Our clean-room Obsidian-style live-preview layer. Compose this into the
  * editor to render markdown formatting inline while keeping the source text.
  */
 export function livePreview(): Extension {
   return [
+    Prec.high(keymap.of([{ key: 'ArrowUp', run: intoBlock(false) }, { key: 'ArrowDown', run: intoBlock(true) }])),
     // The widget fields first, so a link's mark wraps the math inside it and a
     // tap on the formula can follow the link.
     tableField,

@@ -221,6 +221,55 @@ test('a wide inline formula scrolls on its own, not the whole editor', async ({ 
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
 });
 
+for (const [kind, source, rendered] of [
+  ['$$ block', '$$\na^2\n$$', '.md-math'],
+  ['table', '| a | b |\n|---|---|\n| 1 | 2 |', '.md-table'],
+] as const) {
+  test(`ArrowUp and ArrowDown stop at a ${kind} instead of jumping over it`, async ({ page, isMobile }) => {
+    test.skip(isMobile, 'no hardware keyboard');
+    await page.keyboard.insertText(`top\n\n${source}\n\nbelow`);
+    const block = page.locator(rendered);
+    await page.keyboard.press('ControlOrMeta+Home');
+    await expect(block).toHaveCount(1);
+    // Down from `top`: the blank line, then the block, whose source opens.
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await expect(block).toHaveCount(0);
+    // Up from `below`: the blank line, then the block again.
+    await page.keyboard.press('ControlOrMeta+End');
+    await expect(block).toHaveCount(1);
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+    await expect(block).toHaveCount(0);
+  });
+}
+
+test('ArrowDown through a $$ block keeps the column it came from', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'no hardware keyboard');
+  await page.keyboard.insertText('0123456789\n\n$$\na^2\n$$\n\n0123456789');
+  await page.keyboard.press('ControlOrMeta+Home');
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
+  for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowDown');
+  await page.keyboard.insertText('|');
+  await expect(page.locator('.cm-line').last()).toHaveText('01234|56789');
+});
+
+for (const [kind, doc, up, typed] of [
+  // The far edge ends the move here, which skipped the block.
+  ['in a quote', 'top\n\n> | a | b |\n> |---|---|\n> | 1 | 2 |\n\nbelow', true, '| 1 | 2 |X'],
+  ['at the end', 'top\n\n| a | b |\n|---|---|\n| 1 | 2 |', false, '\nX| a | b |'],
+] as const) {
+  test(`the arrows stop at the near edge of a block ${kind}`, async ({ page, isMobile }) => {
+    test.skip(isMobile, 'no hardware keyboard');
+    await page.keyboard.insertText(doc);
+    await page.keyboard.press(up ? 'ControlOrMeta+End' : 'ControlOrMeta+Home');
+    for (let i = 0; i < 2; i++) await page.keyboard.press(up ? 'ArrowUp' : 'ArrowDown');
+    await page.keyboard.insertText('X');
+    expect(await page.evaluate(() => (document.querySelector('.cm-content') as HTMLElement).innerText))
+      .toContain(typed);
+  });
+}
+
 test('arrow keys move the caret the way a right-to-left line reads', async ({ page }) => {
   // The caret ends at the Arabic word's logical end, which is its left edge, so
   // ArrowRight steps back into the word and ArrowLeft forward. Without
