@@ -11,8 +11,8 @@ MathJax 4.1.3). See [Method](#method) to repeat it.
 
 ## Decision: KaTeX
 
-Chosen and built (see [As built](#as-built)). Only `$$` blocks for now; inline
-`$…$` is a follow-up.
+Chosen and built (see [As built](#as-built)): `$$` blocks first (#29), then `$$`
+in the middle of a paragraph (#42), inline `$…$` and math in table cells (#43).
 
 - It's the only option that renders the issue's own example correctly *and* looks
   the same in every webview we target, including old ones, because its fonts ship
@@ -184,10 +184,14 @@ This part doesn't depend on the renderer. It follows the table widget
 `$$` is the syntax Obsidian, GitHub, Pandoc and Typora use, so documents stay
 portable.
 
-**Inline `$…$` (follow-up):** this needs the same renderer, so no extra bytes,
-plus an inline parser with Pandoc's rules: no space after the opening `$` or
-before the closing one, and no digit right after the closing `$`. Those rules
-keep "costs $5 and $10" as plain text.
+**Math in the text (#42, #43):** the same renderer, so no extra bytes.
+`src/live-preview/math.ts` also has two inline parsers: `DisplayMath` for `$$ …
+$$` in a paragraph, typeset in display mode below the text before it, and
+`InlineMath` for `$…$` on Pandoc's rules (no space after the opening `$` or
+before the closing one, and no digit right after the closing `$`), which keep
+"costs $5 and $10" as plain text. A table cell's math is typeset by the table
+widget. Every path goes through `render()`, which bounds what a note's math can
+cost: see the comments on `MAX_TEX`, `MAX_DEPTH` and `mathCost` there.
 
 ## Method
 

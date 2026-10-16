@@ -5,11 +5,45 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Math in the middle of a line, as in Obsidian. `hello $$ E = mc^2 $$` typesets
+  the formula on a row of its own below the text before it, and such a formula
+  may run over the paragraph's next lines, closed by a `$$` line: `We get $$`,
+  the TeX, then `$$`. A `$$` in code, a link or a table cell is never taken for
+  one. (#42)
+- Inline math: `$x^2$` typesets inside the line. Pandoc's rules, which Obsidian
+  follows, keep most money as text: no space just inside either `$`, and a `$`
+  with a digit right after it closes nothing, so `from $5 to $10` stays as
+  written. `\$` is a dollar sign. A formula too wide for the line scrolls on its
+  own instead of widening the editor on a phone. (#43)
+- Math in table cells, `$x$` and `$$x$$` alike, typeset by the table; write a
+  pipe inside one as `\|`, as in code. (#43)
+
+### Changed
+- What a note's math can cost every reader's editor is bounded, beyond the
+  10,000-character limit on one formula: each paragraph, heading and table
+  typesets up to that much in all, counting a little for every formula, and
+  leaves the rest as source; a formula nested too deeply, in its TeX or in what
+  KaTeX makes of it, stays source; and a formula is at most 50em tall, since
+  KaTeX does not cap a negative size. Measured before: 300 pasted formulas, 6 s
+  a keystroke; 900 nested `\color`, 22 s frozen; `\raisebox{-99999999em}`, a
+  line 33 million px tall and the rest of the note out of reach. (#43)
+- Tapping a formula focuses the editor, so the keyboard opens on a phone; in
+  read mode the tap does nothing, and math in a link's text follows the link. A
+  right-to-left line that starts with math reads in its prose's direction, not
+  the TeX's. (#43)
+
 ### Fixed
+- A `$$` block nested about 150 environments deep (`\begin{matrix}` inside
+  `\begin{matrix}` …, 4 KB) crashed the app's page for everyone who opened the
+  note, on every open. It shows its source instead. (#43)
+- ArrowUp and ArrowDown stepped right over a rendered table or `$$` block, so
+  its source could only be reached with Left and Right. They stop on its near
+  edge now, which opens it, and keep the column they came from. (#45)
 - Clicking or tapping in the empty space below the end of the document did
   nothing in WebKit webviews (iOS among them). That space sits outside the
   editable text, where CodeMirror doesn't listen. It now puts the cursor at
-  the end of the document, as Chromium already did.
+  the end of the document, as Chromium already did. (#44)
 
 ## [0.4.0] - 2026-10-14
 
