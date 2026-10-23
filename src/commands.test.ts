@@ -159,16 +159,41 @@ test('toggleChecklist keeps indentation when creating a task', () => {
   assert.equal(show(run(toggleChecklist, '  * hi|')), '  * [ ] |hi');
 });
 
+const enter = (spec: string) =>
+  show(run(insertNewlineContinueMarkup, spec, markdown({ base: markdownLanguage })));
+
 test('Enter keeps the text of a continuation line under an empty task item', () => {
   // lang-markdown saw ` 2,5h` as an empty item (sliced past the `- [ ] ` width)
   // and Enter deleted it, leaving `- [ ] \n|  `.
-  const enter = (spec: string) => show(run(insertNewlineContinueMarkup, spec, markdown({ base: markdownLanguage })));
   // Now declined (doc untouched), so the defaultKeymap's plain newline runs.
   assert.equal(enter('- [ ] \n 2,5h|  '), '- [ ] \n 2,5h|  ');
   assert.equal(enter('- [ ] \n 2,5h  |'), '- [ ] \n 2,5h  |');
   assert.equal(enter('- [ ] a\n b|'), '- [ ] a\n b|');
-  // Unchanged: continuing an item, and exiting an empty one.
-  assert.equal(enter('- [ ] a|'), '- [ ] a\n- [ ] |');
+});
+
+test('Enter keeps short continuation lines under any list marker', () => {
+  // Same upstream slice, other markers: each of these used to lose its text.
+  assert.equal(enter('- a\n b|'), '- a\n b|');           // plain bullet
+  assert.equal(enter('- \n x|'), '- \n x|');             // empty bullet
+  assert.equal(enter('* [ ] \n 2,5h|'), '* [ ] \n 2,5h|'); // other bullet char
+  assert.equal(enter('- [x] \n 2,5h|'), '- [x] \n 2,5h|'); // checked box
+  assert.equal(enter('1. \n x|'), '1. \n x|');           // ordered
+  assert.equal(enter('1. [ ] a\n b|'), '1. [ ] a\n b|'); // ordered task
+});
+
+test('Enter still continues and exits lists and quotes', () => {
+  assert.equal(enter('- [ ] a|'), '- [ ] a\n- [ ] |');                 // next task
+  assert.equal(enter('- [x] a|'), '- [x] a\n- [ ] |');                 // next task is unticked
+  assert.equal(enter('- [ ] 2,|5h'), '- [ ] 2,\n- [ ] |5h');           // split mid-line
+  assert.equal(enter('1. a|'), '1. a\n2. |');                          // numbering
+  assert.equal(enter('- [ ] \n      2,5h|'), '- [ ] \n      2,5h\n      |'); // aligned continuation
+  assert.equal(enter('> a|'), '> a\n> |');                             // blockquote
+  // Empty items (markup only) still exit, one level at a time.
   assert.equal(enter('- [ ] a\n- [ ] |'), '- [ ] a\n|');
+  assert.equal(enter('- |'), '|');
   assert.equal(enter('1. a\n2. |'), '1. a\n|');
+  assert.equal(enter('- a\n  - |'), '- a\n- |');
+  assert.equal(enter('> - \n> |'), '> - \n>\n> |');
+  // Outside markdown markup it declines, leaving Enter to the defaultKeymap.
+  assert.equal(enter('plain|'), 'plain|');
 });
