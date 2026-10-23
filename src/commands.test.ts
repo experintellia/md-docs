@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { EditorSelection, EditorState, Transaction, type Extension, type TransactionSpec } from '@codemirror/state';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { insertNewlineAndIndent } from '@codemirror/commands';
 import type { Command, EditorView } from '@codemirror/view';
 import {
   toggleBold,
@@ -159,47 +160,61 @@ test('toggleChecklist keeps indentation when creating a task', () => {
   assert.equal(show(run(toggleChecklist, '  * hi|')), '  * [ ] |hi');
 });
 
-const enter = (spec: string) =>
-  show(run(insertNewlineContinueMarkup, spec, markdown({ base: markdownLanguage })));
+// Enter as the keymap runs it: ours first, then defaultKeymap's plain newline
+// if ours declines. Cursors are `|`; several may be given.
+function enter(spec: string): string {
+  const parts = spec.split('|');
+  const cursors = parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join('').length);
+  let state = EditorState.create({
+    doc: parts.join(''),
+    selection: EditorSelection.create(cursors.map((c) => EditorSelection.cursor(c))),
+    extensions: [EditorState.allowMultipleSelections.of(true), markdown({ base: markdownLanguage })],
+  });
+  const view = { get state() { return state; }, dispatch(tr: Transaction) { state = tr.state; } } as unknown as EditorView;
+  if (!insertNewlineContinueMarkup(view)) insertNewlineAndIndent(view);
+  const doc = state.doc.toString();
+  return state.selection.ranges.reduceRight((out, r) => out.slice(0, r.head) + '|' + out.slice(r.head), doc);
+}
 
 test('Enter keeps the text of a continuation line under an empty task item', () => {
   // lang-markdown saw ` 2,5h` as an empty item (sliced past the `- [ ] ` width)
-  // and Enter deleted it, leaving `- [ ] \n|  `.
-  // Now declined (doc untouched), so the defaultKeymap's plain newline runs.
-  assert.equal(enter('- [ ] \n 2,5h|  '), '- [ ] \n 2,5h|  ');
-  assert.equal(enter('- [ ] \n 2,5h  |'), '- [ ] \n 2,5h  |');
-  assert.equal(enter('- [ ] task\n  abc|'), '- [ ] task\n  abc|'); // aligned, but ends before col 6
+  // and Enter deleted it, leaving `- [ ] \n|  `. Now it's a plain newline.
+  assert.equal(enter('- [ ] \n 2,5h|  '), '- [ ] \n 2,5h\n |');
+  assert.equal(enter('- [ ] \n 2,5h  |'), '- [ ] \n 2,5h  \n |');
+  assert.equal(enter('- [ ] task\n  abc|'), '- [ ] task\n  abc\n  |'); // aligned, but ends before col 6
   // Text that looks like markup is still text: `2026.` is not an item marker.
-  assert.equal(enter('- [ ] Pay\n 2026.|'), '- [ ] Pay\n 2026.|');
-  assert.equal(enter('- [ ] buy\n 3.5)|'), '- [ ] buy\n 3.5)|');
-  assert.equal(enter('- [ ] a\n  [x]|'), '- [ ] a\n  [x]|');
-});
-
-test('Enter keeps text in a blockquote after an empty quoted line', () => {
-  // Upstream's "two empty quoted lines" exit misjudged `>b` the same way.
-  assert.equal(enter('   > a\n   >\n   >b|'), '   > a\n   >\n   >b|');
-});
-
-test('Enter checks every cursor, not just the main one', () => {
-  const doc = '- [ ] a\n- [ ] \n 2,5h';
-  let state = EditorState.create({
-    doc,
-    selection: EditorSelection.create([EditorSelection.cursor(7), EditorSelection.cursor(doc.length)]),
-    extensions: [EditorState.allowMultipleSelections.of(true), markdown({ base: markdownLanguage })],
-  });
-  const view = { get state() { return state; }, dispatch(tr: Transaction) { state = tr.state; } };
-  assert.equal(insertNewlineContinueMarkup(view as unknown as EditorView), false);
-  assert.equal(state.doc.toString(), doc);
+  assert.equal(enter('- [ ] Pay\n 2026.|'), '- [ ] Pay\n 2026.\n |');
+  assert.equal(enter('- [ ] buy\n 3.5)|'), '- [ ] buy\n 3.5)\n |');
+  assert.equal(enter('- [ ] a\n  [x]|'), '- [ ] a\n  [x]\n  |');
 });
 
 test('Enter keeps short continuation lines under any list marker', () => {
   // Same upstream slice, other markers: each of these used to lose its text.
-  assert.equal(enter('- a\n b|'), '- a\n b|');           // plain bullet
-  assert.equal(enter('- \n x|'), '- \n x|');             // empty bullet
-  assert.equal(enter('* [ ] \n 2,5h|'), '* [ ] \n 2,5h|'); // other bullet char
-  assert.equal(enter('- [x] \n 2,5h|'), '- [x] \n 2,5h|'); // checked box
-  assert.equal(enter('1. \n x|'), '1. \n x|');           // ordered
-  assert.equal(enter('1. [ ] a\n b|'), '1. [ ] a\n b|'); // ordered task
+  assert.equal(enter('- a\n b|'), '- a\n b\n |');           // plain bullet
+  assert.equal(enter('- \n x|'), '- \n x\n |');             // empty bullet
+  assert.equal(enter('* [ ] \n 2,5h|'), '* [ ] \n 2,5h\n |'); // other bullet char
+  assert.equal(enter('- [x] \n 2,5h|'), '- [x] \n 2,5h\n |'); // checked box
+  assert.equal(enter('1. \n x|'), '1. \n x\n |');           // ordered
+  assert.equal(enter('1. [ ] a\n b|'), '1. [ ] a\n b\n |'); // ordered task
+});
+
+test('Enter keeps a short nested item whose marker is followed by a tab', () => {
+  // Upstream only recognises `- ` (space), so a `-\t` item fell back to the
+  // outer `- [ ] ` width and its text was deleted.
+  assert.equal(enter('- [ ] a\n  -\tx|'), '- [ ] a\n  -\tx\n  |');
+  assert.equal(enter('- [ ] a\n  -\tb|c'), '- [ ] a\n  -\tb\n  |c');
+});
+
+test('Enter keeps text in a blockquote after an empty quoted line', () => {
+  // Upstream's "two empty quoted lines" exit misjudged these the same way.
+  assert.equal(enter('   > a\n   >\n   >b|'), '   > a\n   >\n   >b\n   |');
+  assert.equal(enter('   > a\n   >\n>-\tb|'), '   > a\n   >\n>-\tb\n|');
+});
+
+test('Enter checks every cursor, not just the main one', () => {
+  assert.equal(enter('- [ ] a|\n- [ ] \n 2,5h|'), '- [ ] a\n|\n- [ ] \n 2,5h\n |');
+  // One cursor's deletion abuts the other's newline; checked separately too.
+  assert.equal(enter('>- [ ] a\n> 1. [ ] \np|ara|'), '>- [ ] a\n> 1. [ ] \np\n|ara\n|');
 });
 
 test('Enter still continues and exits lists and quotes', () => {
@@ -207,6 +222,7 @@ test('Enter still continues and exits lists and quotes', () => {
   assert.equal(enter('- [x] a|'), '- [x] a\n- [ ] |');                 // next task is unticked
   assert.equal(enter('- [ ] 2,|5h'), '- [ ] 2,\n- [ ] |5h');           // split mid-line
   assert.equal(enter('1. a|'), '1. a\n2. |');                          // numbering
+  assert.equal(enter('1. a\n2. |\n3. b'), '1. a\n|\n2. b');            // exit renumbers the rest
   assert.equal(enter('- [ ] \n      2,5h|'), '- [ ] \n      2,5h\n      |'); // aligned continuation
   assert.equal(enter('> a|'), '> a\n> |');                             // blockquote
   // Empty items (markup only) still exit, one level at a time.
@@ -217,6 +233,6 @@ test('Enter still continues and exits lists and quotes', () => {
   assert.equal(enter('- a\n  - b\n  - |'), '- a\n  - b\n- |');
   assert.equal(enter('> - \n> |'), '> - \n>\n> |');
   assert.equal(enter('> a\n>\n>|'), '> a\n\n|');
-  // Outside markdown markup it declines, leaving Enter to the defaultKeymap.
-  assert.equal(enter('plain|'), 'plain|');
+  // Outside list and quote markup it's the plain newline.
+  assert.equal(enter('plain|'), 'plain\n|');
 });

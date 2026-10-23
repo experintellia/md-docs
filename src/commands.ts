@@ -146,34 +146,31 @@ export const toggleBullet: Command = (view) => {
 
 const continueMarkup = insertNewlineContinueMarkupCommand({ nonTightLists: false });
 
-/** Whether lang-markdown may strip the line at `pos` without starting a new
- *  one: the line opens the innermost list item or quote around it (its markup
- *  is all that's there, or upstream wouldn't strip it), or holds only `>`s. */
-function mayStrip(state: EditorState, pos: number): boolean {
-  const line = state.doc.lineAt(pos);
-  if (/^[\s>]*$/.test(line.text)) return true;
-  let node = syntaxTree(state).resolveInner(pos, -1);
-  while (node.name !== 'ListItem' && node.name !== 'Blockquote') {
-    if (!node.parent) return false;
-    node = node.parent;
+const MARKUP = new Set(['ListMark', 'QuoteMark', 'TaskMarker']);
+
+/** Whether [from, to) holds nothing but whitespace and list/quote/task markup. */
+function onlyMarkup(state: EditorState, from: number, to: number): boolean {
+  const tree = syntaxTree(state);
+  for (let pos = from; pos < to; pos++) {
+    if (/\S/.test(state.sliceDoc(pos, pos + 1)) && !MARKUP.has(tree.resolveInner(pos, 1).name)) return false;
   }
-  return node.from >= line.from;
+  return true;
 }
 
 /** lang-markdown's Enter, minus a bug (seen in 6.5.0 through 6.5.2): it judges
  *  an item "empty" by slicing the caret's line at the column where the item's
  *  *first* line's markup ends. On a continuation line whose text ends before
  *  that column (`- [ ] \n 2,5h|`) the slice is blank, so Enter "exits the empty
- *  item" and deletes the line's text. Any change that removes text without
- *  adding a line must sit on a line it may strip; otherwise decline, and the
+ *  item" and deletes the line's text. Enter may only delete whitespace and
+ *  markup; if upstream would delete anything else, decline, and the
  *  defaultKeymap's plain newline runs. */
 export const insertNewlineContinueMarkup: Command = (view) => {
   const { state } = view;
   let tr: Transaction | undefined;
   if (!continueMarkup({ state, dispatch: (t) => { tr = t; } }) || !tr) return false;
   let safe = true;
-  tr.changes.iterChanges((_fromA, toA, _fromB, _toB, inserted) => {
-    if (inserted.lines === 1 && !mayStrip(state, toA)) safe = false;
+  tr.changes.iterChanges((fromA, toA) => {
+    if (!onlyMarkup(state, fromA, toA)) safe = false;
   });
   if (!safe) return false;
   view.dispatch(tr);
