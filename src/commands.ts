@@ -1,4 +1,5 @@
-import { EditorSelection } from '@codemirror/state';
+import { EditorSelection, type EditorState, type Transaction } from '@codemirror/state';
+import { syntaxTree } from '@codemirror/language';
 import type { Command, KeyBinding } from '@codemirror/view';
 import { insertNewlineContinueMarkupCommand, deleteMarkupBackward } from '@codemirror/lang-markdown';
 
@@ -143,6 +144,39 @@ export const toggleBullet: Command = (view) => {
   return true;
 };
 
+const continueMarkup = insertNewlineContinueMarkupCommand({ nonTightLists: false });
+
+const MARKUP = new Set(['ListMark', 'QuoteMark', 'TaskMarker']);
+
+/** Whether [from, to) holds nothing but whitespace and list/quote/task markup. */
+function onlyMarkup(state: EditorState, from: number, to: number): boolean {
+  const tree = syntaxTree(state);
+  for (let pos = from; pos < to; pos++) {
+    if (/\S/.test(state.sliceDoc(pos, pos + 1)) && !MARKUP.has(tree.resolveInner(pos, 1).name)) return false;
+  }
+  return true;
+}
+
+/** lang-markdown's Enter, minus a bug (seen in 6.5.0 through 6.5.2): it judges
+ *  an item "empty" by slicing the caret's line at the column where the item's
+ *  *first* line's markup ends. On a continuation line whose text ends before
+ *  that column (`- [ ] \n 2,5h|`) the slice is blank, so Enter "exits the empty
+ *  item" and deletes the line's text. Enter may only delete whitespace and
+ *  markup; if upstream would delete anything else, decline, and the
+ *  defaultKeymap's plain newline runs. */
+export const insertNewlineContinueMarkup: Command = (view) => {
+  const { state } = view;
+  let tr: Transaction | undefined;
+  if (!continueMarkup({ state, dispatch: (t) => { tr = t; } }) || !tr) return false;
+  let safe = true;
+  tr.changes.iterChanges((fromA, toA) => {
+    if (!onlyMarkup(state, fromA, toA)) safe = false;
+  });
+  if (!safe) return false;
+  view.dispatch(tr);
+  return true;
+};
+
 /** Keyboard shortcuts mirroring the toolbar actions, plus markdown-aware
  *  Enter/Backspace. We bind Enter ourselves (lang-markdown's keymap is disabled
  *  via addKeymap:false in editor.ts) with `nonTightLists: false` so a double
@@ -151,7 +185,7 @@ export const toggleBullet: Command = (view) => {
  *  before every subsequent item. Both commands return false outside markdown
  *  markup, so the defaultKeymap fallbacks (newline / delete) still apply. */
 export const markdownKeymap: KeyBinding[] = [
-  { key: 'Enter', run: insertNewlineContinueMarkupCommand({ nonTightLists: false }) },
+  { key: 'Enter', run: insertNewlineContinueMarkup },
   { key: 'Backspace', run: deleteMarkupBackward },
   { key: 'Mod-b', run: toggleBold },
   { key: 'Mod-i', run: toggleItalic },

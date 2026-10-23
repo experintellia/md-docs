@@ -44,6 +44,11 @@ All notable changes to MD-Docs are documented here. This project adheres to
   nothing in WebKit webviews (iOS among them). That space sits outside the
   editable text, where CodeMirror doesn't listen. It now puts the cursor at
   the end of the document, as Chromium already did. (#44)
+- Enter at the end of a short line continuing a list item deleted the line:
+  ` 2,5h` under an empty `- [ ] ` vanished. CodeMirror's markdown Enter
+  measured the item's first line to decide the item was empty. Enter now never
+  deletes more than whitespace and list or quote markers; where it would have,
+  it starts a plain new line. (#48)
 
 ## [0.4.0] - 2026-10-14
 
