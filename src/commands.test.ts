@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { EditorState, Transaction, type TransactionSpec } from '@codemirror/state';
+import { EditorState, Transaction, type Extension, type TransactionSpec } from '@codemirror/state';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import type { Command, EditorView } from '@codemirror/view';
 import {
   toggleBold,
@@ -9,6 +10,7 @@ import {
   cycleHeading,
   toggleBullet,
   toggleChecklist,
+  insertNewlineContinueMarkup,
 } from './commands.ts';
 
 // Tier 2: toolbar command behaviour. The commands only read `view.state` and
@@ -35,9 +37,9 @@ function parse(spec: string): { doc: string; selection: { anchor: number; head?:
   return { doc: spec.replace('|', ''), selection: { anchor: pos } };
 }
 
-function run(cmd: Command, spec: string): Result {
+function run(cmd: Command, spec: string, extensions: Extension = []): Result {
   const { doc, selection } = parse(spec);
-  let state = EditorState.create({ doc, selection });
+  let state = EditorState.create({ doc, selection, extensions });
   const view = {
     get state() {
       return state;
@@ -155,4 +157,18 @@ test('cycleHeading resets H4-H6 (typed by hand) back to plain text', () => {
 test('toggleChecklist keeps indentation when creating a task', () => {
   assert.equal(show(run(toggleChecklist, '  hi|')), '  - [ ] |hi');
   assert.equal(show(run(toggleChecklist, '  * hi|')), '  * [ ] |hi');
+});
+
+test('Enter keeps the text of a continuation line under an empty task item', () => {
+  // lang-markdown saw ` 2,5h` as an empty item (sliced past the `- [ ] ` width)
+  // and Enter deleted it, leaving `- [ ] \n|  `.
+  const enter = (spec: string) => show(run(insertNewlineContinueMarkup, spec, markdown({ base: markdownLanguage })));
+  // Now declined (doc untouched), so the defaultKeymap's plain newline runs.
+  assert.equal(enter('- [ ] \n 2,5h|  '), '- [ ] \n 2,5h|  ');
+  assert.equal(enter('- [ ] \n 2,5h  |'), '- [ ] \n 2,5h  |');
+  assert.equal(enter('- [ ] a\n b|'), '- [ ] a\n b|');
+  // Unchanged: continuing an item, and exiting an empty one.
+  assert.equal(enter('- [ ] a|'), '- [ ] a\n- [ ] |');
+  assert.equal(enter('- [ ] a\n- [ ] |'), '- [ ] a\n|');
+  assert.equal(enter('1. a\n2. |'), '1. a\n|');
 });

@@ -1,5 +1,6 @@
 import { EditorSelection } from '@codemirror/state';
 import type { Command, KeyBinding } from '@codemirror/view';
+import type { Transaction } from '@codemirror/state';
 import { insertNewlineContinueMarkupCommand, deleteMarkupBackward } from '@codemirror/lang-markdown';
 
 /**
@@ -143,6 +144,26 @@ export const toggleBullet: Command = (view) => {
   return true;
 };
 
+const continueMarkup = insertNewlineContinueMarkupCommand({ nonTightLists: false });
+
+/** lang-markdown's Enter, minus a bug (still in 6.5.2): it judges an item
+ *  "empty" by slicing the caret's line at the column where the item's *first*
+ *  line's markup ends. A continuation line indented less than that
+ *  (`- [ ] \n 2,5h|`) slices to blank, so Enter "exits the empty item" and
+ *  deletes the line's text. A line with text must always gain a new line; if
+ *  it wouldn't, fall through to the default newline. */
+export const insertNewlineContinueMarkup: Command = (view) => {
+  const { state } = view;
+  let tr: Transaction | undefined;
+  if (!continueMarkup({ state, dispatch: (t) => { tr = t; } }) || !tr) return false;
+  // ponytail: checks the main cursor only; multi-cursor Enter is rare here.
+  const text = state.doc.lineAt(state.selection.main.head).text;
+  const markupOnly = /^(?:[ \t]*(?:>|[-+*]|\d+[.)]))*[ \t]*(?:\[[ xX]\])?[ \t]*$/.test(text);
+  if (!markupOnly && tr.newDoc.lines <= state.doc.lines) return false;
+  view.dispatch(tr);
+  return true;
+};
+
 /** Keyboard shortcuts mirroring the toolbar actions, plus markdown-aware
  *  Enter/Backspace. We bind Enter ourselves (lang-markdown's keymap is disabled
  *  via addKeymap:false in editor.ts) with `nonTightLists: false` so a double
@@ -151,7 +172,7 @@ export const toggleBullet: Command = (view) => {
  *  before every subsequent item. Both commands return false outside markdown
  *  markup, so the defaultKeymap fallbacks (newline / delete) still apply. */
 export const markdownKeymap: KeyBinding[] = [
-  { key: 'Enter', run: insertNewlineContinueMarkupCommand({ nonTightLists: false }) },
+  { key: 'Enter', run: insertNewlineContinueMarkup },
   { key: 'Backspace', run: deleteMarkupBackward },
   { key: 'Mod-b', run: toggleBold },
   { key: 'Mod-i', run: toggleItalic },
