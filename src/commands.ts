@@ -1,6 +1,6 @@
-import { EditorSelection } from '@codemirror/state';
+import { EditorSelection, type EditorState, type Transaction } from '@codemirror/state';
+import { syntaxTree } from '@codemirror/language';
 import type { Command, KeyBinding } from '@codemirror/view';
-import type { Transaction } from '@codemirror/state';
 import { insertNewlineContinueMarkupCommand, deleteMarkupBackward } from '@codemirror/lang-markdown';
 
 /**
@@ -146,20 +146,36 @@ export const toggleBullet: Command = (view) => {
 
 const continueMarkup = insertNewlineContinueMarkupCommand({ nonTightLists: false });
 
-/** lang-markdown's Enter, minus a bug (still in 6.5.2): it judges an item
- *  "empty" by slicing the caret's line at the column where the item's *first*
- *  line's markup ends. A continuation line indented less than that
- *  (`- [ ] \n 2,5h|`) slices to blank, so Enter "exits the empty item" and
- *  deletes the line's text. A line with text must always gain a new line; if
- *  it wouldn't, fall through to the default newline. */
+/** Whether lang-markdown may strip the line at `pos` without starting a new
+ *  one: the line opens the innermost list item or quote around it (its markup
+ *  is all that's there, or upstream wouldn't strip it), or holds only `>`s. */
+function mayStrip(state: EditorState, pos: number): boolean {
+  const line = state.doc.lineAt(pos);
+  if (/^[\s>]*$/.test(line.text)) return true;
+  let node = syntaxTree(state).resolveInner(pos, -1);
+  while (node.name !== 'ListItem' && node.name !== 'Blockquote') {
+    if (!node.parent) return false;
+    node = node.parent;
+  }
+  return node.from >= line.from;
+}
+
+/** lang-markdown's Enter, minus a bug (seen in 6.5.0 through 6.5.2): it judges
+ *  an item "empty" by slicing the caret's line at the column where the item's
+ *  *first* line's markup ends. On a continuation line whose text ends before
+ *  that column (`- [ ] \n 2,5h|`) the slice is blank, so Enter "exits the empty
+ *  item" and deletes the line's text. Any change that removes text without
+ *  adding a line must sit on a line it may strip; otherwise decline, and the
+ *  defaultKeymap's plain newline runs. */
 export const insertNewlineContinueMarkup: Command = (view) => {
   const { state } = view;
   let tr: Transaction | undefined;
   if (!continueMarkup({ state, dispatch: (t) => { tr = t; } }) || !tr) return false;
-  // ponytail: checks the main cursor only; multi-cursor Enter is rare here.
-  const text = state.doc.lineAt(state.selection.main.head).text;
-  const markupOnly = /^(?:[ \t]*(?:>|[-+*]|\d+[.)]))*[ \t]*(?:\[[ xX]\])?[ \t]*$/.test(text);
-  if (!markupOnly && tr.newDoc.lines <= state.doc.lines) return false;
+  let safe = true;
+  tr.changes.iterChanges((_fromA, toA, _fromB, _toB, inserted) => {
+    if (inserted.lines === 1 && !mayStrip(state, toA)) safe = false;
+  });
+  if (!safe) return false;
   view.dispatch(tr);
   return true;
 };

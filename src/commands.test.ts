@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { EditorState, Transaction, type Extension, type TransactionSpec } from '@codemirror/state';
+import { EditorSelection, EditorState, Transaction, type Extension, type TransactionSpec } from '@codemirror/state';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import type { Command, EditorView } from '@codemirror/view';
 import {
@@ -168,7 +168,28 @@ test('Enter keeps the text of a continuation line under an empty task item', () 
   // Now declined (doc untouched), so the defaultKeymap's plain newline runs.
   assert.equal(enter('- [ ] \n 2,5h|  '), '- [ ] \n 2,5h|  ');
   assert.equal(enter('- [ ] \n 2,5h  |'), '- [ ] \n 2,5h  |');
-  assert.equal(enter('- [ ] a\n b|'), '- [ ] a\n b|');
+  assert.equal(enter('- [ ] task\n  abc|'), '- [ ] task\n  abc|'); // aligned, but ends before col 6
+  // Text that looks like markup is still text: `2026.` is not an item marker.
+  assert.equal(enter('- [ ] Pay\n 2026.|'), '- [ ] Pay\n 2026.|');
+  assert.equal(enter('- [ ] buy\n 3.5)|'), '- [ ] buy\n 3.5)|');
+  assert.equal(enter('- [ ] a\n  [x]|'), '- [ ] a\n  [x]|');
+});
+
+test('Enter keeps text in a blockquote after an empty quoted line', () => {
+  // Upstream's "two empty quoted lines" exit misjudged `>b` the same way.
+  assert.equal(enter('   > a\n   >\n   >b|'), '   > a\n   >\n   >b|');
+});
+
+test('Enter checks every cursor, not just the main one', () => {
+  const doc = '- [ ] a\n- [ ] \n 2,5h';
+  let state = EditorState.create({
+    doc,
+    selection: EditorSelection.create([EditorSelection.cursor(7), EditorSelection.cursor(doc.length)]),
+    extensions: [EditorState.allowMultipleSelections.of(true), markdown({ base: markdownLanguage })],
+  });
+  const view = { get state() { return state; }, dispatch(tr: Transaction) { state = tr.state; } };
+  assert.equal(insertNewlineContinueMarkup(view as unknown as EditorView), false);
+  assert.equal(state.doc.toString(), doc);
 });
 
 test('Enter keeps short continuation lines under any list marker', () => {
@@ -193,7 +214,9 @@ test('Enter still continues and exits lists and quotes', () => {
   assert.equal(enter('- |'), '|');
   assert.equal(enter('1. a\n2. |'), '1. a\n|');
   assert.equal(enter('- a\n  - |'), '- a\n- |');
+  assert.equal(enter('- a\n  - b\n  - |'), '- a\n  - b\n- |');
   assert.equal(enter('> - \n> |'), '> - \n>\n> |');
+  assert.equal(enter('> a\n>\n>|'), '> a\n\n|');
   // Outside markdown markup it declines, leaving Enter to the defaultKeymap.
   assert.equal(enter('plain|'), 'plain|');
 });
