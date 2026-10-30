@@ -11,6 +11,7 @@ import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
 import { MAX_TEX, MathWidget, mathCost } from './widgets/math.ts';
+import { MermaidWidget } from './widgets/mermaid.ts';
 import { type Segment, type TableSpec, TableWidget } from './widgets/table.ts';
 
 /**
@@ -393,6 +394,9 @@ export function buildDecorations(view: EditorView): DecorationSet {
           ranges.push(Decoration.line({ class: hClass }).range(line.from));
           return;
         }
+        // A drawn ```mermaid block is the mermaid field's: no copy button, and
+        // no code-block lines under the diagram.
+        if (name === 'FencedCode' && renderedMermaid(state, node.node) !== null) return false;
         if (name === 'FencedCode') {
           // Copy button on the opening fence, carrying the block body only
           // (CodeText excludes the ``` fences and the info string).
@@ -744,6 +748,35 @@ export function buildMath(state: EditorState): DecorationSet {
 }
 
 export const mathField = blockField(buildMath);
+
+// The source a ```mermaid block is drawn from, or null while it shows its
+// source: while it is being edited, while it is unclosed, and while it is empty.
+function renderedMermaid(state: EditorState, block: SyntaxNodeLike): string | null {
+  const info = block.getChild('CodeInfo');
+  if (!info || state.doc.sliceString(info.from, info.to).toLowerCase() !== 'mermaid') return null;
+  if (block.getChildren('CodeMark').length < 2) return null;
+  if (rangeHasSelection(state, block.from, block.to)) return null;
+  const source = block.getChildren('CodeText').map((part) => state.doc.sliceString(part.from, part.to)).join('');
+  return source.trim() ? source : null;
+}
+
+/** Drawn ```mermaid blocks — block widgets, so a state field, like tables. */
+export function buildMermaid(state: EditorState): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  syntaxTree(state).iterate({
+    enter: (node) => {
+      if (node.name !== 'FencedCode') return;
+      const source = renderedMermaid(state, node.node);
+      if (source !== null) {
+        ranges.push(Decoration.replace({ widget: new MermaidWidget(source), block: true }).range(node.from, node.to));
+      }
+      return false;
+    },
+  });
+  return Decoration.set(ranges, true);
+}
+
+export const mermaidField = blockField(buildMermaid);
 
 /**
  * The live-preview decoration plugin. Rebuilds on document, viewport and
