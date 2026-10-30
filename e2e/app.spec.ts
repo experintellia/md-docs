@@ -142,6 +142,14 @@ test('a ```mermaid block is drawn, and a tap opens its source', async ({ page, i
   await expect(page.locator('.cm-content')).toContainText('pie title NETFLIX');
 });
 
+test('a ```mermaid block that does not parse keeps its source, the error as text', async ({ page }) => {
+  await page.keyboard.insertText('```mermaid\nflowchart LR\n  A -->\n```\n\nafter');
+  const diagram = page.locator('.md-mermaid.md-mermaid-error');
+  await expect(diagram).toHaveAttribute('title', /.+/);
+  await expect(diagram).toHaveText('flowchart LR\n  A -->');
+  await expect(diagram.locator('svg')).toHaveCount(0);
+});
+
 test('$$ in the middle of a line typesets below the text, as in Obsidian', async ({ page, isMobile }) => {
   // The second runs over three lines of its paragraph, closed by a `$$` alone.
   await page.keyboard.insertText('hello $$ E = mc^2 $$\n\nWe get $$\na^2\n$$\n\nafter');

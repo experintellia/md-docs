@@ -1,14 +1,40 @@
 import { type EditorView, WidgetType } from '@codemirror/view';
 
-type Pele = typeof import('pele/lazy');
+type Drawn = { svg: string } | { error: string };
 
-// ponytail: Pele (Obsidian's Mermaid renderer) loads the first time a document
-// actually shows a diagram, as KaTeX does, and `pele/lazy` then loads only the
-// diagram types the document uses. Until then the block shows its source.
-let pele: Pele | undefined;
-let loading: Promise<Pele> | undefined;
-function loadPele(): Promise<Pele> {
-  return loading ??= import('pele/lazy').then((m) => (pele = m));
+// Past this a diagram is given up on and its worker killed. Pele draws a
+// typical diagram in milliseconds; this leaves room for loading the worker on a
+// slow phone.
+const TIMEOUT = 5000;
+
+// ponytail: Pele (Obsidian's Mermaid renderer) runs in a worker that starts
+// with the first diagram a document shows, as KaTeX loads with the first
+// formula. Until a diagram is drawn its block shows the source.
+let worker: Worker | undefined;
+// One diagram at a time, so a timeout kills only the one that ran over.
+let queue: Promise<unknown> = Promise.resolve();
+
+function draw(source: string): Promise<Drawn> {
+  const drawn = queue.then(() => new Promise<Drawn>((resolve) => {
+    const w = worker ??= new Worker(new URL('./mermaid-worker.ts', import.meta.url));
+    const fail = (error: string) => {
+      w.terminate();
+      worker = undefined;
+      resolve({ error });
+    };
+    const timer = setTimeout(() => fail('Took too long to draw'), TIMEOUT);
+    w.onmessage = ({ data }: MessageEvent<Drawn>) => {
+      clearTimeout(timer);
+      resolve(data);
+    };
+    w.onerror = () => {
+      clearTimeout(timer);
+      fail('Could not draw this diagram');
+    };
+    w.postMessage(source);
+  }));
+  queue = drawn;
+  return drawn;
 }
 
 /**
@@ -41,26 +67,21 @@ export class MermaidWidget extends WidgetType {
       view.dispatch({ selection: { anchor: view.posAtDOM(el) } });
     });
     el.textContent = this.source;
-    const draw = (p: Pele) => p.renderAsync(this.source, {
-      // The editor is contenteditable, and a tap opens the source: a link in
-      // the diagram could not be followed anyway.
-      links: false,
-    }).then(({ svg }) => {
-      // Pele escapes the diagram's text and filters its styles; see
-      // https://pele.run/security.
-      el.innerHTML = svg;
-      el.classList.remove('md-mermaid-error');
-    }, (error: unknown) => {
-      // Half-typed or unsupported: the source stays up, the reason in its
-      // tooltip.
-      el.classList.add('md-mermaid-error');
-      el.title = error instanceof Error ? error.message : String(error);
-    }).then(() => {
+    void draw(this.source).then((drawn) => {
+      if ('svg' in drawn) {
+        // Pele escapes the diagram's text and filters its styles and links,
+        // and the worker supplies no icon or math markup, which it would not
+        // filter. See https://pele.run/security.
+        el.innerHTML = drawn.svg;
+      } else {
+        // Half-typed, unsupported or too big: the source stays up, the reason
+        // in its tooltip. As text — the message can quote the diagram.
+        el.classList.add('md-mermaid-error');
+        el.title = drawn.error;
+      }
       // It just changed size under CodeMirror's feet.
       if (el.isConnected) view.requestMeasure();
     });
-    if (pele) void draw(pele);
-    else loadPele().then(draw, () => { /* the source stays up */ });
     return el;
   }
 }
