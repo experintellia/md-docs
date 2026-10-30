@@ -220,3 +220,29 @@
   max-height: 50em; /* as .md-math */
 }
 .cm-content { min-width: 0; }
+
+/* Drawn ```mermaid block. Replaces the source while the cursor is elsewhere,
+   like a `$$` block; until Pele has loaded, or if the diagram does not parse,
+   it holds the source. Pele colours its SVG from these, so a theme switch
+   needs no redraw. */
+.md-mermaid {
+  --pele-bg: var(--bg);
+  --pele-fg: var(--fg);
+  --pele-muted: var(--muted);
+  --pele-line: var(--fg);
+  --pele-surface: var(--toolbar-bg);
+  --pele-surface-alt: var(--code-bg);
+  --pele-border: var(--border);
+  --pele-accent: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  text-align: center;
+  padding: 0.4em 6px;
+  overflow-x: auto;
+}
+.md-mermaid svg { font-family: var(--pele-font, sans-serif); }
+.md-mermaid-error {
+  text-align: start;
+  background: var(--code-bg);
+  color: var(--tok-invalid);
+}

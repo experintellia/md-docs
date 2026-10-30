@@ -6,6 +6,11 @@ All notable changes to MD-Docs are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Mermaid diagrams: a ` ```mermaid ` block is drawn in place while the cursor
+  is elsewhere, and a tap opens its source, as with a `$$` block. Drawn by
+  [Pele](https://pele.run), Obsidian's renderer, which loads only once a
+  document shows a diagram, and then only the diagram types it uses. A diagram
+  that does not parse keeps its source up, with the error in its tooltip. (#50)
 - Math in the middle of a line, as in Obsidian. `hello $$ E = mc^2 $$` typesets
   the formula on a row of its own below the text before it, and such a formula
   may run over the paragraph's next lines, closed by a `$$` line: `We get $$`,

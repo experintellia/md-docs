@@ -130,6 +130,18 @@ after`);
   await expect(page.locator('.cm-content')).toContainText(String.raw`\Omega = \{ (1,2)`);
 });
 
+test('a ```mermaid block is drawn, and a tap opens its source', async ({ page, isMobile }) => {
+  // The example from #50.
+  await page.keyboard.insertText('```mermaid\npie title NETFLIX\n  "Time spent looking for movie" : 90\n  "Time spent watching it" : 10\n```\n\nafter');
+  const diagram = page.locator('.md-mermaid');
+  await expect(diagram.locator('svg')).toBeVisible();
+  await expect(diagram).toContainText('NETFLIX');
+  await expect(diagram).not.toHaveClass(/md-mermaid-error/);
+  await press(diagram.locator('svg'), isMobile);
+  await expect(diagram).toHaveCount(0);
+  await expect(page.locator('.cm-content')).toContainText('pie title NETFLIX');
+});
+
 test('$$ in the middle of a line typesets below the text, as in Obsidian', async ({ page, isMobile }) => {
   // The second runs over three lines of its paragraph, closed by a `$$` alone.
   await page.keyboard.insertText('hello $$ E = mc^2 $$\n\nWe get $$\na^2\n$$\n\nafter');

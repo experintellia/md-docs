@@ -20,6 +20,7 @@ only and wrote our own implementation — **no code was copied**.
 ## Built on
 
 - [CodeMirror 6](https://codemirror.net/) and `@codemirror/lang-markdown` / `@lezer/markdown`
+- [Pele](https://pele.run/) — Mermaid diagrams
 - [Yjs](https://yjs.dev/) with `y-codemirror.next`
 - [`y-webxdc`](https://codeberg.org/webxdc/y-webxdc) — the webxdc Yjs provider
 - The [webxdc](https://webxdc.org/) platform and `webxdc-dev`
