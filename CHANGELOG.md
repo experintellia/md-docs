@@ -5,6 +5,10 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.5.0-beta.1] - 2026-10-30
+
+Pre-release.
+
 ### Added
 - Mermaid diagrams: a ` ```mermaid ` block is drawn in place while the cursor
   is elsewhere, and a tap opens its source, as with a `$$` block. Drawn by
@@ -33,6 +37,8 @@ All notable changes to MD-Docs are documented here. This project adheres to
 - ```` ```svg ````, ```` ```xml ```` and ```` ```html ```` fences are highlighted.
 
 ### Changed
+- The `.xdc` is 708 KB, up from 452 KB, nearly all of it the worker that draws
+  Mermaid diagrams; it loads only once a note shows one.
 - On a narrow screen the help shows a multi-line example (a code block, table,
   `$$` block, diagram or SVG) above its description, at full width, instead
   of squeezing the description beside it to a word or two a line.
