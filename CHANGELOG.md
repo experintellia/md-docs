@@ -33,6 +33,9 @@ All notable changes to MD-Docs are documented here. This project adheres to
 - ```` ```svg ````, ```` ```xml ```` and ```` ```html ```` fences are highlighted.
 
 ### Changed
+- On a narrow screen the help shows a multi-line example (a code block, table,
+  `$$` block, diagram or SVG) above its description, at full width, instead
+  of squeezing the description beside it to a word or two a line.
 - What a note's math can cost every reader's editor is bounded, beyond the
   10,000-character limit on one formula: each paragraph, heading and table
   typesets up to that much in all, counting a little for every formula, and

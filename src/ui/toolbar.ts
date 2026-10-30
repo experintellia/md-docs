@@ -202,7 +202,7 @@ function buildHelp(): HTMLElement {
          edits the <strong>same document</strong> — changes sync to all peers, and
          the <strong>first line becomes the document's title</strong> shown in chat.</p>
       <h2>Markdown syntax</h2>
-      <table>
+      <table class="help-syntax">
         <tbody>
           <tr><td><code># Heading</code></td><td>Heading (use the ${ico(faHeading)} button to cycle levels)</td></tr>
           <tr><td><code>**bold**</code></td><td>Bold text (${ico(faBold)})</td></tr>
@@ -219,11 +219,11 @@ function buildHelp(): HTMLElement {
         </tbody>
         <tbody>
           <tr><td><code>&gt; quote</code></td><td>Block quote</td></tr>
-          <tr><td><pre><code>\`\`\`js&#10;let x = 1&#10;\`\`\`</code></pre></td><td>Code block, highlighted for the language after <code>\`\`\`</code> (js, py, sh, …)</td></tr>
-          <tr><td><pre><code>| a | b |&#10;|---|---|&#10;| 1 | 2 |</code></pre></td><td>Table, with a <code>|---|</code> line under the header row</td></tr>
-          <tr><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX) on a line of its own, between <code>$$</code></td></tr>
-          <tr><td><pre><code>\`\`\`mermaid&#10;flowchart LR&#10;  A --&gt; B&#10;\`\`\`</code></pre></td><td>Diagram (Mermaid): flowchart, sequence, pie, class, state, gantt, … — syntax at <a href="https://mermaid.js.org/intro/" target="_blank" rel="noopener">mermaid.js.org</a></td></tr>
-          <tr><td><pre><code>&lt;svg width="40"&#10;     height="40"&gt;&#10;  &lt;circle r="18"&#10;    cx="20" cy="20"&#10;    fill="tomato"/&gt;&#10;&lt;/svg&gt;</code></pre></td><td>SVG image, drawn with scripts and links removed; tap it to edit, pinch to zoom. A <code>\`\`\`svg</code> block stays code</td></tr>
+          <tr class="help-block"><td><pre><code>\`\`\`js&#10;let x = 1&#10;\`\`\`</code></pre></td><td>Code block, highlighted for the language after <code>\`\`\`</code> (js, py, sh, …)</td></tr>
+          <tr class="help-block"><td><pre><code>| a | b |&#10;|---|---|&#10;| 1 | 2 |</code></pre></td><td>Table, with a <code>|---|</code> line under the header row</td></tr>
+          <tr class="help-block"><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX) on a line of its own, between <code>$$</code></td></tr>
+          <tr class="help-block"><td><pre><code>\`\`\`mermaid&#10;flowchart LR&#10;  A --&gt; B&#10;\`\`\`</code></pre></td><td>Diagram (Mermaid): flowchart, sequence, pie, class, state, gantt, … — syntax at <a href="https://mermaid.js.org/intro/" target="_blank" rel="noopener">mermaid.js.org</a></td></tr>
+          <tr class="help-block"><td><pre><code>&lt;svg width="40"&#10;     height="40"&gt;&#10;  &lt;circle r="18"&#10;    cx="20" cy="20"&#10;    fill="tomato"/&gt;&#10;&lt;/svg&gt;</code></pre></td><td>SVG image, drawn with scripts and links removed; tap it to edit, pinch to zoom. A <code>\`\`\`svg</code> block stays code</td></tr>
           <tr><td><code>---</code></td><td>Separator line (three or more minuses on their own line)</td></tr>
         </tbody>
       </table>
