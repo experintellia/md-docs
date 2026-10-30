@@ -140,6 +140,9 @@ test('a ```mermaid block is drawn, and a tap opens its source', async ({ page, i
   await press(diagram.locator('svg'), isMobile);
   await expect(diagram).toHaveCount(0);
   await expect(page.locator('.cm-content')).toContainText('pie title NETFLIX');
+  // Leaving it draws it again — from the cache, so at once.
+  await page.keyboard.press('ControlOrMeta+End');
+  await expect(page.locator('.md-mermaid svg')).toBeVisible();
 });
 
 test('the mermaid example in the help draws', async ({ page }) => {
