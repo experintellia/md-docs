@@ -30,8 +30,8 @@ const mdHighlight = HighlightStyle.define([
 ]);
 
 // CodeMirror moves vertically by the drawn lines, and a rendered table, `$$`
-// block, diagram or SVG is one tall widget it steps right over: its source could only be
-// reached with the horizontal arrows. Stop on the block's near edge instead,
+// block, diagram or SVG is one tall widget it steps right over: its source
+// could only be reached with the horizontal arrows. Stop on the block's near edge instead,
 // which reveals its source as the horizontal arrows already do.
 function intoBlock(forward: boolean) {
   return (view: EditorView): boolean => {

@@ -27,10 +27,9 @@ All notable changes to MD-Docs are documented here. This project adheres to
   pipe inside one as `\|`, as in code. (#43)
 - A raw `<svg>…</svg>` in the note, on its own lines or one line, draws as an
   image; tap it to edit, as a table or a `$$` block, or pinch it to zoom in
-  until you let go. Only drawing is kept: no
-  script, link out of the file, animation, stylesheet or anything else that
-  runs or loads. A
-  ```` ```svg ```` fence stays code. (#49)
+  until you let go. Only drawing is kept: no script, link out of the file,
+  animation, stylesheet or anything else that runs or loads. A ```` ```svg ````
+  fence stays code. (#49)
 - ```` ```svg ````, ```` ```xml ```` and ```` ```html ```` fences are highlighted.
 
 ### Changed

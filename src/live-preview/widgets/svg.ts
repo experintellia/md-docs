@@ -43,8 +43,10 @@ const keepAttr = (attr: Attr): boolean =>
  *
  * The widget draws it as an `<img>`, which already runs no script and loads
  * nothing; this keeps the image a drawing wherever else it ends up (a
- * long-press "save image" on a phone hands on exactly this). Elements and attributes are allowlisted, links point only within
- * the file (`#id`), and nothing in it reaches the network.
+ * long-press "save image" on a phone hands on exactly this). Elements are
+ * allowlisted; attributes lose handlers, prefixes and anything that could
+ * fetch, links point only within the file (`#id`), and nothing in it reaches
+ * the network.
  */
 export function sanitizeSvg(source: string): string | null {
   // Read as HTML, which is how `<svg>` written into a page is read: no
@@ -71,7 +73,7 @@ export function sanitizeSvg(source: string): string | null {
 }
 
 // ponytail: one entry per distinct `<svg>` source seen, dropped wholesale past
-// 100. `buildSvg` asks on every caret move; parsing is what this saves.
+// 100 — a count, not a size: 100 huge SVGs are held whole until then. `buildSvg` asks on every caret move; parsing is what this saves.
 const cache = new Map<string, string | null>();
 export function sanitizedSvg(source: string): string | null {
   if (!cache.has(source)) {

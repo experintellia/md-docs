@@ -89,8 +89,9 @@ test('a raw <script> block is highlighted like a ```js fence', async ({ page }) 
 });
 
 test('a raw <svg> block draws sanitized, a ```svg fence stays code', async ({ page, isMobile }) => {
-  // The issue's example (#49), with things a peer must not get to run.
-  await page.keyboard.insertText(`<svg width="200" height="100" onload="alert(1)">
+  // The issue's example (#49), with things a peer must not get to run, and
+  // indented as it is there: a tap must still open the source.
+  await page.keyboard.insertText(`  <svg width="200" height="100" onload="alert(1)">
   <script>alert(2)</script>
   <rect x="20" y="20" width="120" height="60" rx="10" fill="steelblue" />
 </svg>
@@ -138,8 +139,8 @@ test('a pinch zooms an SVG and lets go of it, without opening its source', async
 
 test('an SVG saved from the image runs, opens and loads nothing', async ({ page, context }) => {
   // What a peer could put in an `<svg>` to act once the image is saved (a
-  // long-press on a phone) and opened,
-  // each of which got through an earlier version of the sanitizer.
+  // long-press on a phone) and opened, each of which got through an earlier
+  // version of the sanitizer.
   const evil = 'http://evil.test';
   const xhtml = 'http://www.w3.org/1999/xhtml';
   const cases = [

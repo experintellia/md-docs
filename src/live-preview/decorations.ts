@@ -795,14 +795,15 @@ export function buildSvg(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
   for (let node = syntaxTree(state).topNode.firstChild; node; node = node.nextSibling) {
     if (node.name !== 'HTMLBlock' && node.name !== 'Paragraph') continue;
-    if (rangeHasSelection(state, node.from, node.to)) continue;
+    // From the line's start: an indented `<svg>` would leave its indent
+    // behind as a blank line above the image. Revealed from there too, as
+    // that is where a tap on the image puts the caret.
+    const from = state.doc.lineAt(node.from).from;
+    if (rangeHasSelection(state, from, node.to)) continue;
     const source = state.doc.sliceString(node.from, node.to).trim();
     if (!/^<svg[\s>]/i.test(source) || !/<\/svg>$/i.test(source)) continue;
     const svg = sanitizedSvg(source);
     if (svg === null) continue;
-    // From the line's start: an indented `<svg>` would leave its indent
-    // behind as a blank line above the image.
-    const from = state.doc.lineAt(node.from).from;
     ranges.push(Decoration.replace({ widget: new SvgWidget(svg), block: true }).range(from, node.to));
   }
   return Decoration.set(ranges, true);
