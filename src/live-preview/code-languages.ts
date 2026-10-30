@@ -15,10 +15,11 @@ import { rust } from '@codemirror/legacy-modes/mode/rust';
 import { go } from '@codemirror/legacy-modes/mode/go';
 import { yaml } from '@codemirror/legacy-modes/mode/yaml';
 import { toml } from '@codemirror/legacy-modes/mode/toml';
+import { html, xml } from '@codemirror/legacy-modes/mode/xml';
 
 // ponytail: CodeMirror 5 stream modes, not the Lezer `@codemirror/lang-*`
 // grammars. Lezer parses more accurately but costs ~133 KB in the `.xdc` for
-// twelve languages; these seventeen add ~22 KB. Promote an individual language
+// twelve languages; these nineteen add ~25 KB. Promote an individual language
 // to its Lezer grammar if its highlighting turns out to be worth the bytes —
 // except JavaScript: vite.config.ts aliases `@codemirror/lang-javascript` to
 // src/lang-javascript-lite.ts, so importing it would silently get this mode.
@@ -67,4 +68,6 @@ export const codeLanguages: LanguageDescription[] = [
   mode('go', ['golang'], go),
   mode('yaml', ['yml'], yaml),
   mode('toml', [], toml),
+  mode('xml', ['svg'], xml),
+  mode('html', ['htm'], html),
 ];

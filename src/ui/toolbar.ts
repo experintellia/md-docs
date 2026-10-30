@@ -223,6 +223,7 @@ function buildHelp(): HTMLElement {
           <tr><td><pre><code>| a | b |&#10;|---|---|&#10;| 1 | 2 |</code></pre></td><td>Table, with a <code>|---|</code> line under the header row</td></tr>
           <tr><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX) on a line of its own, between <code>$$</code></td></tr>
           <tr><td><pre><code>\`\`\`mermaid&#10;flowchart LR&#10;  A --&gt; B&#10;\`\`\`</code></pre></td><td>Diagram (Mermaid): flowchart, sequence, pie, class, state, gantt, … — syntax at <a href="https://mermaid.js.org/intro/" target="_blank" rel="noopener">mermaid.js.org</a></td></tr>
+          <tr><td><pre><code>&lt;svg width="40"&#10;     height="40"&gt;&#10;  &lt;circle r="18"&#10;    cx="20" cy="20"&#10;    fill="tomato"/&gt;&#10;&lt;/svg&gt;</code></pre></td><td>SVG image, drawn with scripts and links removed; tap it to edit, pinch to zoom. A <code>\`\`\`svg</code> block stays code</td></tr>
           <tr><td><code>---</code></td><td>Separator line (three or more minuses on their own line)</td></tr>
         </tbody>
       </table>
