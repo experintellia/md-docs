@@ -241,8 +241,17 @@
   overflow-x: auto;
 }
 .md-mermaid svg { font-family: var(--pele-font, sans-serif); }
+/* The source, then why it was not drawn: Pele's message, whose `^` points
+   into the line above it, hence monospace and no wrapping. */
 .md-mermaid-error {
   text-align: start;
   background: var(--code-bg);
+}
+.md-mermaid-error > div {
   color: var(--tok-invalid);
+  font-size: 0.85em;
+  white-space: pre;
+  margin-top: 0.4em;
+  padding-top: 0.4em;
+  border-top: 1px solid var(--border);
 }

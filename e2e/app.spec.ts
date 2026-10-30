@@ -142,11 +142,27 @@ test('a ```mermaid block is drawn, and a tap opens its source', async ({ page, i
   await expect(page.locator('.cm-content')).toContainText('pie title NETFLIX');
 });
 
-test('a ```mermaid block that does not parse keeps its source, the error as text', async ({ page }) => {
+test('the mermaid example in the help draws', async ({ page }) => {
+  // Read off the help, so the example cannot drift into one that fails.
+  const example = await page.evaluate(() => {
+    document.querySelector<HTMLButtonElement>('[title="Help & markdown syntax"]')!.click();
+    return [...document.querySelectorAll('#help-overlay pre')]
+      .map((pre) => pre.textContent!).find((text) => text.startsWith('```mermaid'))!;
+  });
+  await page.keyboard.press('Escape');
+  await page.locator('.cm-content').click();
+  await page.keyboard.insertText(`${example}\n\nafter`);
+  await expect(page.locator('.md-mermaid svg')).toBeVisible();
+  await expect(page.locator('.md-mermaid-error')).toHaveCount(0);
+});
+
+test('a ```mermaid block that does not parse keeps its source, the error shown under it', async ({ page }) => {
   await page.keyboard.insertText('```mermaid\nflowchart LR\n  A -->\n```\n\nafter');
   const diagram = page.locator('.md-mermaid.md-mermaid-error');
-  await expect(diagram).toHaveAttribute('title', /.+/);
-  await expect(diagram).toHaveText('flowchart LR\n  A -->');
+  // On screen, not in a tooltip: a phone cannot hover.
+  await expect(diagram.locator('div')).toBeVisible();
+  await expect(diagram.locator('div')).not.toBeEmpty();
+  await expect(diagram).toContainText('flowchart LR\n  A -->');
   await expect(diagram.locator('svg')).toHaveCount(0);
 });
 

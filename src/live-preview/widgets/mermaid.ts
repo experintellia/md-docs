@@ -75,9 +75,10 @@ export class MermaidWidget extends WidgetType {
         el.innerHTML = drawn.svg;
       } else {
         // Half-typed, unsupported or too big: the source stays up, the reason
-        // in its tooltip. As text — the message can quote the diagram.
+        // under it — not in a tooltip, which a phone cannot hover. As text:
+        // the message can quote the diagram.
         el.classList.add('md-mermaid-error');
-        el.title = drawn.error;
+        el.appendChild(document.createElement('div')).textContent = drawn.error;
       }
       // It just changed size under CodeMirror's feet.
       if (el.isConnected) view.requestMeasure();

@@ -12,7 +12,7 @@ All notable changes to MD-Docs are documented here. This project adheres to
   the first diagram a document shows; one that takes over 5 seconds is given up
   on, so a diagram from another chat member cannot hang the editor. Links and
   images in a diagram are off. A diagram that does not parse keeps its source
-  up, with the error in its tooltip. (#50)
+  up, with the error under it. (#50)
 - Math in the middle of a line, as in Obsidian. `hello $$ E = mc^2 $$` typesets
   the formula on a row of its own below the text before it, and such a formula
   may run over the paragraph's next lines, closed by a `$$` line: `We get $$`,

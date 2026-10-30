@@ -222,6 +222,7 @@ function buildHelp(): HTMLElement {
           <tr><td><pre><code>\`\`\`js&#10;let x = 1&#10;\`\`\`</code></pre></td><td>Code block, highlighted for the language after <code>\`\`\`</code> (js, py, sh, …)</td></tr>
           <tr><td><pre><code>| a | b |&#10;|---|---|&#10;| 1 | 2 |</code></pre></td><td>Table, with a <code>|---|</code> line under the header row</td></tr>
           <tr><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX) on a line of its own, between <code>$$</code></td></tr>
+          <tr><td><pre><code>\`\`\`mermaid&#10;flowchart LR&#10;  A --&gt; B&#10;\`\`\`</code></pre></td><td>Diagram (Mermaid): flowchart, sequence, pie, class, state, gantt, … — syntax at mermaid.js.org</td></tr>
           <tr><td><code>---</code></td><td>Separator line (three or more minuses on their own line)</td></tr>
         </tbody>
       </table>
