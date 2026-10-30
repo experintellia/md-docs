@@ -295,6 +295,17 @@ html, body {
     box-shadow: none;
   }
   .help-close { display: none; }
+  /* A multi-line example takes the full width, its description below it:
+     beside it, the description was squeezed to a word or two a line. A
+     one-line example (`**bold**`) still sits beside its own, in a column of
+     its own width — rows, not a table, so the stacked ones are not held to
+     that column. */
+  .help-syntax, .help-syntax tbody { display: block; }
+  .help-syntax tr { display: flex; }
+  .help-syntax td:first-child { flex: none; min-width: 7.5em; }
+  .help-syntax tr.help-block { display: block; }
+  .help-syntax .help-block td { display: block; padding-right: 0; }
+  .help-syntax .help-block td + td { padding-top: 4px; }
   .help-head {
     position: sticky;
     top: 0;
