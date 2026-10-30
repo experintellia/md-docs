@@ -88,6 +88,97 @@ test('a raw <script> block is highlighted like a ```js fence', async ({ page }) 
   expect(errors).toEqual([]);
 });
 
+test('a raw <svg> block draws sanitized, a ```svg fence stays code', async ({ page, isMobile }) => {
+  // The issue's example (#49), with things a peer must not get to run.
+  await page.keyboard.insertText(`<svg width="200" height="100" onload="alert(1)">
+  <script>alert(2)</script>
+  <rect x="20" y="20" width="120" height="60" rx="10" fill="steelblue" />
+</svg>
+
+\`\`\`svg
+<rect fill="red" />
+\`\`\`
+
+after`);
+  const img = page.locator('img.md-svg');
+  await expect(img).toHaveJSProperty('naturalWidth', 200);
+  const svg = decodeURIComponent((await img.getAttribute('src'))!.split(',')[1]);
+  expect(svg).toContain('fill="steelblue"');
+  expect(svg).not.toMatch(/script|alert/);
+  // The fence is highlighted as XML: its tag name is coloured, not plain text.
+  const tag = page.locator('.cm-line', { hasText: 'fill="red"' }).getByText('rect', { exact: true });
+  await expect(tag).not.toHaveCSS('color', await page.locator('.cm-line', { hasText: 'after' }).evaluate((el) => getComputedStyle(el).color));
+  // A tap opens the source, as on a table.
+  await press(img, isMobile);
+  await expect(img).toHaveCount(0);
+  await expect(page.locator('.cm-content')).toContainText('alert(2)');
+  // Focused, so a phone's keyboard comes up to edit it.
+  await expect(page.locator('.cm-editor')).toHaveClass(/cm-focused/);
+});
+
+test('a pinch zooms an SVG and lets go of it, without opening its source', async ({ page, browserName, isMobile }) => {
+  test.skip(!isMobile || browserName !== 'chromium', 'two-finger touch is sent over CDP');
+  await page.keyboard.insertText('<svg width="100" height="100"><rect width="90" height="90"/></svg>\n\nafter');
+  const img = page.locator('img.md-svg');
+  const box = (await img.boundingBox())!;
+  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', spread: number): Promise<unknown> => cdp.send('Input.dispatchTouchEvent', {
+    type,
+    touchPoints: type === 'touchEnd' ? [] : [{ x: x - spread, y }, { x: x + spread, y }],
+  });
+  await touch('touchStart', 10);
+  await touch('touchMove', 30);
+  // Three times as far apart: three times the size, about the same place.
+  expect(await img.evaluate((el) => el.style.transform)).toContain('scale(3)');
+  await touch('touchEnd', 0);
+  await expect(img).toHaveJSProperty('style.transform', '');
+  await expect(img).toHaveCount(1);
+});
+
+test('an SVG saved from the image runs, opens and loads nothing', async ({ page, context }) => {
+  // What a peer could put in an `<svg>` to act once the image is saved (a
+  // long-press on a phone) and opened,
+  // each of which got through an earlier version of the sanitizer.
+  const evil = 'http://evil.test';
+  const xhtml = 'http://www.w3.org/1999/xhtml';
+  const cases = [
+    '<svg onload="alert(1)"><script>alert(1)</script><rect width="9" height="9"/></svg>',
+    '<svg><x:script xmlns:x="http://www.w3.org/2000/svg">alert(1)</x:script><rect width="9" height="9"/></svg>',
+    '<svg xmlns:x="http://www.w3.org/1999/xlink"><a x:href="javascript:alert(1)"><rect width="500" height="500"/></a></svg>',
+    `<svg><h:iframe xmlns:h="${xhtml}" src="javascript:alert(1)"/><h:img xmlns:h="${xhtml}" src="${evil}/i"/><rect width="9" height="9"/></svg>`,
+    '<svg><a><set attributeName="href" to="javascript:alert(1)"/><rect width="500" height="500"/></a></svg>',
+    '<svg><a><animate attributeName="href" values="javascript:alert(1)" dur="1s" fill="freeze"/><rect width="500" height="500"/></a></svg>',
+    `<svg><rect width="9" height="9"/><foreignObject width="500" height="500"><iframe xmlns="${xhtml}" src="javascript:alert(1)"/></foreignObject></svg>`,
+    `<svg><style>@import url(${evil}/a); rect { fill: url(${evil}/b) }</style><rect width="9" height="9"/></svg>`,
+    `<svg><rect width="9" height="9" fill="url(${evil}/c#a)" mask="url(${evil}/d)" style="filter:url(${evil}/e)"/></svg>`,
+    `<svg><rect width="9" height="9" fill="u\\72l(${evil}/f#a)" filter="u\\rl(${evil}/g#f)"/></svg>`,
+    `<svg><image href="${evil}/h" width="9" height="9"/><use href="${evil}/u.svg#a"/><rect width="9" height="9"/></svg>`,
+  ];
+  await page.keyboard.insertText(`${cases.join('\n\n')}\n\nafter`);
+  const images = page.locator('img.md-svg');
+  await expect(images).toHaveCount(cases.length);
+  const saved = await images.evaluateAll((els) => els.map((el) => decodeURIComponent((el as HTMLImageElement).src.split(',')[1])));
+
+  // Opened the way someone opens the saved file: a top-level .svg document.
+  const file = await context.newPage();
+  const fired: string[] = [];
+  file.on('dialog', (d) => { fired.push(`dialog ${d.message()}`); void d.dismiss(); });
+  file.on('request', (r) => { if (r.url().startsWith(evil)) fired.push(`request ${r.url()}`); });
+  await file.route('http://saved.test/**', (route) => route.fulfill({
+    contentType: 'image/svg+xml',
+    body: saved[Number(new URL(route.request().url()).pathname.slice(1))],
+  }));
+  for (const [i, svg] of saved.entries()) {
+    expect(svg, cases[i]).toContain('<rect');
+    await file.goto(`http://saved.test/${i}`);
+    await file.mouse.click(5, 5);
+    await file.waitForTimeout(100);
+    expect(file.url(), svg).toBe(`http://saved.test/${i}`);
+  }
+  expect(fired).toEqual([]);
+});
+
 test('an edit made right before closing survives the relaunch', async ({ page }) => {
   await page.keyboard.insertText('keep me');
   await page.reload();

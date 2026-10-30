@@ -12,6 +12,7 @@ import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
 import { MAX_TEX, MathWidget, mathCost } from './widgets/math.ts';
 import { MermaidWidget } from './widgets/mermaid.ts';
+import { sanitizedSvg, SvgWidget } from './widgets/svg.ts';
 import { type Segment, type TableSpec, TableWidget } from './widgets/table.ts';
 
 /**
@@ -777,6 +778,37 @@ export function buildMermaid(state: EditorState): DecorationSet {
 }
 
 export const mermaidField = blockField(buildMermaid);
+
+/**
+ * Raw `<svg>` blocks, drawn sanitized (see widgets/svg.ts) — a state field and
+ * a full-document rebuild, like tables. A ```` ```svg ```` fence stays code.
+ *
+ * An HTML block, or a paragraph (a one-line `<svg>…</svg>`, or one whose
+ * opening tag runs over several lines), at the top level whose source is a
+ * single `<svg>` element. Anything else stays source, as it was.
+ *
+ * ponytail: CommonMark ends an HTML block at a blank line, so an SVG with one
+ * inside stays source, as does one in a quote or a list, whose source carries
+ * the `> ` or the indent.
+ */
+export function buildSvg(state: EditorState): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  for (let node = syntaxTree(state).topNode.firstChild; node; node = node.nextSibling) {
+    if (node.name !== 'HTMLBlock' && node.name !== 'Paragraph') continue;
+    if (rangeHasSelection(state, node.from, node.to)) continue;
+    const source = state.doc.sliceString(node.from, node.to).trim();
+    if (!/^<svg[\s>]/i.test(source) || !/<\/svg>$/i.test(source)) continue;
+    const svg = sanitizedSvg(source);
+    if (svg === null) continue;
+    // From the line's start: an indented `<svg>` would leave its indent
+    // behind as a blank line above the image.
+    const from = state.doc.lineAt(node.from).from;
+    ranges.push(Decoration.replace({ widget: new SvgWidget(svg), block: true }).range(from, node.to));
+  }
+  return Decoration.set(ranges, true);
+}
+
+export const svgField = blockField(buildSvg);
 
 /**
  * The live-preview decoration plugin. Rebuilds on document, viewport and

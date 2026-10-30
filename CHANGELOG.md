@@ -25,6 +25,13 @@ All notable changes to MD-Docs are documented here. This project adheres to
   own instead of widening the editor on a phone. (#43)
 - Math in table cells, `$x$` and `$$x$$` alike, typeset by the table; write a
   pipe inside one as `\|`, as in code. (#43)
+- A raw `<svg>…</svg>` in the note, on its own lines or one line, draws as an
+  image; tap it to edit, as a table or a `$$` block, or pinch it to zoom in
+  until you let go. Only drawing is kept: no
+  script, link out of the file, animation, stylesheet or anything else that
+  runs or loads. A
+  ```` ```svg ```` fence stays code. (#49)
+- ```` ```svg ````, ```` ```xml ```` and ```` ```html ```` fences are highlighted.
 
 ### Changed
 - What a note's math can cost every reader's editor is bounded, beyond the

@@ -255,3 +255,27 @@
   padding-top: 0.4em;
   border-top: 1px solid var(--border);
 }
+
+/* Raw `<svg>` block, drawn; a tap opens its source. A peer's
+   `height="1000000"` must not make a block a million pixels tall. */
+.md-svg {
+  display: block;
+  max-width: calc(100% - 6px);
+  max-height: 80vh;
+  margin-block: 0.4em;
+  margin-inline-start: 6px;
+  cursor: text;
+  /* Two fingers on it are its pinch zoom (svg.ts), not the page's. */
+  touch-action: pan-x pan-y;
+  position: relative;
+  /* The spring back once the fingers lift. */
+  transition: transform 0.2s ease-out;
+}
+/* Mid-pinch: follow the fingers at once, over the text around it. */
+.md-svg-zoom {
+  transition: none;
+  z-index: 10;
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-svg { transition: none; }
+}

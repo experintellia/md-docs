@@ -2,7 +2,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { EditorSelection, type Extension, Prec } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
-import { linkClickHandler, livePreviewPlugin, mathField, mermaidField, tableField } from './decorations.ts';
+import { linkClickHandler, livePreviewPlugin, mathField, mermaidField, svgField, tableField } from './decorations.ts';
 
 // Highlight style for fenced-code-block contents (and other tagged tokens).
 // Colours come from CSS custom properties so the one style serves both themes
@@ -30,7 +30,7 @@ const mdHighlight = HighlightStyle.define([
 ]);
 
 // CodeMirror moves vertically by the drawn lines, and a rendered table, `$$`
-// block or diagram is one tall widget it steps right over: its source could only be
+// block, diagram or SVG is one tall widget it steps right over: its source could only be
 // reached with the horizontal arrows. Stop on the block's near edge instead,
 // which reveals its source as the horizontal arrows already do.
 function intoBlock(forward: boolean) {
@@ -41,7 +41,7 @@ function intoBlock(forward: boolean) {
     const lo = Math.min(sel.head, moved.head);
     const hi = Math.max(sel.head, moved.head);
     let target = -1;
-    for (const field of [mathField, mermaidField, tableField]) {
+    for (const field of [mathField, mermaidField, tableField, svgField]) {
       view.state.field(field).between(lo, hi, (from, to, deco) => {
         if (!deco.spec.block) return;
         // The edge the caret meets first must lie past it and within the
@@ -73,6 +73,7 @@ export function livePreview(): Extension {
     tableField,
     mathField,
     mermaidField,
+    svgField,
     livePreviewPlugin,
     linkClickHandler,
     syntaxHighlighting(mdHighlight),
