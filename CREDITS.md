@@ -26,3 +26,21 @@ only and wrote our own implementation — **no code was copied**.
 - The [webxdc](https://webxdc.org/) platform and `webxdc-dev`
 
 This project is itself influenced by `webxdc/editor` and its `durian/editor` fork.
+
+## Licenses
+
+MD-Docs itself is MIT-licensed (see [`LICENSE`](./LICENSE)). Its bundled
+dependencies are MIT, apart from two:
+
+- `js-base64` (a Yjs dependency) is BSD-3-Clause.
+- The [Font Awesome Free](https://fontawesome.com) icons are CC BY 4.0, by
+  Fonticons, Inc.; their code is MIT.
+
+`npm run build` writes every bundled package's license notice into the `.xdc`
+as `THIRD-PARTY-LICENSES.txt` (see `thirdPartyLicenses()` in `vite.config.ts`).
+
+The math fonts in `fonts/katex-*/` are KaTeX's own (MIT, Khan Academy and
+contributors), with TrueType hinting and glyph names removed by
+`scripts/strip-katex-fonts.py`.
+
+The app icon (`public/icon.png`) is AI-generated.

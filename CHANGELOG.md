@@ -6,6 +6,9 @@ All notable changes to MD-Docs are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- The project is MIT-licensed (`LICENSE`). The `.xdc` now carries
+  `THIRD-PARTY-LICENSES.txt`, the license notice of every package bundled into
+  it, written by the build; `CREDITS.md` lists the non-MIT ones.
 - Mermaid diagrams: a ` ```mermaid ` block is drawn in place while the cursor
   is elsewhere, and a tap opens its source, as with a `$$` block. Drawn by
   [Pele](https://pele.run), Obsidian's renderer, in a worker that starts with
