@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type PluginOption } from 'vite';
 import zipPack from 'vite-plugin-zip-pack';
@@ -75,7 +75,48 @@ function katexFonts(): PluginOption {
   };
 }
 
+// Every npm package with code in the `.xdc` (the app and the mermaid worker)
+// asks, by its license, that its notice ship with it; Terser strips them from
+// the code. So the build writes them, package by package, to
+// THIRD-PARTY-LICENSES.txt in the `.xdc`. A package counts only if some of its
+// code survived tree-shaking, so the list follows the bundle on its own.
+const bundledPackages = new Set<string>();
+function thirdPartyLicenses({ emit }: { emit: boolean }): PluginOption {
+  return {
+    name: 'third-party-licenses',
+    apply: 'build',
+    generateBundle(_, bundle) {
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type !== 'chunk') continue;
+        for (const [id, { renderedLength }] of Object.entries(chunk.modules)) {
+          // Greedy, so a nested node_modules names the innermost package.
+          const dir = /^(.*\/node_modules\/(?:@[^/]+\/)?[^/]+)\//.exec(id)?.[1];
+          if (dir && renderedLength > 0) bundledPackages.add(dir);
+        }
+      }
+      // The worker is bundled first, while the app's modules are transformed.
+      if (!emit) return;
+      const notices = [...bundledPackages].sort().map((dir) => {
+        const { name, version, license, author } = JSON.parse(readFileSync(`${dir}/package.json`, 'utf-8'));
+        const file = readdirSync(dir).find((f) => /^(licen[cs]e|copying)/i.test(f));
+        const text = file
+          ? readFileSync(`${dir}/${file}`, 'utf-8').trim()
+          : `${license}, by ${typeof author === 'string' ? author : author?.name}. The package ships no license file.`;
+        return `${name} ${version} — ${license}\n\n${text}`;
+      });
+      this.emitFile({
+        type: 'asset',
+        fileName: 'THIRD-PARTY-LICENSES.txt',
+        source: `MD-Docs bundles the following third-party packages.\n\n${notices.join(`\n\n${'-'.repeat(72)}\n\n`)}\n`,
+      });
+    },
+  };
+}
+
 export default defineConfig({
+  worker: {
+    plugins: () => [thirdPartyLicenses({ emit: false })],
+  },
   build: {
     // Conservative targets matching the messengers' embedded webviews.
     target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
@@ -94,6 +135,7 @@ export default defineConfig({
   plugins: [
     ...(process.env.ERUDA ? [eruda()] : []),
     katexFonts(),
+    thirdPartyLicenses({ emit: true }),
     // Serve a single-peer mock webxdc.js during `vite` dev (serve:app), so the
     // app runs standalone in a browser without webxdc-dev. No-op for `build` —
     // the real webxdc.js comes from the messenger. See @webxdc/vite-plugins.
