@@ -1,4 +1,6 @@
-# Build the .xdc and attach it to a GitHub Release when a vX.Y.Z tag is pushed.
+# Build the .xdc and attach it to a GitHub Release when a vX.Y.Z tag (or a
+# vX.Y.Z-pre.N pre-release tag) is pushed. The release notes are the tag's
+# section of CHANGELOG.md.
 name: Release .xdc
 on:
   push:
@@ -27,8 +29,16 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      - name: Release notes
+        # The lines under `## [X.Y.Z]` up to the next `## [`; fail if none.
+        run: |
+          awk -v v="${GITHUB_REF_NAME#v}" '/^## \[/ { p = index($0, "[" v "]") } p && !/^## \[/' CHANGELOG.md > release-notes.md
+          grep -q . release-notes.md
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist-release/*.xdc
           fail_on_unmatched_files: true
+          body_path: release-notes.md
+          # v0.5.0-beta.1 and the like go out as pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
