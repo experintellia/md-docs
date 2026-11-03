@@ -5,6 +5,12 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Changed
+- Read mode is remembered per user and follows you to each of your devices: the
+  document opens in the mode you last chose, and a switch on one device reaches
+  your others. It is stored in the shared document under your address, so chat
+  peers can see who reads and who edits. (#58)
+
 ## [0.5.0] - 2026-10-31
 
 ### Added

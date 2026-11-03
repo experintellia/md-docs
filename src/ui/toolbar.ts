@@ -79,7 +79,7 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
   const utils = [...(collab ? [historyButton(collab)] : []), themeButton(), helpButton()];
   const end = document.createElement('div');
   end.className = 'md-tool-end';
-  end.append(readModeButton(container, view), ...moreMenu(utils));
+  end.append(readModeButton(container, view, collab), ...moreMenu(utils));
   container.append(spacer, end);
 
   if (isMobile()) {
@@ -89,12 +89,16 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
 
 /** Toggle read mode: the editor stops taking input and shows no source, so a
  *  tap on a link opens it. The editing buttons have nothing to act on there,
- *  so they step aside. Not persisted: every open starts in edit mode. */
-function readModeButton(container: HTMLElement, view: EditorView): HTMLButtonElement {
+ *  so they step aside. The choice is this viewer's and follows them to each of
+ *  their devices (see readModePref); without a chat to sync through, it lasts
+ *  only as long as this page. */
+function readModeButton(container: HTMLElement, view: EditorView, collab?: Collab): HTMLButtonElement {
   const btn = utilButton(() => faSvg(faBookOpen), 'Toggle read / edit mode');
   btn.setAttribute('aria-pressed', 'false');
-  btn.addEventListener('click', () => {
-    const reading = container.classList.toggle('reading');
+  // Idempotent: a stored choice can arrive again while we are already there.
+  const show = (reading: boolean): void => {
+    if (view.state.readOnly === reading) return;
+    container.classList.toggle('reading', reading);
     setReadMode(view, reading);
     // Drop the keyboard on the way in. On the way out, leave focus alone: the
     // next tap puts the caret where the reader wants to edit.
@@ -102,7 +106,17 @@ function readModeButton(container: HTMLElement, view: EditorView): HTMLButtonEle
     btn.setAttribute('aria-pressed', String(reading));
     // Like the theme button: show the mode a tap switches to.
     btn.replaceChildren(faSvg(reading ? faPen : faBookOpen));
+  };
+  btn.addEventListener('click', () => {
+    const reading = !view.state.readOnly;
+    show(reading);
+    collab?.readMode.set(reading);
   });
+  if (collab) {
+    // Open in the mode last chosen, and follow later choices from another device.
+    collab.readMode.onChange(() => show(collab.readMode.get()));
+    show(collab.readMode.get());
+  }
   return btn;
 }
 
