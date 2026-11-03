@@ -38,6 +38,34 @@ export interface Collab {
   undoManager: Y.UndoManager;
   provider: WebxdcProvider;
   history: History;
+  readMode: ReadModePref;
+}
+
+/** This viewer's read-mode choice, as the shared doc holds it. */
+export interface ReadModePref {
+  get(): boolean;
+  set(on: boolean): void;
+  /** Runs after any change to the stored choices, this viewer's or a peer's. */
+  onChange(cb: () => void): void;
+}
+
+/**
+ * Read mode per viewer, keyed by their address, so it follows them to every
+ * device they open the chat on. It rides the same synced doc as the text, which
+ * means peers can see who reads and who edits. ponytail: keyed by address, not
+ * a random ID, so it stays the same on each of the user's devices.
+ */
+export function readModePref(ydoc: Y.Doc, me: string): ReadModePref {
+  const map = ydoc.getMap<boolean>('readMode');
+  return {
+    get: () => map.get(me) === true,
+    set: (on) => {
+      if (map.get(me) !== on) map.set(me, on);
+    },
+    onChange: (cb) => {
+      map.observe(cb);
+    },
+  };
 }
 
 /**
@@ -240,5 +268,8 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
     saveTimer = setTimeout(saveDraft, 1000);
   });
 
-  return { ydoc, ytext, awareness, undoManager, provider, history };
+  return {
+    ydoc, ytext, awareness, undoManager, provider, history,
+    readMode: readModePref(ydoc, webxdc.selfAddr),
+  };
 }
