@@ -3,6 +3,7 @@ import { Awareness } from 'y-protocols/awareness';
 import WebxdcProvider from 'y-webxdc';
 import { fromUint8Array, toUint8Array } from 'js-base64';
 import { setupHistory, type History } from './history.ts';
+import { createReadModePref, type ReadModePref } from './read-mode.ts';
 
 // localStorage key for the synchronous crash/exit safety net (see below).
 const DRAFT_KEY = 'md-docs-draft';
@@ -39,33 +40,6 @@ export interface Collab {
   provider: WebxdcProvider;
   history: History;
   readMode: ReadModePref;
-}
-
-/** This viewer's read-mode choice, as the shared doc holds it. */
-export interface ReadModePref {
-  get(): boolean;
-  set(on: boolean): void;
-  /** Runs after any change to the stored choices, this viewer's or a peer's. */
-  onChange(cb: () => void): void;
-}
-
-/**
- * Read mode per viewer, keyed by their address, so it follows them to every
- * device they open the chat on. It rides the same synced doc as the text, which
- * means peers can see who reads and who edits. ponytail: keyed by address, not
- * a random ID, so it stays the same on each of the user's devices.
- */
-export function readModePref(ydoc: Y.Doc, me: string): ReadModePref {
-  const map = ydoc.getMap<boolean>('readMode');
-  return {
-    get: () => map.get(me) === true,
-    set: (on) => {
-      if (map.get(me) !== on) map.set(me, on);
-    },
-    onChange: (cb) => {
-      map.observe(cb);
-    },
-  };
 }
 
 /**
@@ -268,8 +242,19 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
     saveTimer = setTimeout(saveDraft, 1000);
   });
 
+  // Read mode rides status updates, not the document (see read-mode.ts). A
+  // choice still in its debounce goes out when the page hides.
+  const readMode = createReadModePref({
+    me: webxdc.selfAddr,
+    send: (payload) => history.sendSilent(payload),
+    onMessage: (cb) => history.onSilent(cb),
+    replayed: history.replayed(),
+  });
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') readMode.flush();
+  });
+
   return {
-    ydoc, ytext, awareness, undoManager, provider, history,
-    readMode: readModePref(ydoc, webxdc.selfAddr),
+    ydoc, ytext, awareness, undoManager, provider, history, readMode,
   };
 }

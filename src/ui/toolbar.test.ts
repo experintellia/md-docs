@@ -14,7 +14,8 @@ window.matchMedia = (): MediaQueryList =>
 
 const { mountToolbar } = await import('./toolbar.ts');
 const { createEditor } = await import('../editor.ts');
-const { readModePref } = await import('../collab.ts');
+const { createReadModePref } = await import('../read-mode.ts');
+const { createChatLog } = await import('../test-chat-log.ts');
 const { runScopeHandlers } = await import('@codemirror/view');
 after(() => GlobalRegistrator.unregister());
 
@@ -240,7 +241,7 @@ test('going into read mode takes our caret off peers\' screens', () => {
   const awareness = new Awareness(ydoc);
   const collab = {
     ydoc, ytext, awareness, undoManager: new Y.UndoManager(ytext),
-    readMode: readModePref(ydoc, 'me@example.com'),
+    readMode: createReadModePref(createChatLog().link('me@example.com'), 0),
   } as unknown as Collab;
   const view = createEditor(document.body, '', [], collab);
   try {
@@ -256,16 +257,22 @@ test('going into read mode takes our caret off peers\' screens', () => {
   }
 });
 
-/** One device: its own copy of the shared doc, opened with `me` as the viewer. */
-function device(ydoc: Y.Doc, me: string): { view: EditorView; container: HTMLElement; destroy(): void } {
+/** One device of `me`, on the chat's log. Its editor has its own text; only the
+ *  read-mode choice is shared, through the log. */
+function device(chat: ReturnType<typeof createChatLog>, me: string): {
+  view: EditorView;
+  container: HTMLElement;
+  destroy(): void;
+} {
   const container = document.createElement('div');
+  const ydoc = new Y.Doc();
   const ytext = ydoc.getText('codemirror');
   const awareness = new Awareness(ydoc);
   const collab = {
     ydoc, ytext, awareness, undoManager: new Y.UndoManager(ytext),
-    readMode: readModePref(ydoc, me),
+    readMode: createReadModePref(chat.link(me), 0),
   } as unknown as Collab;
-  const view = createEditor(document.body, ytext.toString(), [], collab);
+  const view = createEditor(document.body, '', [], collab);
   mountToolbar(container, view, collab);
   return {
     view,
@@ -278,40 +285,32 @@ function device(ydoc: Y.Doc, me: string): { view: EditorView; container: HTMLEle
   };
 }
 
-test('read mode is per viewer, and follows them to each device they open', () => {
+const tick = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+test('read mode is per viewer, and follows them to each device they open', async () => {
   reset();
-  // Relay each doc's changes to the others, as the chat does for peers' edits.
-  const relay = (a: Y.Doc, b: Y.Doc): void => {
-    a.on('update', (u: Uint8Array, origin: unknown) => {
-      if (origin !== 'relay') Y.applyUpdate(b, u, 'relay');
-    });
-    b.on('update', (u: Uint8Array, origin: unknown) => {
-      if (origin !== 'relay') Y.applyUpdate(a, u, 'relay');
-    });
-  };
-  const alicePhone = new Y.Doc();
-  const aliceLaptop = new Y.Doc();
-  const bob = new Y.Doc();
-  relay(alicePhone, aliceLaptop);
-  relay(alicePhone, bob);
-  const phone = device(alicePhone, 'alice@example.com');
-  const laptop = device(aliceLaptop, 'alice@example.com');
-  const bobPhone = device(bob, 'bob@example.com');
+  const chat = createChatLog();
+  const phone = device(chat, 'alice@example.com');
+  const laptop = device(chat, 'alice@example.com');
+  const bobPhone = device(chat, 'bob@example.com');
   const reading = (d: { view: EditorView }): boolean => d.view.state.readOnly;
   try {
+    await tick();
     btnByTitle(phone.container, 'Toggle read / edit mode').click();
+    await tick();
     assert.equal(reading(laptop), true, 'alice’s laptop opens the way she left the phone');
     assert.equal(reading(bobPhone), false, 'bob’s choice is his own, and he has not picked one');
 
     btnByTitle(laptop.container, 'Toggle read / edit mode').click();
+    await tick();
     assert.equal(reading(phone), false, 'a change on one device reaches her others');
 
     // A device opened later starts from the stored choice, not from edit mode.
     btnByTitle(phone.container, 'Toggle read / edit mode').click();
-    const fresh = new Y.Doc();
-    Y.applyUpdate(fresh, Y.encodeStateAsUpdate(alicePhone), 'relay');
-    const tablet = device(fresh, 'alice@example.com');
+    await tick();
+    const tablet = device(chat, 'alice@example.com');
     try {
+      await tick();
       assert.equal(reading(tablet), true, 'a new device opens in read mode');
       assert.ok(tablet.container.classList.contains('reading'));
     } finally {

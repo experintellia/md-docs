@@ -255,3 +255,28 @@ test('a re-send claims nothing, leaves a pending restore tag alone, and its auth
   listener!({ payload: { serializedYjsUpdate: blob, t: 1000, author: 'Carol' } });
   assert.deepEqual(who(), [['Carol', 1000, false]], 'the author, once her own send lands');
 });
+
+test('a silent update reaches onSilent, stays out of the timeline, and carries no edit info', () => {
+  let listener: ((u: { payload: Record<string, unknown> }) => void) | undefined;
+  const sent: Array<Record<string, unknown>> = [];
+  const real = {
+    selfName: 'Alice',
+    setUpdateListener: (cb: (u: { payload: Record<string, unknown> }) => void) => {
+      listener = cb;
+      return Promise.resolve();
+    },
+    sendUpdate: (u: Record<string, unknown>) => { sent.push(u); },
+  } as unknown as typeof window.webxdc;
+  const history = setupHistory(real);
+  history.webxdc.setUpdateListener(() => {});
+  const heard: Array<Record<string, unknown>> = [];
+  history.onSilent((p) => heard.push(p));
+
+  const readMode = { addr: 'alice@example.com', on: true };
+  history.sendSilent({ readMode });
+  assert.deepEqual(sent, [{ payload: { readMode } }], 'no info, summary, or timeline stamp');
+
+  listener!({ payload: { readMode } });
+  assert.deepEqual(heard, [{ readMode }]);
+  assert.deepEqual(history.versions(), [], 'not a version');
+});

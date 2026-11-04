@@ -61,12 +61,22 @@ export interface History {
   resend(serializedYjsUpdate: string, document: string): void;
   onChange(cb: () => void): void;
   /**
+   * A status update that edits no document: no info line, no summary, nothing in
+   * the timeline. For state that belongs to a person rather than the text (read
+   * mode). Peers get it through onSilent, replays included, in the channel's order.
+   */
+  sendSilent(payload: SilentPayload): void;
+  onSilent(cb: (payload: SilentPayload) => void): void;
+  /**
    * Resolves once the channel's startup replay has been delivered (webxdc's
    * setUpdateListener promise, which y-webxdc discards). Resolves immediately
    * on clients whose setUpdateListener returns void.
    */
   replayed(): Promise<void>;
 }
+
+/** A silent update's payload: the fields are the caller's own. */
+type SilentPayload = { [key: string]: unknown };
 
 interface Record {
   t: number;
@@ -176,6 +186,7 @@ export function setupHistory(real: typeof window.webxdc): History {
   // version is always exact. Good enough for a timeline; revisit only if it bites.
   const records: Record[] = [];
   const listeners: Array<() => void> = [];
+  const silentListeners: Array<(payload: SilentPayload) => void> = [];
   const emit = (): void => {
     for (const cb of listeners) {
       try {
@@ -242,6 +253,17 @@ export function setupHistory(real: typeof window.webxdc): History {
           if (poison.bad.includes(id)) return;
           poison.pending = id;
           writePoison(poison);
+        }
+        // Not a document batch: hand it to the silent listeners. Not recorded —
+        // it is not part of the timeline.
+        if (blob === null && p && typeof p === 'object') {
+          for (const silent of silentListeners) {
+            try {
+              silent(p as SilentPayload);
+            } catch (err) {
+              console.error('history: a silent-update listener failed', err);
+            }
+          }
         }
         // The provider first: history is bookkeeping, and a throw from one of
         // our onChange listeners must not stop the document itself from syncing.
@@ -329,6 +351,12 @@ export function setupHistory(real: typeof window.webxdc): History {
       (real.sendUpdate as typeof real.sendUpdate)({ payload, document } as never, '');
     },
     onChange: (cb) => { listeners.push(cb); },
+    // Straight to the real sendUpdate, like resend: no t/author stamp, which
+    // would make the update look like a batch of the timeline.
+    sendSilent: (payload) => {
+      (real.sendUpdate as typeof real.sendUpdate)({ payload } as never, '');
+    },
+    onSilent: (cb) => { silentListeners.push(cb); },
     replayed: () => replayed,
   };
 }

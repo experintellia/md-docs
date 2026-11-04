@@ -11,6 +11,30 @@ import 'katex/dist/katex.css';
 // Entry point. Phase 2: a Yjs-backed document synced to chat peers via the
 // webxdc persistent channel, bound to CodeMirror with undo + awareness.
 
+// How long the stored updates may take before a progress bar appears. A quick
+// open shows none, so nothing flashes.
+const LOADING_BAR_DELAY_MS = 4000;
+
+/**
+ * Show nothing while the channel replays the stored updates: the page would
+ * otherwise fill in piece by piece. Past LOADING_BAR_DELAY_MS a progress bar
+ * says it is still working.
+ */
+function holdUntilReplayed(replayed: Promise<void>): void {
+  document.body.classList.add('replaying');
+  const bar = document.getElementById('loading');
+  const timer = setTimeout(() => {
+    if (bar) bar.hidden = false;
+  }, LOADING_BAR_DELAY_MS);
+  const done = (): void => {
+    clearTimeout(timer);
+    if (bar) bar.hidden = true;
+    document.body.classList.remove('replaying');
+  };
+  // A failed replay must not leave the page hidden for good.
+  replayed.then(done, done);
+}
+
 function main(): void {
   const editorEl = document.querySelector<HTMLElement>('#editor');
   const toolbarEl = document.querySelector<HTMLElement>('#toolbar');
@@ -58,6 +82,7 @@ function main(): void {
     collab,
   );
   if (toolbarEl) mountToolbar(toolbarEl, view, collab);
+  if (collab) holdUntilReplayed(collab.history.replayed());
 
   // Live typing + remote cursors over the ephemeral realtime channel (no-op in
   // messengers that don't implement it yet — persistent sync still works).

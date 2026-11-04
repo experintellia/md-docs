@@ -526,6 +526,24 @@ html, body {
   }
 }
 
+/* Replaying the stored updates: show nothing until the document is whole. The
+   layout stays, so nothing jumps when the page appears. */
+.replaying #toolbar,
+.replaying #editor,
+.replaying #status { visibility: hidden; }
+
+#loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  color: var(--muted);
+}
+#loading[hidden] { display: none; }
+#loading progress { width: min(12rem, 60vw); }
+
 /* CodeMirror fills the editor area. */
 .cm-editor { height: 100%; }
 /* CM6 draws the caret as a bordered element (drawSelection/dropCursor); its

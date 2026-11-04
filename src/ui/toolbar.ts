@@ -90,7 +90,7 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
 /** Toggle read mode: the editor stops taking input and shows no source, so a
  *  tap on a link opens it. The editing buttons have nothing to act on there,
  *  so they step aside. The choice is this viewer's and follows them to each of
- *  their devices (see readModePref); without a chat to sync through, it lasts
+ *  their devices (see read-mode.ts); without a chat to sync through, it lasts
  *  only as long as this page. */
 function readModeButton(container: HTMLElement, view: EditorView, collab?: Collab): HTMLButtonElement {
   const btn = utilButton(() => faSvg(faBookOpen), 'Toggle read / edit mode');
