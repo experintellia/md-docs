@@ -282,13 +282,14 @@ test('false positive: `---` inside a fenced code block is not a separator', () =
   assert.ok(!hasRule(decorate('```\n---\n```\nbody', 13)), 'fenced code content');
 });
 
-test('reveal on cursor: raw `---` stays visible when the cursor is on the line', () => {
+test('reveal on cursor: raw `---` shows with no rule under it while the cursor is on the line', () => {
   const on = decorate('---\nbody', 1); // cursor inside the rule line
-  assert.ok(hasRule(on), 'md-hr class persists while editing');
+  assert.ok(!hasRule(on), 'no md-hr line class while editing (Obsidian-style)');
   assert.ok(
     !hiddenMarkers(on).some((d) => d.from === 0 && d.to === 3),
     'markers revealed when the cursor is on the line',
   );
+  assert.ok(hasRule(decorate('---\nbody', 6)), 'the rule returns once the cursor leaves the line');
 });
 
 test('fenced code block gets a copy button carrying the body without fences', () => {
