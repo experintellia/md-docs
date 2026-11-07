@@ -45,6 +45,50 @@
   padding-right: 0.7em;
 }
 
+/* Obsidian callouts (`> [!info] Title`): a quote box in the colour of its type.
+   The side comes from the callout's direction class, as for a quote. The bar
+   is first drawn grey by its side rule, then recoloured by the border-color
+   rule, which has to come after it: the two have equal specificity. The tint
+   is a fraction of the colour, so it reads on both themes. */
+.cm-line.md-callout-ltr {
+  border-left: 3px solid var(--border);
+  padding-left: 0.7em;
+}
+.cm-line.md-callout-rtl {
+  border-right: 3px solid var(--border);
+  padding-right: 0.7em;
+}
+.cm-line.md-callout {
+  background: color-mix(in srgb, var(--callout, var(--muted)) 10%, transparent);
+  border-color: var(--callout, var(--muted));
+}
+.cm-line.md-callout-head {
+  font-weight: 600;
+}
+.md-callout-label {
+  color: var(--callout);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  margin-inline-end: 0.4em;
+}
+.md-callout-label svg {
+  width: 1em;
+  height: 1em;
+}
+.md-callout-note { --callout: #2f6fd6; }
+.md-callout-abstract { --callout: #0f8c8c; }
+.md-callout-info { --callout: #2f6fd6; }
+.md-callout-tip { --callout: #0f8c8c; }
+.md-callout-success { --callout: #2e8540; }
+.md-callout-question { --callout: #b7791f; }
+.md-callout-warning { --callout: #c2570c; }
+.md-callout-failure { --callout: #c53030; }
+.md-callout-danger { --callout: #c53030; }
+.md-callout-bug { --callout: #c53030; }
+.md-callout-example { --callout: #7c4fd1; }
+.md-callout-quote { --callout: #6b7280; }
+
 /* Fenced code block lines */
 .cm-line.md-code-block {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

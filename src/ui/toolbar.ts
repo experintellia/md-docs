@@ -219,6 +219,7 @@ function buildHelp(): HTMLElement {
         </tbody>
         <tbody>
           <tr><td><code>&gt; quote</code></td><td>Block quote</td></tr>
+          <tr><td><code>&gt; [!warning] Title</code></td><td>Callout box, as in Obsidian: <code>note</code>, <code>tip</code>, <code>info</code>, <code>success</code>, <code>question</code>, <code>warning</code>, <code>failure</code>, <code>danger</code>, <code>bug</code>, <code>example</code>, <code>quote</code>, …</td></tr>
           <tr class="help-block"><td><pre><code>\`\`\`js&#10;let x = 1&#10;\`\`\`</code></pre></td><td>Code block, highlighted for the language after <code>\`\`\`</code> (js, py, sh, …)</td></tr>
           <tr class="help-block"><td><pre><code>| a | b |&#10;|---|---|&#10;| 1 | 2 |</code></pre></td><td>Table, with a <code>|---|</code> line under the header row</td></tr>
           <tr class="help-block"><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX) on a line of its own, between <code>$$</code></td></tr>
