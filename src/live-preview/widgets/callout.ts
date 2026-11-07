@@ -80,7 +80,16 @@ export class CalloutLabelWidget extends WidgetType {
     const span = document.createElement('span');
     span.className = 'md-callout-label';
     span.appendChild(faSvg(GROUPS.get(this.group) ?? faPen));
-    span.append(this.label);
+    if (this.label) {
+      span.append(this.label);
+    } else {
+      // A titled callout has no type name on screen, so a screen reader gets
+      // it here: the icon alone would say nothing about the type.
+      const type = document.createElement('span');
+      type.className = 'md-sr-only';
+      type.textContent = this.group.charAt(0).toUpperCase() + this.group.slice(1) + ': ';
+      span.appendChild(type);
+    }
     return span;
   }
 }

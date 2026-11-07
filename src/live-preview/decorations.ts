@@ -128,8 +128,12 @@ function proseText(state: EditorState, line: Line): string {
   return text + line.text.slice(at);
 }
 
+// A callout's `[!type]` marker is drawn as an icon, so its Latin letters are not
+// the line's text: `> [!note] ملاحظة` is Arabic, not left-to-right.
+const CALLOUT_MARKER = /^\[![^\]]*\][+-]?/;
+
 export function lineDirection(text: string): 'ltr' | 'rtl' | null {
-  for (const ch of text.replace(BLOCK_MARKERS, '')) {
+  for (const ch of text.replace(BLOCK_MARKERS, '').replace(CALLOUT_MARKER, '')) {
     if (DECIDES.test(ch)) return RTL.test(ch) ? 'rtl' : 'ltr';
   }
   return null;
@@ -477,7 +481,9 @@ export function buildDecorations(view: EditorView): DecorationSet {
           // The marker goes unless its line is being edited, as the other markup does.
           if (callout && !lineHasSelection(state, node.from)) {
             const type = callout[2];
-            const title = doc.lineAt(node.from).text.slice(callout[0].length).trim();
+            // From the marker's end in the document, not the line's start: the
+            // quote may be indented or nested, so the match begins mid-line.
+            const title = doc.sliceString(node.from + callout[0].length, doc.lineAt(node.from).to).trim();
             const label = title ? '' : type[0].toUpperCase() + type.slice(1);
             ranges.push(
               Decoration.replace({ widget: new CalloutLabelWidget(calloutGroup(type), label) })

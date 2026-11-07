@@ -133,6 +133,19 @@ test('the marker shows raw on the callout line being edited', () => {
   assert.equal(calloutLabel(decos), undefined, 'no icon while editing the line');
 });
 
+test('an Arabic callout is right-to-left, the Latin type name in its marker does not decide', () => {
+  const doc = '> [!note] ملاحظة مهمة\n> هذا نص عربي';
+  const decos = decorate(doc, doc.length);
+  assert.ok(withClass(decos, 'md-callout-rtl'), 'RTL callout bar');
+  assert.ok(!withClass(decos, 'md-callout-ltr'), 'not drawn left-to-right');
+});
+
+test('a callout indented or nested in a quote still gets its type name as title', () => {
+  for (const doc of ['  > [!tip]\n  > body', '> > [!tip]\n> > body']) {
+    assert.equal((calloutLabel(decorate(doc, doc.length))!.spec.widget as CalloutLabelWidget).label, 'Tip', doc);
+  }
+});
+
 test('Obsidian aliases share a type, an unknown type is a note', () => {
   const group = (type: string) => {
     const doc = `> [!${type}]\n> b`;

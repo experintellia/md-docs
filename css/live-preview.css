@@ -66,15 +66,25 @@
   font-weight: 600;
 }
 .md-callout-label {
-  color: var(--callout);
   display: inline-flex;
   align-items: center;
   gap: 0.4em;
   margin-inline-end: 0.4em;
 }
+/* The label is text, so it keeps the text colour in both themes; the colour
+   is on the icon, which needs only 3:1 against its background. */
 .md-callout-label svg {
   width: 1em;
   height: 1em;
+  color: var(--callout);
+}
+.md-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .md-callout-note { --callout: #2f6fd6; }
 .md-callout-abstract { --callout: #0f8c8c; }
