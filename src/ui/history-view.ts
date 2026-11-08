@@ -13,6 +13,7 @@ import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
 import { faSvg, utilButton } from './icon.ts';
 import { trapFocus } from './modal.ts';
 import { livePreview } from '../live-preview/index.ts';
+import { highlight } from '../live-preview/highlight.ts';
 import { mathBlock } from '../live-preview/math.ts';
 import type { Collab } from '../collab.ts';
 import { commonEnds, type HistoryVersion } from '../history.ts';
@@ -118,7 +119,7 @@ class HistoryOverlay {
           EditorView.editable.of(false),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ 'aria-label': 'Selected version' }),
-          markdown({ base: markdownLanguage, codeLanguages: [], extensions: [mathBlock] }),
+          markdown({ base: markdownLanguage, codeLanguages: [], extensions: [mathBlock, highlight] }),
           this.preview.of(livePreview()),
         ],
       }),

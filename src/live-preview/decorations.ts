@@ -7,6 +7,7 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from '@codemirror/view';
+import { HIGHLIGHT_COLORS } from './highlight.ts';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
@@ -31,6 +32,7 @@ const INLINE_MARK_CLASS: Record<string, string> = {
   Emphasis: 'md-emphasis',
   InlineCode: 'md-inline-code',
   Strikethrough: 'md-strike',
+  Highlight: 'md-highlight',
 };
 
 // Syntax-marker nodes that get hidden (unless revealed on the active line).
@@ -38,6 +40,7 @@ const HIDDEN_MARKS = new Set([
   'EmphasisMark',
   'CodeMark',
   'StrikethroughMark',
+  'HighlightMark',
   'HeaderMark',
   'QuoteMark',
   'LinkMark',
@@ -484,6 +487,20 @@ export function buildDecorations(view: EditorView): DecorationSet {
           if (!/^[\s>]*$/.test(doc.sliceString(line.from, node.from))) return;
           ranges.push(Decoration.line({ class: 'md-hr' }).range(line.from));
           ranges.push(hidden.range(node.from, node.to));
+          return;
+        }
+
+        // --- Highlight: a color emoji right after the opening `==` picks the
+        //     color, and is hidden with the marks, as the rest of the markup.
+        if (name === 'Highlight') {
+          const color = HIGHLIGHT_COLORS[doc.sliceString(node.from + 2, node.from + 4)];
+          ranges.push(
+            Decoration.mark({ class: color ? `md-highlight md-highlight-${color}` : 'md-highlight' })
+              .range(node.from, node.to),
+          );
+          if (color && !lineHasSelection(state, node.from)) {
+            ranges.push(hidden.range(node.from + 2, node.from + 4));
+          }
           return;
         }
 

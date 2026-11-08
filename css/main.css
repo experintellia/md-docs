@@ -32,6 +32,14 @@
   --add: #116329;
   --del: #a40e26;
   --restored: #bc4c00;
+  /* `==highlight==` backgrounds, translucent so a selection shows through
+     (see --code-bg). Text stays --fg. */
+  --hl-red: rgba(255, 99, 99, 0.35);
+  --hl-orange: rgba(255, 159, 64, 0.4);
+  --hl-yellow: rgba(255, 214, 0, 0.35);
+  --hl-green: rgba(46, 204, 113, 0.3);
+  --hl-blue: rgba(59, 130, 246, 0.25);
+  --hl-purple: rgba(155, 89, 230, 0.25);
   /* Text and ticks drawn on --accent. */
   --on-accent: #ffffff;
 }
@@ -60,6 +68,12 @@ html.dark {
   --add: #3fb950;
   --del: #ff7b72;
   --restored: #e8830c;
+  --hl-red: rgba(248, 81, 73, 0.4);
+  --hl-orange: rgba(255, 140, 0, 0.4);
+  --hl-yellow: rgba(210, 153, 34, 0.45);
+  --hl-green: rgba(63, 185, 80, 0.35);
+  --hl-blue: rgba(56, 139, 253, 0.4);
+  --hl-purple: rgba(163, 113, 247, 0.4);
   /* White on the light-blue accent is 2.4:1. */
   --on-accent: #1e1e1e;
 }
