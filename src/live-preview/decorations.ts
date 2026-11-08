@@ -472,7 +472,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
             // block gets both, which is why they set corners and not the
             // `border-radius` shorthand.
             const edges = name === 'Blockquote'
-              ? (callout && pos === node.from ? ' md-callout-head' : '')
+              ? (callout && pos === node.from ? ' md-callout-head' : '') + (callout && isLast ? ' md-callout-last' : '')
               : (pos === node.from ? ' md-code-first' : '') + (isLast ? ' md-code-last' : '');
             ranges.push(Decoration.line({ class: cls + edges }).range(line.from));
             if (isLast) break;

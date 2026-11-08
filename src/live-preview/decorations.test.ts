@@ -114,6 +114,8 @@ test('a callout is a box in its type colour, its first line marked and its marke
   assert.ok(!withClass(decos, 'md-quote'), 'not a plain quote');
   const head = decos.filter((d) => d.spec.class?.includes('md-callout-head'));
   assert.deepEqual(head.map((d) => d.from), [0], 'only the first line is the head');
+  const last = decos.filter((d) => d.spec.class?.includes('md-callout-last'));
+  assert.deepEqual(last.map((d) => d.from), [doc.indexOf('> body')], 'only the last line rounds the bottom');
   const label = calloutLabel(decos);
   assert.ok(label, 'marker stood in for by the icon');
   assert.equal((label!.spec.widget as CalloutLabelWidget).group, 'warning');

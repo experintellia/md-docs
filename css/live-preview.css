@@ -45,31 +45,46 @@
   padding-right: 0.7em;
 }
 
-/* Obsidian callouts (`> [!info] Title`): a quote box in the colour of its type.
-   The side comes from the callout's direction class, as for a quote. The bar
-   is first drawn grey by its side rule, then recoloured by the border-color
-   rule, which has to come after it: the two have equal specificity. The tint
-   is a fraction of the colour, so it reads on both themes. */
+/* Obsidian callouts (`> [!info] Title`): a rounded box in the colour of its
+   type. The bar's side comes from the callout's direction class, as for a
+   quote, and lines up with a plain quote's bar and text. The bar is first drawn
+   grey by its side rule, then recoloured by the border-color rule, which has to
+   come after it: the two have equal specificity. The tint is a fraction of the
+   colour, so the body keeps the normal text colour on both themes. */
 .cm-line.md-callout-ltr {
   border-left: 3px solid var(--border);
-  padding-left: 0.7em;
 }
 .cm-line.md-callout-rtl {
   border-right: 3px solid var(--border);
-  padding-right: 0.7em;
 }
 .cm-line.md-callout {
   background: color-mix(in srgb, var(--callout, var(--muted)) 10%, transparent);
   border-color: var(--callout, var(--muted));
+  /* Both sides the same, so a line's own direction cannot move them. */
+  padding-inline-start: 0.7em;
+  padding-inline-end: 0.7em;
 }
+/* Outer corners only, as for a code block: the box is one rectangle per line.
+   All four sides round alike, so no side depends on the direction. A one-line
+   callout (a folded one, say) is both head and last. */
 .cm-line.md-callout-head {
   font-weight: 600;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  padding-top: 0.4em;
+  padding-bottom: 0.15em;
+}
+.cm-line.md-callout-last {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  padding-bottom: 0.4em;
 }
 .md-callout-label {
   display: inline-flex;
   align-items: center;
   gap: 0.4em;
   margin-inline-end: 0.4em;
+  vertical-align: -0.1em;
 }
 /* The label is text, so it keeps the text colour in both themes; the colour
    is on the icon, which needs only 3:1 against its background. */
@@ -86,18 +101,34 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.md-callout-note { --callout: #2f6fd6; }
-.md-callout-abstract { --callout: #0f8c8c; }
-.md-callout-info { --callout: #2f6fd6; }
-.md-callout-tip { --callout: #0f8c8c; }
+/* One hue per type, near ones apart (note blue, info sky; failure red, danger
+   crimson, bug brick) so the box says its type before the icon is read. Every
+   icon is 4:1 or better on its own 10% box; dark mode lightens each to keep
+   that on the dark background. */
+.md-callout-note { --callout: #3366d6; }
+.md-callout-abstract { --callout: #0b8194; }
+.md-callout-info { --callout: #0a7bbd; }
+.md-callout-tip { --callout: #0f8571; }
 .md-callout-success { --callout: #2e8540; }
-.md-callout-question { --callout: #b7791f; }
+.md-callout-question { --callout: #a8650a; }
 .md-callout-warning { --callout: #c2570c; }
-.md-callout-failure { --callout: #c53030; }
-.md-callout-danger { --callout: #c53030; }
-.md-callout-bug { --callout: #c53030; }
+.md-callout-failure { --callout: #cf2a2a; }
+.md-callout-danger { --callout: #c21d5a; }
+.md-callout-bug { --callout: #b3361f; }
 .md-callout-example { --callout: #7c4fd1; }
 .md-callout-quote { --callout: #6b7280; }
+html.dark .md-callout-note { --callout: #7aa2ff; }
+html.dark .md-callout-abstract { --callout: #4cc9e0; }
+html.dark .md-callout-info { --callout: #4db8ff; }
+html.dark .md-callout-tip { --callout: #3dd6b5; }
+html.dark .md-callout-success { --callout: #5bc16f; }
+html.dark .md-callout-question { --callout: #f0b94a; }
+html.dark .md-callout-warning { --callout: #ff9a4d; }
+html.dark .md-callout-failure { --callout: #ff6b6b; }
+html.dark .md-callout-danger { --callout: #f76598; }
+html.dark .md-callout-bug { --callout: #f08a6c; }
+html.dark .md-callout-example { --callout: #b197fc; }
+html.dark .md-callout-quote { --callout: #a0a6ad; }
 
 /* Fenced code block lines */
 .cm-line.md-code-block {
