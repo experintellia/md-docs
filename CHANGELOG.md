@@ -5,6 +5,13 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Highlights, as in Obsidian: `==text==` is drawn highlighted, and nests with
+  bold, italic and strikethrough. A color emoji right after the opening `==`
+  picks the color: `==🔴Important==` is red, 🟠 orange, 🟡 yellow, 🟢 green,
+  🔵 blue, 🟣 purple. The `==` and the emoji are hidden off the line, as the
+  other markup is.
+
 ## [0.5.0] - 2026-10-31
 
 ### Added

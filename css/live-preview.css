@@ -13,6 +13,14 @@
 .md-strong { font-weight: 700; }
 .md-emphasis { font-style: italic; }
 .md-strike { text-decoration: line-through; }
+/* `==text==`: the default is the yellow; a color emoji after the `==` picks another. */
+.md-highlight { background: var(--hl-yellow); border-radius: 3px; }
+.md-highlight-red { background: var(--hl-red); }
+.md-highlight-orange { background: var(--hl-orange); }
+.md-highlight-yellow { background: var(--hl-yellow); }
+.md-highlight-green { background: var(--hl-green); }
+.md-highlight-blue { background: var(--hl-blue); }
+.md-highlight-purple { background: var(--hl-purple); }
 .md-inline-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: var(--code-bg);

@@ -24,6 +24,13 @@ test('renders markdown live as you type', async ({ page }) => {
   await expect(page.locator('#toolbar')).toBeInViewport();
 });
 
+test('==🟢done== is a green highlight, its == and emoji hidden off the line', async ({ page }) => {
+  await page.keyboard.insertText('==🟢done==\n\nafter');
+  // The cursor is on the last line, so the first reads as its rendered text alone.
+  await expect(page.locator('.cm-line').first()).toHaveText('done');
+  await expect(page.locator('.md-highlight-green')).toHaveText('done');
+});
+
 test('toolbar formats the selection and keeps the editor focused', async ({ page, isMobile }) => {
   await page.keyboard.insertText('word');
   await page.keyboard.press('ControlOrMeta+a');
