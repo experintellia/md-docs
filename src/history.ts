@@ -63,7 +63,8 @@ export interface History {
   /**
    * A status update that edits no document: no info line, no summary, nothing in
    * the timeline. For state that belongs to a person rather than the text (read
-   * mode). Peers get it through onSilent, replays included, in the channel's order.
+   * mode). Peers get it through onSilent, replays included; a listener that
+   * registers late is first handed the ones already seen.
    */
   sendSilent(payload: SilentPayload): void;
   onSilent(cb: (payload: SilentPayload) => void): void;
@@ -187,6 +188,11 @@ export function setupHistory(real: typeof window.webxdc): History {
   const records: Record[] = [];
   const listeners: Array<() => void> = [];
   const silentListeners: Array<(payload: SilentPayload) => void> = [];
+  // Every silent update so far, for a listener that registers after the replay
+  // began: the provider calls setUpdateListener before anyone can call
+  // onSilent, and a messenger may replay inside that call.
+  // ponytail: kept for the session; they are a few bytes each, one per toggle.
+  const silentSeen: SilentPayload[] = [];
   const emit = (): void => {
     for (const cb of listeners) {
       try {
@@ -257,6 +263,7 @@ export function setupHistory(real: typeof window.webxdc): History {
         // Not a document batch: hand it to the silent listeners. Not recorded —
         // it is not part of the timeline.
         if (blob === null && p && typeof p === 'object') {
+          silentSeen.push(p as SilentPayload);
           for (const silent of silentListeners) {
             try {
               silent(p as SilentPayload);
@@ -356,7 +363,10 @@ export function setupHistory(real: typeof window.webxdc): History {
     sendSilent: (payload) => {
       (real.sendUpdate as typeof real.sendUpdate)({ payload } as never, '');
     },
-    onSilent: (cb) => { silentListeners.push(cb); },
+    onSilent: (cb) => {
+      for (const p of silentSeen) cb(p);
+      silentListeners.push(cb);
+    },
     replayed: () => replayed,
   };
 }

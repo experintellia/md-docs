@@ -280,3 +280,22 @@ test('a silent update reaches onSilent, stays out of the timeline, and carries n
   assert.deepEqual(heard, [{ readMode }]);
   assert.deepEqual(history.versions(), [], 'not a version');
 });
+
+test('silent updates replayed before onSilent is registered still reach it', () => {
+  // The provider registers first and a messenger may replay synchronously
+  // inside that call, before read mode has subscribed.
+  const real = {
+    selfName: 'Alice',
+    setUpdateListener: (cb: (u: { payload: Record<string, unknown> }) => void) => {
+      cb({ payload: { readMode: { n: 1 } } });
+      cb({ payload: { readMode: { n: 2 } } });
+      return Promise.resolve();
+    },
+    sendUpdate: () => {},
+  } as unknown as typeof window.webxdc;
+  const history = setupHistory(real);
+  history.webxdc.setUpdateListener(() => {});
+  const heard: Array<Record<string, unknown>> = [];
+  history.onSilent((p) => heard.push(p));
+  assert.deepEqual(heard, [{ readMode: { n: 1 } }, { readMode: { n: 2 } }], 'in the order received');
+});

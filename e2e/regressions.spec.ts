@@ -1,5 +1,5 @@
 import {
-  test, expect, press, serveMockWebxdc, chat, editor, open, write, REALTIME_UP, realtimeUp,
+  test, expect, press, serveMockWebxdc, chat, editor, open, write, peer, REALTIME_UP, realtimeUp,
 } from './fixtures';
 
 // Bugs the app has had, pinned where they lived: in the wiring between
@@ -159,4 +159,34 @@ test('on a phone the status line clears the toolbar and tasks are big enough to 
   const scale = await page.locator('.md-task-checkbox').evaluate((box) =>
     parseFloat(getComputedStyle(box).fontSize) / parseFloat(getComputedStyle(box.parentElement!).fontSize));
   expect(scale, 'checkbox is the desktop size').toBeGreaterThan(1.3);
+});
+
+test('a document waits for the stored updates, with a progress bar after 4 s', async ({ page, context }) => {
+  // #59 review: nothing may show while the log replays, and the bar only on a
+  // slow replay. This messenger takes 7 s to hand the log over.
+  await serveMockWebxdc(context, `{
+    const deliver = window.webxdc.setUpdateListener;
+    window.webxdc.setUpdateListener = (cb, serial) =>
+      new Promise((resolve) => setTimeout(() => resolve(deliver(cb, serial)), 7000));
+  }`);
+  await page.goto(peer('alice'));
+  const loading = page.locator('#loading');
+  await expect(page.locator('#editor')).toBeHidden();
+  await page.waitForTimeout(2000);
+  await expect(loading, 'no bar on a short wait').toBeHidden();
+  await expect(loading).toBeVisible({ timeout: 4000 });
+  await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 5000 });
+  await expect(loading).toBeHidden();
+});
+
+test('a read-mode tap right before closing is kept, and tells the chat nothing', async ({ page, isMobile }) => {
+  // #59 review: the choice is debounced, so closing inside the debounce has to
+  // send it. Reloading right after the tap is that close.
+  await open(page);
+  await press(page.getByTitle('Toggle read / edit mode'), isMobile);
+  await page.reload();
+  await expect(page.locator('.cm-editor')).toBeVisible();
+  await expect(editor(page)).toHaveAttribute('contenteditable', 'false');
+  // One update from alice, with no info line and no summary.
+  expect(await chat(page)).toEqual(['alice']);
 });

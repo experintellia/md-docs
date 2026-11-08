@@ -31,8 +31,9 @@ function holdUntilReplayed(replayed: Promise<void>): void {
     if (bar) bar.hidden = true;
     document.body.classList.remove('replaying');
   };
-  // A failed replay must not leave the page hidden for good.
-  replayed.then(done, done);
+  // collab.replayed settles within 10 s and never rejects, so the page cannot
+  // stay hidden for good.
+  replayed.then(done);
 }
 
 function main(): void {
@@ -82,7 +83,7 @@ function main(): void {
     collab,
   );
   if (toolbarEl) mountToolbar(toolbarEl, view, collab);
-  if (collab) holdUntilReplayed(collab.history.replayed());
+  if (collab) holdUntilReplayed(collab.replayed);
 
   // Live typing + remote cursors over the ephemeral realtime channel (no-op in
   // messengers that don't implement it yet — persistent sync still works).
