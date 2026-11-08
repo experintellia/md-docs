@@ -14,6 +14,7 @@ import { faSvg, utilButton } from './icon.ts';
 import { trapFocus } from './modal.ts';
 import { livePreview } from '../live-preview/index.ts';
 import { highlight } from '../live-preview/highlight.ts';
+import { footnote } from '../live-preview/footnote.ts';
 import { mathBlock } from '../live-preview/math.ts';
 import type { Collab } from '../collab.ts';
 import { commonEnds, type HistoryVersion } from '../history.ts';
@@ -119,7 +120,7 @@ class HistoryOverlay {
           EditorView.editable.of(false),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ 'aria-label': 'Selected version' }),
-          markdown({ base: markdownLanguage, codeLanguages: [], extensions: [mathBlock, highlight] }),
+          markdown({ base: markdownLanguage, codeLanguages: [], extensions: [mathBlock, highlight, footnote] }),
           this.preview.of(livePreview()),
         ],
       }),

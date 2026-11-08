@@ -11,6 +11,10 @@ All notable changes to MD-Docs are documented here. This project adheres to
   picks the color: `==🔴Important==` is red, 🟠 orange, 🟡 yellow, 🟢 green,
   🔵 blue, 🟣 purple. The `==` and the emoji are hidden off the line, as the
   other markup is.
+- Footnotes, as in Obsidian: `text[^1]` shows a superscript number, and
+  `[^1]: note` defines it (indent a continued line by two spaces). `^[note]` is
+  an inline footnote. The brackets are hidden off the line the cursor is on, and
+  a definition's `[^1]:` stays visible, muted.
 
 ## [0.5.0] - 2026-10-31
 
