@@ -255,12 +255,22 @@ test('spaced (`- - -`) and indented (`   ---`) breaks render a separator', () =>
   assert.ok(hasRule(decorate('   ---\nbody', 8)), 'up to 3 leading spaces');
 });
 
-test('false positive: `***` / `___` breaks are minus-only, so no separator', () => {
-  // CommonMark calls these thematic breaks too, but this editor deliberately
-  // only draws a rule for minuses.
-  assert.ok(!hasRule(decorate('***\nbody', 5)), 'asterisk break stays text');
-  assert.ok(!hasRule(decorate('___\nbody', 5)), 'underscore break stays text');
-  assert.ok(!hasRule(decorate('*** \n* * *\nbody', 11)), 'spaced asterisks too');
+test('`***`, `___` and spaced variants render a separator, like Obsidian', () => {
+  for (const src of ['***', '****', '* * *', '___', '____', '_ _ _']) {
+    const decos = decorate(`${src}\nbody`, src.length + 2); // cursor on line 2
+    assert.ok(hasRule(decos), `${src} is a rule`);
+    assert.ok(
+      hiddenMarkers(decos).some((d) => d.from === 0 && d.to === src.length),
+      `${src}: markers hidden`,
+    );
+  }
+});
+
+test('false positive: mixed markers or fewer than three are not a separator', () => {
+  assert.ok(!hasRule(decorate('**\nbody', 4)), '`**` is not a break');
+  assert.ok(!hasRule(decorate('*-*\nbody', 5)), 'mixed markers');
+  assert.ok(!hasRule(decorate('_*_\nbody', 5)), 'mixed underscore and asterisk');
+  assert.ok(!hasRule(decorate('*** text\nbody', 11)), 'trailing text');
 });
 
 test('false positive: fewer than three minuses is not a separator', () => {
