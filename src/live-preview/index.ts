@@ -2,7 +2,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { EditorSelection, type Extension, Prec } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
-import { linkClickHandler, livePreviewPlugin, mathField, mermaidField, svgField, tableField } from './decorations.ts';
+import { holdRevealOnPress, linkClickHandler, livePreviewPlugin, mathField, mermaidField, svgField, tableField } from './decorations.ts';
 
 // Highlight style for fenced-code-block contents (and other tagged tokens).
 // Colours come from CSS custom properties so the one style serves both themes
@@ -70,6 +70,7 @@ export function livePreview(): Extension {
     Prec.high(keymap.of([{ key: 'ArrowUp', run: intoBlock(false) }, { key: 'ArrowDown', run: intoBlock(true) }])),
     // The widget fields first, so a link's mark wraps the math inside it and a
     // tap on the formula can follow the link.
+    holdRevealOnPress,
     tableField,
     mathField,
     mermaidField,
