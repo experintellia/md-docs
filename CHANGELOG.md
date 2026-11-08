@@ -5,6 +5,16 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Changed
+- Read mode is remembered per user and follows you to each of your devices: the
+  document opens in the mode you last chose, and a switch on one device reaches
+  your others a moment later. The choice is a status update of its own, not a
+  document edit, so it posts no notice to the chat and does not touch the
+  document's updates. (#58)
+- A document waits to appear until the chat's stored updates have loaded, so
+  it does not fill in piece by piece. If that takes more than 4 seconds, a
+  progress bar shows.
+
 ## [0.5.0] - 2026-10-31
 
 ### Added

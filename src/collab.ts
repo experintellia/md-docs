@@ -3,6 +3,7 @@ import { Awareness } from 'y-protocols/awareness';
 import WebxdcProvider from 'y-webxdc';
 import { fromUint8Array, toUint8Array } from 'js-base64';
 import { setupHistory, type History } from './history.ts';
+import { createReadModePref, type ReadModePref } from './read-mode.ts';
 
 // localStorage key for the synchronous crash/exit safety net (see below).
 const DRAFT_KEY = 'md-docs-draft';
@@ -38,6 +39,9 @@ export interface Collab {
   undoManager: Y.UndoManager;
   provider: WebxdcProvider;
   history: History;
+  readMode: ReadModePref;
+  /** The startup replay, or 10 s if it never settles. Never rejects. */
+  replayed: Promise<void>;
 }
 
 /**
@@ -102,6 +106,18 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
         startinfo: `${webxdc.selfName} updated the document`,
       };
     },
+  });
+
+  // The channel's startup replay, or 10 s, whichever comes first; it never
+  // rejects. A replay promise that rejects or never settles (spec violation)
+  // must not strand the draft, the read-mode choice, or the hidden page.
+  const replayed = new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, 10_000);
+    const done = (): void => {
+      clearTimeout(timer);
+      resolve();
+    };
+    history.replayed().then(done, done);
   });
 
   // Synchronous local safety net. The provider only persists via the async
@@ -199,11 +215,9 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
         markRestored(stillUnsent);
       }
     };
-    // then(f, f) + timeout race: a rejected or never-settling replay promise
-    // (spec violation) must not strand the draft forever — worst case on such
-    // a client is the old apply-before-replay behavior, 10s late.
-    const timeout = new Promise<void>((r) => setTimeout(r, 10_000));
-    Promise.race([history.replayed(), timeout]).then(applyDraft, applyDraft);
+    // Worst case on a client whose replay never settles: the old
+    // apply-before-replay behavior, 10s late.
+    replayed.then(applyDraft);
   }
 
   // ponytail: snapshots the full doc state as base64 on each save — fine for
@@ -240,5 +254,22 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
     saveTimer = setTimeout(saveDraft, 1000);
   });
 
-  return { ydoc, ytext, awareness, undoManager, provider, history };
+  // Read mode rides status updates, not the document (see read-mode.ts). A
+  // choice still in its debounce goes out when the page hides, or on desktop,
+  // which closes through beforeunload (y-webxdc holds the window open for its
+  // own flush there, which covers this send too).
+  const readMode = createReadModePref({
+    me: webxdc.selfAddr,
+    send: (payload) => history.sendSilent(payload),
+    onMessage: (cb) => history.onSilent(cb),
+    replayed,
+  });
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') readMode.flush();
+  });
+  window.addEventListener('beforeunload', () => readMode.flush());
+
+  return {
+    ydoc, ytext, awareness, undoManager, provider, history, readMode, replayed,
+  };
 }

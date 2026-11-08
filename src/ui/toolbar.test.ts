@@ -14,6 +14,8 @@ window.matchMedia = (): MediaQueryList =>
 
 const { mountToolbar } = await import('./toolbar.ts');
 const { createEditor } = await import('../editor.ts');
+const { createReadModePref } = await import('../read-mode.ts');
+const { createChatLog } = await import('../test-chat-log.ts');
 const { runScopeHandlers } = await import('@codemirror/view');
 after(() => GlobalRegistrator.unregister());
 
@@ -237,7 +239,10 @@ test('going into read mode takes our caret off peers\' screens', () => {
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText('t');
   const awareness = new Awareness(ydoc);
-  const collab = { ydoc, ytext, awareness, undoManager: new Y.UndoManager(ytext) } as unknown as Collab;
+  const collab = {
+    ydoc, ytext, awareness, undoManager: new Y.UndoManager(ytext),
+    readMode: createReadModePref(createChatLog().link('me@example.com'), 0),
+  } as unknown as Collab;
   const view = createEditor(document.body, '', [], collab);
   try {
     mountToolbar(container, view, collab);
@@ -249,6 +254,72 @@ test('going into read mode takes our caret off peers\' screens', () => {
     view.destroy();
     awareness.destroy(); // its timer would keep the test process alive
     ydoc.destroy();
+  }
+});
+
+/** One device of `me`, on the chat's log. Its editor has its own text; only the
+ *  read-mode choice is shared, through the log. */
+function device(chat: ReturnType<typeof createChatLog>, me: string): {
+  view: EditorView;
+  container: HTMLElement;
+  destroy(): void;
+} {
+  const container = document.createElement('div');
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('codemirror');
+  const awareness = new Awareness(ydoc);
+  const collab = {
+    ydoc, ytext, awareness, undoManager: new Y.UndoManager(ytext),
+    readMode: createReadModePref(chat.link(me), 0),
+  } as unknown as Collab;
+  const view = createEditor(document.body, '', [], collab);
+  mountToolbar(container, view, collab);
+  return {
+    view,
+    container,
+    destroy() {
+      view.destroy();
+      awareness.destroy(); // its timer would keep the test process alive
+      ydoc.destroy();
+    },
+  };
+}
+
+const tick = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+test('read mode is per viewer, and follows them to each device they open', async () => {
+  reset();
+  const chat = createChatLog();
+  const phone = device(chat, 'alice@example.com');
+  const laptop = device(chat, 'alice@example.com');
+  const bobPhone = device(chat, 'bob@example.com');
+  const reading = (d: { view: EditorView }): boolean => d.view.state.readOnly;
+  try {
+    await tick();
+    btnByTitle(phone.container, 'Toggle read / edit mode').click();
+    await tick();
+    assert.equal(reading(laptop), true, 'alice’s laptop opens the way she left the phone');
+    assert.equal(reading(bobPhone), false, 'bob’s choice is his own, and he has not picked one');
+
+    btnByTitle(laptop.container, 'Toggle read / edit mode').click();
+    await tick();
+    assert.equal(reading(phone), false, 'a change on one device reaches her others');
+
+    // A device opened later starts from the stored choice, not from edit mode.
+    btnByTitle(phone.container, 'Toggle read / edit mode').click();
+    await tick();
+    const tablet = device(chat, 'alice@example.com');
+    try {
+      await tick();
+      assert.equal(reading(tablet), true, 'a new device opens in read mode');
+      assert.ok(tablet.container.classList.contains('reading'));
+    } finally {
+      tablet.destroy();
+    }
+  } finally {
+    phone.destroy();
+    laptop.destroy();
+    bobPhone.destroy();
   }
 });
 
