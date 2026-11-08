@@ -58,8 +58,10 @@
   border-right: 3px solid var(--border);
 }
 .cm-line.md-callout {
-  background: color-mix(in srgb, var(--callout, var(--muted)) 10%, transparent);
-  border-color: var(--callout, var(--muted));
+  /* A nested quote's muted colour would otherwise reach the callout's body. */
+  color: var(--fg);
+  background: rgba(var(--callout-rgb, 107, 114, 128), 0.1);
+  border-color: rgb(var(--callout-rgb, 107, 114, 128));
   /* Both sides the same, so a line's own direction cannot move them. */
   padding-inline-start: 0.7em;
   padding-inline-end: 0.7em;
@@ -82,8 +84,6 @@
 .md-callout-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.4em;
-  margin-inline-end: 0.4em;
   vertical-align: -0.1em;
 }
 /* The label is text, so it keeps the text colour in both themes; the colour
@@ -91,7 +91,8 @@
 .md-callout-label svg {
   width: 1em;
   height: 1em;
-  color: var(--callout);
+  margin-inline-end: 0.4em;
+  color: rgb(var(--callout-rgb, 107, 114, 128));
 }
 .md-sr-only {
   position: absolute;
@@ -105,30 +106,32 @@
    crimson, bug brick) so the box says its type before the icon is read. Every
    icon is 4:1 or better on its own 10% box; dark mode lightens each to keep
    that on the dark background. */
-.md-callout-note { --callout: #3366d6; }
-.md-callout-abstract { --callout: #0b8194; }
-.md-callout-info { --callout: #0a7bbd; }
-.md-callout-tip { --callout: #0f8571; }
-.md-callout-success { --callout: #2e8540; }
-.md-callout-question { --callout: #a8650a; }
-.md-callout-warning { --callout: #c2570c; }
-.md-callout-failure { --callout: #cf2a2a; }
-.md-callout-danger { --callout: #c21d5a; }
-.md-callout-bug { --callout: #b3361f; }
-.md-callout-example { --callout: #7c4fd1; }
-.md-callout-quote { --callout: #6b7280; }
-html.dark .md-callout-note { --callout: #7aa2ff; }
-html.dark .md-callout-abstract { --callout: #4cc9e0; }
-html.dark .md-callout-info { --callout: #4db8ff; }
-html.dark .md-callout-tip { --callout: #3dd6b5; }
-html.dark .md-callout-success { --callout: #5bc16f; }
-html.dark .md-callout-question { --callout: #f0b94a; }
-html.dark .md-callout-warning { --callout: #ff9a4d; }
-html.dark .md-callout-failure { --callout: #ff6b6b; }
-html.dark .md-callout-danger { --callout: #f76598; }
-html.dark .md-callout-bug { --callout: #f08a6c; }
-html.dark .md-callout-example { --callout: #b197fc; }
-html.dark .md-callout-quote { --callout: #a0a6ad; }
+.md-callout-note { --callout-rgb: 51, 102, 214; }
+.md-callout-abstract { --callout-rgb: 11, 129, 148; }
+.md-callout-info { --callout-rgb: 10, 123, 189; }
+.md-callout-todo { --callout-rgb: 90, 103, 216; }
+.md-callout-tip { --callout-rgb: 15, 133, 113; }
+.md-callout-success { --callout-rgb: 46, 133, 64; }
+.md-callout-question { --callout-rgb: 168, 101, 10; }
+.md-callout-warning { --callout-rgb: 194, 87, 12; }
+.md-callout-failure { --callout-rgb: 207, 42, 42; }
+.md-callout-danger { --callout-rgb: 194, 29, 90; }
+.md-callout-bug { --callout-rgb: 179, 54, 31; }
+.md-callout-example { --callout-rgb: 124, 79, 209; }
+.md-callout-quote { --callout-rgb: 107, 114, 128; }
+html.dark .md-callout-note { --callout-rgb: 122, 162, 255; }
+html.dark .md-callout-abstract { --callout-rgb: 76, 201, 224; }
+html.dark .md-callout-info { --callout-rgb: 77, 184, 255; }
+html.dark .md-callout-todo { --callout-rgb: 139, 149, 255; }
+html.dark .md-callout-tip { --callout-rgb: 61, 214, 181; }
+html.dark .md-callout-success { --callout-rgb: 91, 193, 111; }
+html.dark .md-callout-question { --callout-rgb: 240, 185, 74; }
+html.dark .md-callout-warning { --callout-rgb: 255, 154, 77; }
+html.dark .md-callout-failure { --callout-rgb: 255, 107, 107; }
+html.dark .md-callout-danger { --callout-rgb: 247, 101, 152; }
+html.dark .md-callout-bug { --callout-rgb: 240, 138, 108; }
+html.dark .md-callout-example { --callout-rgb: 177, 151, 252; }
+html.dark .md-callout-quote { --callout-rgb: 160, 166, 173; }
 
 /* Fenced code block lines */
 .cm-line.md-code-block {

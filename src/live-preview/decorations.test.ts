@@ -148,6 +148,20 @@ test('a callout indented or nested in a quote still gets its type name as title'
   }
 });
 
+test('todo is its own type, not an alias of info', () => {
+  const doc = '> [!todo]\n> b';
+  const label = calloutLabel(decorate(doc, doc.length))!.spec.widget as CalloutLabelWidget;
+  assert.equal(label.group, 'todo');
+  assert.equal(label.label, 'Todo');
+});
+
+test('an upper-case type is shown in title case, as Obsidian does', () => {
+  const doc = '> [!ERROR]\n> b';
+  const label = calloutLabel(decorate(doc, doc.length))!.spec.widget as CalloutLabelWidget;
+  assert.equal(label.group, 'danger');
+  assert.equal(label.label, 'Error');
+});
+
 test('Obsidian aliases share a type, an unknown type is a note', () => {
   const group = (type: string) => {
     const doc = `> [!${type}]\n> b`;

@@ -11,23 +11,25 @@ import {
   faList,
   faPen,
   faQuoteLeft,
+  faSquareCheck,
   faTriangleExclamation,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
 import { faSvg } from '../../ui/icon.ts';
 
 /**
- * An Obsidian callout's first line: `> [!info] Title`. Group 1 is the marker
- * (`[!info]`, with a fold sign `-`/`+` if any), group 2 the type. The rest of
- * the line is the title. Anchored at the quote's `>`.
+ * An Obsidian callout's first line: `> [!info] Title`. Group 1 is the type; the
+ * marker is the whole match up to the title, including any fold sign (`-`/`+`,
+ * read but not drawn). Anchored at the quote's `>`.
  */
-export const CALLOUT = /^>[ \t]*(\[!([\w-]+)\][+-]?)[ \t]*/;
+export const CALLOUT = /^>[ \t]*\[!([\w-]+)\][+-]?[ \t]*/;
 
 // One icon and one colour per group. Obsidian's own names for them are in ALIASES.
 const GROUPS = new Map<string, IconDefinition>([
   ['note', faPen],
   ['abstract', faClipboard],
   ['info', faCircleInfo],
+  ['todo', faSquareCheck],
   ['tip', faFire],
   ['success', faCircleCheck],
   ['question', faCircleQuestion],
@@ -41,7 +43,6 @@ const GROUPS = new Map<string, IconDefinition>([
 
 const ALIASES = new Map<string, string>([
   ['summary', 'abstract'], ['tldr', 'abstract'],
-  ['todo', 'info'],
   ['hint', 'tip'], ['important', 'tip'],
   ['check', 'success'], ['done', 'success'],
   ['help', 'question'], ['faq', 'question'],
@@ -64,22 +65,26 @@ export function calloutGroup(type: string): string {
  */
 export class CalloutLabelWidget extends WidgetType {
   readonly group: string;
+  /** The visible title; empty when the callout has its own title. */
   readonly label: string;
+  /** The type in title case, as Obsidian names it. */
+  readonly name: string;
 
-  constructor(group: string, label: string) {
+  constructor(group: string, label: string, name: string) {
     super();
     this.group = group;
     this.label = label;
+    this.name = name;
   }
 
   override eq(other: CalloutLabelWidget): boolean {
-    return other.group === this.group && other.label === this.label;
+    return other.group === this.group && other.label === this.label && other.name === this.name;
   }
 
   override toDOM(): HTMLElement {
     const span = document.createElement('span');
     span.className = 'md-callout-label';
-    span.appendChild(faSvg(GROUPS.get(this.group) ?? faPen));
+    span.appendChild(faSvg(GROUPS.get(this.group)!));
     if (this.label) {
       span.append(this.label);
     } else {
@@ -87,7 +92,7 @@ export class CalloutLabelWidget extends WidgetType {
       // it here: the icon alone would say nothing about the type.
       const type = document.createElement('span');
       type.className = 'md-sr-only';
-      type.textContent = this.group.charAt(0).toUpperCase() + this.group.slice(1) + ': ';
+      type.textContent = this.name + ': ';
       span.appendChild(type);
     }
     return span;

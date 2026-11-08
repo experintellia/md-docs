@@ -130,7 +130,7 @@ function proseText(state: EditorState, line: Line): string {
 
 // A callout's `[!type]` marker is drawn as an icon, so its Latin letters are not
 // the line's text: `> [!note] ملاحظة` is Arabic, not left-to-right.
-const CALLOUT_MARKER = /^\[![^\]]*\][+-]?/;
+const CALLOUT_MARKER = /^\[![\w-]+\][+-]?/;
 
 export function lineDirection(text: string): 'ltr' | 'rtl' | null {
   for (const ch of text.replace(BLOCK_MARKERS, '').replace(CALLOUT_MARKER, '')) {
@@ -461,7 +461,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
           // both bars on its lines, which reads as a box around the inner
           // quote. Fine, and better than a spine that breaks.
           const cls = callout
-            ? `md-callout md-callout-${calloutGroup(callout[2])} md-callout-${quoteDir}`
+            ? `md-callout md-callout-${calloutGroup(callout[1])} md-callout-${quoteDir}`
             : name === 'Blockquote' ? `md-quote md-quote-${quoteDir}` : 'md-code-block';
           let pos = node.from;
           while (pos <= node.to) {
@@ -480,13 +480,14 @@ export function buildDecorations(view: EditorView): DecorationSet {
           }
           // The marker goes unless its line is being edited, as the other markup does.
           if (callout && !lineHasSelection(state, node.from)) {
-            const type = callout[2];
+            const type = callout[1];
             // From the marker's end in the document, not the line's start: the
             // quote may be indented or nested, so the match begins mid-line.
             const title = doc.sliceString(node.from + callout[0].length, doc.lineAt(node.from).to).trim();
-            const label = title ? '' : type[0].toUpperCase() + type.slice(1);
+            // Obsidian shows the type identifier in title case: `[!ERROR]` is "Error".
+            const name = type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
             ranges.push(
-              Decoration.replace({ widget: new CalloutLabelWidget(calloutGroup(type), label) })
+              Decoration.replace({ widget: new CalloutLabelWidget(calloutGroup(type), title ? '' : name, name) })
                 .range(node.from + callout[0].indexOf('[!'), node.from + callout[0].length),
             );
           }
