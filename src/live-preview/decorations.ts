@@ -1,5 +1,13 @@
 import { syntaxTree } from '@codemirror/language';
-import { type EditorState, type Line, type Range, StateField, type Text } from '@codemirror/state';
+import {
+  type EditorSelection,
+  type EditorState,
+  type Line,
+  type Range,
+  StateEffect,
+  StateField,
+  type Text,
+} from '@codemirror/state';
 import {
   Decoration,
   type DecorationSet,
@@ -180,8 +188,61 @@ type SyntaxNodeLike = ReturnType<ReturnType<typeof syntaxTree>['resolveInner']>;
 // no editing to show the source for, and a link has to stay a link to be tapped.
 function rangeHasSelection(state: EditorState, from: number, to: number): boolean {
   if (state.readOnly) return false;
-  return state.selection.ranges.some((r) => r.from <= to && r.to >= from);
+  const sel = state.field(heldReveal, false) ?? state.selection;
+  return sel.ranges.some((r) => r.from <= to && r.to >= from);
 }
+
+// A press that only drops the caret holds the reveal where it was for a
+// double-press interval. Revealing at once shifted the line under the pointer
+// (the `**` or `# ` appearing), so the second press of a double tap or click
+// landed on other text: the word beside it, a `*`, or on iOS a selection from
+// the start of the document. Anything else — typing, a drag, a word selected,
+// the keyboard — reveals right away.
+// ponytail: one fixed window, not the OS double-click time (no API for it);
+// 500 ms is the Windows default, iOS is shorter. A slower double-click than
+// that still sees the shift.
+const DOUBLE_PRESS_MS = 500;
+let lastPress = 0;
+const releaseReveal = StateEffect.define<null>();
+
+const heldReveal = StateField.define<EditorSelection | null>({
+  create: () => null,
+  update(held, tr) {
+    if (tr.docChanged || tr.effects.some((e) => e.is(releaseReveal))) return null;
+    if (!tr.selection) return held;
+    const caretByPress = tr.selection.ranges.every((r) => r.empty) && Date.now() - lastPress < DOUBLE_PRESS_MS;
+    return caretByPress ? held ?? tr.startState.selection : null;
+  },
+});
+
+const releaseHeldReveal = ViewPlugin.fromClass(
+  class {
+    timer = 0;
+    update(update: ViewUpdate): void {
+      if (!update.selectionSet || !update.state.field(heldReveal)) return;
+      clearTimeout(this.timer);
+      const { view } = update;
+      this.timer = window.setTimeout(() => view.dispatch({ effects: releaseReveal.of(null) }), DOUBLE_PRESS_MS);
+    }
+    destroy(): void {
+      clearTimeout(this.timer);
+    }
+  },
+  {
+    eventObservers: {
+      // Not on a widget: a tap on a formula, table or diagram opens its source
+      // at once, there is no text under it to shift.
+      pointerdown: (e) => {
+        if (!(e.target as Element).closest?.('[contenteditable=false]')) lastPress = Date.now();
+      },
+      // The arrows move the caret from the keyboard: nothing to wait for.
+      keydown: () => { lastPress = 0; },
+    },
+  },
+);
+
+/** Hold the reveal across a double tap or click; see `heldReveal`. */
+export const holdRevealOnPress = [heldReveal, releaseHeldReveal];
 
 // Which URL node is a link's *destination*? Not simply "a URL inside a Link":
 // GFM parses autolink-shaped link TEXT into a URL node too, so
@@ -661,9 +722,11 @@ export function buildTables(state: EditorState): DecorationSet {
 // the first few thousand characters up front and finishes in the background,
 // on a transaction that carries neither a document change nor a selection —
 // without this a table or bold text further down stays raw until something else
-// touches the editor. Read mode because it changes what the selection reveals.
+// touches the editor. Read mode because it changes what the selection reveals,
+// and so does a held reveal letting go.
 function treeOrModeChanged(start: EditorState, state: EditorState): boolean {
-  return syntaxTree(state) !== syntaxTree(start) || state.readOnly !== start.readOnly;
+  return syntaxTree(state) !== syntaxTree(start) || state.readOnly !== start.readOnly ||
+    start.field(heldReveal, false) !== state.field(heldReveal, false);
 }
 
 // A state field holding one kind of block widget, rebuilt by `build`.

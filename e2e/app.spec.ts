@@ -24,6 +24,35 @@ test('renders markdown live as you type', async ({ page }) => {
   await expect(page.locator('#toolbar')).toBeInViewport();
 });
 
+test('a double tap or click selects the word under it on a line with hidden markup', async ({ page, isMobile }) => {
+  // The caret ends on the next line, so the `**` are hidden on the first one.
+  await page.keyboard.insertText('some **bold** text and more words\nnext');
+  // Revealing the `**` on the first press used to shift "more" away from under
+  // the second: it selected "and" instead.
+  const box = await page.evaluate(() => {
+    const walk = document.createTreeWalker(document.querySelector('.cm-content')!, NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      const i = (n as Text).data.indexOf('more');
+      if (i < 0) continue;
+      const r = document.createRange();
+      r.setStart(n, i + 1);
+      r.setEnd(n, i + 2);
+      const { x, y, width, height } = r.getBoundingClientRect();
+      return { x: x + width / 2, y: y + height / 2 };
+    }
+    throw new Error('no "more"');
+  });
+  if (isMobile) {
+    await page.touchscreen.tap(box.x, box.y);
+    await page.touchscreen.tap(box.x, box.y);
+  } else {
+    await page.mouse.dblclick(box.x, box.y);
+  }
+  await expect.poll(() => page.evaluate(() => getSelection()?.toString())).toBe('more');
+  // And the line still reveals its markup for editing.
+  await expect(page.locator('.cm-line').first()).toHaveText('some **bold** text and more words');
+});
+
 test('toolbar formats the selection and keeps the editor focused', async ({ page, isMobile }) => {
   await page.keyboard.insertText('word');
   await page.keyboard.press('ControlOrMeta+a');

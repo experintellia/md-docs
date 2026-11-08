@@ -5,6 +5,13 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- A double tap or double-click on a line with hidden markup selects the word
+  under it. The first press revealed the line's `**` or `# ` at once, which
+  shifted the text, so the second landed elsewhere: on the word beside it, a
+  `*`, or (reported on iPhone) a selection from the start of the document. A
+  press that only places the caret now waits half a second before revealing.
+
 ## [0.5.0] - 2026-10-31
 
 ### Added
