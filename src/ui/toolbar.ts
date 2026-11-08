@@ -212,6 +212,7 @@ function buildHelp(): HTMLElement {
           <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
           <tr><td><code>[text](url)</code></td><td>Link</td></tr>
           <tr><td><code>$x^2$</code></td><td>Math (LaTeX) in the text</td></tr>
+          <tr><td><code>^[inline note]</code></td><td>Inline footnote</td></tr>
         </tbody>
         <tbody>
           <tr><td><code>- item</code></td><td>Bullet list (${ico(faListUl)})</td></tr>
@@ -222,6 +223,7 @@ function buildHelp(): HTMLElement {
           <tr><td><code>&gt; quote</code></td><td>Block quote</td></tr>
           <tr class="help-block"><td><pre><code>\`\`\`js&#10;let x = 1&#10;\`\`\`</code></pre></td><td>Code block, highlighted for the language after <code>\`\`\`</code> (js, py, sh, …)</td></tr>
           <tr class="help-block"><td><pre><code>| a | b |&#10;|---|---|&#10;| 1 | 2 |</code></pre></td><td>Table, with a <code>|---|</code> line under the header row</td></tr>
+          <tr class="help-block"><td><pre><code>text[^1]&#10;&#10;[^1]: note</code></pre></td><td>Footnote: a superscript number in the text, and its note below; indent a line of the note by two spaces to continue it</td></tr>
           <tr class="help-block"><td><pre><code>$$&#10;x^2&#10;$$</code></pre></td><td>Math (LaTeX) on a line of its own, between <code>$$</code></td></tr>
           <tr class="help-block"><td><pre><code>\`\`\`mermaid&#10;flowchart LR&#10;  A --&gt; B&#10;\`\`\`</code></pre></td><td>Diagram (Mermaid): flowchart, sequence, pie, class, state, gantt, … — syntax at <a href="https://mermaid.js.org/intro/" target="_blank" rel="noopener">mermaid.js.org</a></td></tr>
           <tr class="help-block"><td><pre><code>&lt;svg width="40"&#10;     height="40"&gt;&#10;  &lt;circle r="18"&#10;    cx="20" cy="20"&#10;    fill="tomato"/&gt;&#10;&lt;/svg&gt;</code></pre></td><td>SVG image, drawn with scripts and links removed; tap it to edit, pinch to zoom. A <code>\`\`\`svg</code> block stays code</td></tr>

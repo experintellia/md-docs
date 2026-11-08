@@ -33,6 +33,7 @@ const INLINE_MARK_CLASS: Record<string, string> = {
   InlineCode: 'md-inline-code',
   Strikethrough: 'md-strike',
   Highlight: 'md-highlight',
+  InlineFootnote: 'md-footnote-inline',
 };
 
 // Syntax-marker nodes that get hidden (unless revealed on the active line).
@@ -47,6 +48,9 @@ const HIDDEN_MARKS = new Set([
   // `[text](url "the title")` — the title belongs to the destination, so it is
   // hidden with it rather than leaking into the rendered text.
   'LinkTitle',
+  // The `[^` and `]` of a reference, and the `^[` and `]` of an inline footnote.
+  // A definition's marker is not hidden: see the footnote branch below.
+  'FootnoteMark',
 ]);
 
 const hidden = Decoration.replace({});
@@ -471,6 +475,18 @@ export function buildDecorations(view: EditorView): DecorationSet {
           return;
         }
 
+        // --- Footnote definition: its lines a little smaller. The `[^1]:` that
+        //     names it is styled below, not hidden, so the reader can tell which
+        //     note it is. The note's text is decorated as the children are visited.
+        if (name === 'FootnoteDefinition') {
+          for (let pos = node.from; pos <= node.to;) {
+            const line = doc.lineAt(pos);
+            ranges.push(Decoration.line({ class: 'md-footnote-def' }).range(line.from));
+            pos = line.to + 1;
+          }
+          return;
+        }
+
         // --- Thematic break (`---`, `***`, `___`, any length, spaces allowed
         //     between markers): draw the rule with a line class and hide the
         //     markers. The parser already rejects the near-misses (2 markers,
@@ -575,6 +591,18 @@ export function buildDecorations(view: EditorView): DecorationSet {
           if (!lineHasSelection(state, node.from)) {
             ranges.push(hidden.range(node.from, node.to));
           }
+          return;
+        }
+
+        // --- Footnotes: a reference's number is a superscript; a definition's
+        //     marker and label are muted (their brackets stay, see HIDDEN_MARKS).
+        const footnoteParent = node.node.parent?.name;
+        if (name === 'FootnoteLabel' && footnoteParent === 'FootnoteReference') {
+          ranges.push(Decoration.mark({ class: 'md-footnote-ref' }).range(node.from, node.to));
+          return;
+        }
+        if ((name === 'FootnoteMark' || name === 'FootnoteLabel') && footnoteParent === 'FootnoteDefinition') {
+          ranges.push(Decoration.mark({ class: 'md-footnote-label' }).range(node.from, node.to));
           return;
         }
 

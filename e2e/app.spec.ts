@@ -313,6 +313,17 @@ test('math in a table cell typesets in the table', async ({ page }) => {
   await expect(table.locator('td').nth(1)).toHaveText('$5');
 });
 
+test('a footnote reads as a superscript number, and its definition as a note', async ({ page }) => {
+  // The cursor ends on `after`, away from both lines, so their markup is hidden.
+  await page.keyboard.insertText('a note[^1] here\n\n[^1]: the text\n\nafter');
+  const ref = page.locator('.md-footnote-ref');
+  await expect(ref).toHaveText('1');
+  await expect(ref).toHaveCSS('vertical-align', 'super');
+  await expect(page.locator('.cm-line', { hasText: 'a note' })).toHaveText('a note1 here');
+  // The definition keeps its `[^1]:`: that is how a reader knows which note it is.
+  await expect(page.locator('.cm-line.md-footnote-def')).toHaveText('[^1]: the text');
+});
+
 test('a negative size in TeX cannot make its line endlessly tall', async ({ page }) => {
   // KaTeX caps positive sizes only: this made a line 33 million px tall.
   await page.keyboard.insertText(String.raw`a $\raisebox{-99999999em}{X}$ b` + '\n\n$$\\rule[-99999em]{1em}{1em}$$\n\nafter');

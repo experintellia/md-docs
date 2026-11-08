@@ -30,6 +30,18 @@
 }
 .md-link { color: var(--accent); text-decoration: underline; cursor: pointer; }
 
+/* Footnotes: `[^1]` is a superscript number, `[^1]: note` a definition whose
+   marker stays readable (muted, not hidden), and `^[note]` a small note inline. */
+.md-footnote-ref {
+  color: var(--accent);
+  font-size: 0.7em;
+  vertical-align: super;
+  line-height: 0;
+}
+.md-footnote-label { color: var(--muted); }
+.cm-line.md-footnote-def { font-size: 0.92em; }
+.md-footnote-inline { font-size: 0.85em; color: var(--muted); }
+
 /* Thematic break (`---`, `***`, `___`): the markers are hidden, so the line itself is the
    rule. Not drawn while the cursor is on the line: there the raw `---` shows
    alone, as in Obsidian. A 2px stripe at mid-height, not a border, so the rule

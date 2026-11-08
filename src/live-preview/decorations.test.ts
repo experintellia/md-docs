@@ -7,6 +7,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import type { MarkdownConfig } from '@lezer/markdown';
 import { buildDecorations, buildTables, lineDirection } from './decorations.ts';
 import { highlight } from './highlight.ts';
+import { footnote } from './footnote.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
@@ -967,4 +968,33 @@ test('ordinary links, autolinks and images are unaffected', () => {
   assert.equal(dataHref('visit https://bare.example now\nbody', 33), 'https://bare.example');
   // An image is still not a link, and its destination stays hidden.
   assert.equal(withClass(decorate('![alt](http://img.png)\nbody', 24), 'md-link'), undefined);
+});
+
+test('a reference is a superscript, and its brackets are hidden off the line', () => {
+  const doc = 'text[^1]\n\nnext';
+  const off = decorate(doc, doc.length, [footnote]);
+  assert.equal(withClass(off, 'md-footnote-ref')?.from, 6, 'the number is a superscript');
+  assert.ok(hiddenMarkers(off).some((d) => d.from === 4 && d.to === 6), '`[^` is hidden');
+  assert.ok(hiddenMarkers(off).some((d) => d.from === 7 && d.to === 8), '`]` is hidden');
+  assert.deepEqual(hiddenMarkers(decorate(doc, 5, [footnote])), [], 'shown on the line the cursor is on');
+});
+
+test('a definition keeps its marker visible and muted, and its line is set smaller', () => {
+  const doc = '[^1]: the note\n\nnext';
+  const decos = decorate(doc, doc.length, [footnote]);
+  assert.ok(withClass(decos, 'md-footnote-def'), 'the line gets md-footnote-def');
+  assert.equal(withClass(decos, 'md-footnote-def')?.from, 0);
+  // `[^`, the label, and `]:`: all three muted, none of them hidden.
+  const muted = decos.filter((d) => d.spec.class === 'md-footnote-label').map((d) => [d.from, d.to]);
+  assert.deepEqual(muted, [[0, 2], [2, 3], [3, 5]]);
+  assert.deepEqual(hiddenMarkers(decos), [], 'the marker stays visible');
+});
+
+test('an inline footnote is muted, and its `^[` and `]` are hidden off the line', () => {
+  const doc = 'a ^[note] b\n\nnext';
+  const off = decorate(doc, doc.length, [footnote]);
+  assert.ok(withClass(off, 'md-footnote-inline'), 'the note gets md-footnote-inline');
+  assert.ok(hiddenMarkers(off).some((d) => d.from === 2 && d.to === 4), '`^[` is hidden');
+  assert.ok(hiddenMarkers(off).some((d) => d.from === 8 && d.to === 9), '`]` is hidden');
+  assert.deepEqual(hiddenMarkers(decorate(doc, 1, [footnote])), [], 'shown on the line the cursor is on');
 });

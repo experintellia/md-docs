@@ -18,6 +18,7 @@ import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 import { livePreview } from './live-preview/index.ts';
 import { codeLanguages } from './live-preview/code-languages.ts';
 import { highlight } from './live-preview/highlight.ts';
+import { footnote } from './live-preview/footnote.ts';
 import { mathBlock } from './live-preview/math.ts';
 import { markdownKeymap } from './commands.ts';
 import { hidePeerFlagsWhenCovered } from './peer-flags.ts';
@@ -69,7 +70,7 @@ export function baseExtensions(collab?: Collab): Extension[] {
     keymap.of([...editing(markdownKeymap), ...defaultKeymap, indentWithTab]),
     // addKeymap:false — our markdownKeymap binds Enter/Backspace instead (with
     // tight-list continuation); see commands.ts.
-    markdown({ base: markdownLanguage, codeLanguages, addKeymap: false, extensions: [mathBlock, highlight] }),
+    markdown({ base: markdownLanguage, codeLanguages, addKeymap: false, extensions: [mathBlock, highlight, footnote] }),
     livePreview(),
     readMode.of([]),
   ];
