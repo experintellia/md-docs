@@ -17,6 +17,7 @@ import {
   faMoon,
   faOutdent,
   faPen,
+  faStrikethrough,
   faSun,
 } from '@fortawesome/free-solid-svg-icons';
 import {
@@ -25,6 +26,7 @@ import {
   toggleBullet,
   toggleChecklist,
   toggleItalic,
+  toggleStrikethrough,
 } from '../commands.ts';
 import { setReadMode } from '../editor.ts';
 import { faSvg, onPress, utilButton } from './icon.ts';
@@ -37,12 +39,15 @@ interface Action {
   icon: () => Node;
   title: string;
   run: Command;
+  /** Left out where the toolbar is short of room (touch, narrow windows). */
+  wideOnly?: boolean;
 }
 
 const ACTIONS: Action[] = [
   { icon: () => faSvg(faHeading), title: 'Heading (cycle level)', run: cycleHeading },
   { icon: () => faSvg(faBold), title: 'Bold', run: toggleBold },
   { icon: () => faSvg(faItalic), title: 'Italic', run: toggleItalic },
+  { icon: () => faSvg(faStrikethrough), title: 'Strikethrough', run: toggleStrikethrough, wideOnly: true },
   { icon: () => faSvg(faListUl), title: 'Bullet list', run: toggleBullet },
   { icon: () => faSvg(faSquareCheck), title: 'Checklist item', run: toggleChecklist },
   { icon: () => faSvg(faOutdent), title: 'Outdent list item', run: indentLess },
@@ -63,6 +68,7 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
   for (const action of ACTIONS) {
     const btn = utilButton(action.icon, action.title);
     btn.classList.add('md-tool-cmd'); // hidden in read mode, see readModeButton
+    if (action.wideOnly) btn.classList.add('md-tool-wide');
     onPress(btn, () => {
       action.run(view);
       view.focus();
@@ -207,7 +213,7 @@ function buildHelp(): HTMLElement {
           <tr><td><code># Heading</code></td><td>Heading (use the ${ico(faHeading)} button to cycle levels)</td></tr>
           <tr><td><code>**bold**</code></td><td>Bold text (${ico(faBold)})</td></tr>
           <tr><td><code>*italic*</code></td><td>Italic text (${ico(faItalic)})</td></tr>
-          <tr><td><code>~~text~~</code></td><td>Strikethrough</td></tr>
+          <tr><td><code>~~text~~</code></td><td>Strikethrough (${ico(faStrikethrough)}; not on a phone or in a narrow window)</td></tr>
           <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
           <tr><td><code>[text](url)</code></td><td>Link</td></tr>
           <tr><td><code>$x^2$</code></td><td>Math (LaTeX) in the text</td></tr>

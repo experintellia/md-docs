@@ -5,7 +5,16 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Strikethrough has a shortcut, Ctrl/Cmd+Shift+X, and a toolbar button on wide
+  screens.
+
 ### Changed
+- Bold, italic and strikethrough (buttons and shortcuts) follow the text that
+  is already styled. A selection inside bold text is cut out of it; one that
+  reaches past its edge extends it instead of adding a second pair of markers.
+  Over several lines or list items each line gets its own markers, after its
+  bullet, checkbox, number, `>` or `#`, and tight around the words.
 - Separators work as in Obsidian: `***` and `___` (and spaced forms such as
   `* * *`) draw a rule as `---` does, the rule sits centred in its line, and
   while the cursor is on the line only the raw markers show, with no rule
