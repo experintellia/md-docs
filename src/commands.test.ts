@@ -265,9 +265,32 @@ test('markers stay where markdown reads them as markers', () => {
   assert.equal(bold('1 \\«* 2»'), '1 **\\«* 2»**');                    // an escape stays whole
   assert.equal(bold('«a \\\\* b»'), '**«a \\\\\\* b»**');              // `\\\\` is a backslash, the `*` literal
   // Punctuation that belongs to other markup is not shed.
-  assert.equal(bold('**a «b»~~c~~**'), '**a** «b»**~~c~~**');
+  assert.equal(bold('**a «b»~c**'), '**a** «b»~**c**');
   assert.equal(bold('wow«! 😀»'), 'wow«! **😀»**');
   assert.equal(bold('wow«! **😀»**'), 'wow«! 😀»');
+});
+
+test('markup that hangs on a word takes the word along', () => {
+  // `foo**\`bar\`**` would stay literal: no marker fits between word and code.
+  assert.equal(bold('foo«`bar`»'), '**foo«`bar`»**');
+  assert.equal(bold('**foo«`bar`»**'), 'foo«`bar`»');                // and off again, word included
+  assert.equal(bold('«`foo`»bar baz'), '**«`foo`»bar** baz');
+  assert.equal(bold('x«$y$»'), '**x«$y$»**');
+  assert.equal(bold('see«[a](u)» b'), '**see«[a](u)»** b');
+  assert.equal(bold('foo«~~bar~~»'), '**foo«~~bar~~»**');            // the other kind of marker
+  assert.equal(bold('foo«*bar*»'), 'foo**«*bar*»**');                // `***` reads fine as it is
+  assert.equal(bold('a «`b`» c'), 'a **«`b`»** c');                  // nothing hangs: untouched
+  assert.equal(strike('x«*»*e**'), 'x«*»*e**');                      // nothing selected to style
+  // What a cut leaves behind follows the same rule, so `b` stays bold here.
+  assert.equal(bold('**a «b»`c`**'), '**a «b»`c`**');
+});
+
+test('a literal marker character next to a new marker becomes part of it', () => {
+  assert.equal(strike('~«a»~\n\nrest'), '~~«a»~~\n\nrest');          // not a ~~~ code fence
+  assert.equal(strike('a~«b»~c'), 'a~~«b»~~c');
+  assert.equal(strike('~~«a»~~'), '«a»');
+  assert.equal(italic('2*«3»'), '2*«3»*');
+  assert.equal(bold('a \\*«b»'), 'a \\***«b»**');                    // an escaped one is text
 });
 
 test('code, math and link targets are never split by a marker', () => {
