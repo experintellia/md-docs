@@ -10,6 +10,7 @@ import {
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
+import { CALLOUT, CalloutLabelWidget, calloutGroup } from './widgets/callout.ts';
 import { MAX_TEX, MathWidget, mathCost } from './widgets/math.ts';
 import { MermaidWidget } from './widgets/mermaid.ts';
 import { sanitizedSvg, SvgWidget } from './widgets/svg.ts';
@@ -127,8 +128,12 @@ function proseText(state: EditorState, line: Line): string {
   return text + line.text.slice(at);
 }
 
+// A callout's `[!type]` marker is drawn as an icon, so its Latin letters are not
+// the line's text: `> [!note] ملاحظة` is Arabic, not left-to-right.
+const CALLOUT_MARKER = /^\[![\w-]+\][+-]?/;
+
 export function lineDirection(text: string): 'ltr' | 'rtl' | null {
-  for (const ch of text.replace(BLOCK_MARKERS, '')) {
+  for (const ch of text.replace(BLOCK_MARKERS, '').replace(CALLOUT_MARKER, '')) {
     if (DECIDES.test(ch)) return RTL.test(ch) ? 'rtl' : 'ltr';
   }
   return null;
@@ -438,6 +443,13 @@ export function buildDecorations(view: EditorView): DecorationSet {
           if (name === 'Blockquote' && node.node.parent?.name === 'ListItem') {
             return;
           }
+          // An Obsidian callout (`> [!info] Title`) is a quote drawn as a box in
+          // its type's colour, its `[!info]` marker stood in for by the type's
+          // icon. Only the first line can hold the marker.
+          const quoteDir = name === 'Blockquote' ? (blockDirection(state, node.from, node.to) ?? 'ltr') : '';
+          const callout = name === 'Blockquote'
+            ? CALLOUT.exec(doc.sliceString(node.from, doc.lineAt(node.from).to))
+            : null;
           // The quote's bar belongs to the quote, not to the line. A quote can
           // hold lines of both directions — an English sentence among Arabic
           // ones, a code block that is always left-to-right — and a bar placed
@@ -448,9 +460,24 @@ export function buildDecorations(view: EditorView): DecorationSet {
           // A quote nested in one of the opposite direction therefore draws
           // both bars on its lines, which reads as a box around the inner
           // quote. Fine, and better than a spine that breaks.
-          const cls = name === 'Blockquote'
-            ? `md-quote md-quote-${blockDirection(state, node.from, node.to) ?? 'ltr'}`
-            : 'md-code-block';
+          // A callout inside callouts paints its ancestors' bars and tints in
+          // a strip at its start, so its lines need every level's colour. A
+          // line carries all its callouts' type classes, which cannot say
+          // which one is innermost, so each callout names its colour for its
+          // own level instead: `--callout-2: var(--callout-tip)`. The CSS
+          // draws at most three levels; ponytail: a fourth reuses level 3.
+          let depth = 1;
+          if (callout) {
+            for (let up = node.node.parent; up; up = up.parent) {
+              if (up.name === 'Blockquote' && CALLOUT.test(doc.sliceString(up.from, doc.lineAt(up.from).to))) depth++;
+            }
+            depth = Math.min(depth, 3);
+          }
+          const cls = callout
+            ? `md-callout md-callout-${calloutGroup(callout[1])} md-callout-${quoteDir}` +
+              (depth > 1 ? ` md-callout-d${depth}` : '')
+            : name === 'Blockquote' ? `md-quote md-quote-${quoteDir}` : 'md-code-block';
+          const attributes = callout ? { style: `--callout-${depth}: var(--callout-${calloutGroup(callout[1])})` } : undefined;
           let pos = node.from;
           while (pos <= node.to) {
             const line = doc.lineAt(pos);
@@ -459,11 +486,28 @@ export function buildDecorations(view: EditorView): DecorationSet {
             // get tagged for the CSS to round the outer corners. A one-line
             // block gets both, which is why they set corners and not the
             // `border-radius` shorthand.
-            const edges = name === 'Blockquote' ? '' :
-              (pos === node.from ? ' md-code-first' : '') + (isLast ? ' md-code-last' : '');
-            ranges.push(Decoration.line({ class: cls + edges }).range(line.from));
+            // A nested callout's last line is not the box's bottom: the
+            // outermost callout rounds that.
+            const edges = name === 'Blockquote'
+              ? (callout && pos === node.from ? ' md-callout-head' : '') +
+                (callout && isLast && depth === 1 ? ' md-callout-last' : '')
+              : (pos === node.from ? ' md-code-first' : '') + (isLast ? ' md-code-last' : '');
+            ranges.push(Decoration.line({ class: cls + edges, attributes }).range(line.from));
             if (isLast) break;
             pos = line.to + 1;
+          }
+          // The marker goes unless its line is being edited, as the other markup does.
+          if (callout && !lineHasSelection(state, node.from)) {
+            const type = callout[1];
+            // From the marker's end in the document, not the line's start: the
+            // quote may be indented or nested, so the match begins mid-line.
+            const title = doc.sliceString(node.from + callout[0].length, doc.lineAt(node.from).to).trim();
+            // Obsidian shows the type identifier in title case: `[!ERROR]` is "Error".
+            const name = type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
+            ranges.push(
+              Decoration.replace({ widget: new CalloutLabelWidget(calloutGroup(type), title ? '' : name, name) })
+                .range(node.from + callout[0].indexOf('[!'), node.from + callout[0].length),
+            );
           }
           return;
         }

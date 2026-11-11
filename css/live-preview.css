@@ -46,6 +46,147 @@
   padding-right: 0.7em;
 }
 
+/* Obsidian callouts (`> [!info] Title`): a rounded box in the colour of its
+   type. The bar's side comes from the callout's direction class, as for a
+   quote, and lines up with a plain quote's bar and text. The bar is first drawn
+   grey by its side rule, then recoloured by the border-color rule, which has to
+   come after it: the two have equal specificity. The tint is a fraction of the
+   colour, so the body keeps the normal text colour on both themes. */
+.cm-line.md-callout-ltr {
+  border-left: 3px solid var(--border);
+}
+.cm-line.md-callout-rtl {
+  border-right: 3px solid var(--border);
+}
+.cm-line.md-callout {
+  /* A nested quote's muted colour would otherwise reach the callout's body. */
+  color: var(--fg);
+  --callout-rgb: var(--callout-1);
+  background: rgba(var(--callout-rgb, 107, 114, 128), 0.1);
+  /* The bar is the outermost callout's, unbroken down a nested one. */
+  border-color: rgb(var(--callout-1, 107, 114, 128));
+  /* Both sides the same, so a line's own direction cannot move them. */
+  padding-inline-start: 0.7em;
+  padding-inline-end: 0.7em;
+}
+/* Outer corners only, as for a code block: the box is one rectangle per line.
+   All four sides round alike, so no side depends on the direction. A one-line
+   callout (a folded one, say) is both head and last. */
+.cm-line.md-callout-head {
+  font-weight: 600;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  padding-top: 0.4em;
+  padding-bottom: 0.15em;
+}
+.cm-line.md-callout-last {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  padding-bottom: 0.4em;
+}
+/* A callout inside a callout: its lines are painted as their own box, behind
+   a strip at the start that carries on the enclosing callouts — each one's
+   tint, then the next one's bar. Inset shadows paint the strip, the first on
+   top; the opaque --bg layer stops a tint from showing through to the bar or
+   box under it. Shadow offsets are physical, so the strip's side comes from
+   the direction class, as the bar's does. The text padding is the same on
+   both sides, so a line's own direction cannot run it into the strip. */
+.cm-line.md-callout-d2 {
+  --callout-rgb: var(--callout-2);
+  padding-inline-start: calc(1.5em + 3px);
+  padding-inline-end: calc(1.5em + 3px);
+}
+.cm-line.md-callout-d3 {
+  --callout-rgb: var(--callout-3);
+  padding-inline-start: calc(2.3em + 6px);
+  padding-inline-end: calc(2.3em + 6px);
+}
+/* Not the box's top: only the outermost callout's head rounds. A level-3
+   line carries level 2's class too. */
+.cm-line.md-callout-d2.md-callout-head {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.cm-line.md-callout-ltr.md-callout-d2 {
+  box-shadow:
+    inset 0.8em 0 rgba(var(--callout-1), 0.1), inset 0.8em 0 var(--bg),
+    inset calc(0.8em + 3px) 0 rgb(var(--callout-2));
+}
+.cm-line.md-callout-rtl.md-callout-d2 {
+  box-shadow:
+    inset -0.8em 0 rgba(var(--callout-1), 0.1), inset -0.8em 0 var(--bg),
+    inset calc(-0.8em - 3px) 0 rgb(var(--callout-2));
+}
+.cm-line.md-callout-ltr.md-callout-d3 {
+  box-shadow:
+    inset 0.8em 0 rgba(var(--callout-1), 0.1), inset 0.8em 0 var(--bg),
+    inset calc(0.8em + 3px) 0 rgb(var(--callout-2)),
+    inset calc(1.6em + 3px) 0 rgba(var(--callout-2), 0.1), inset calc(1.6em + 3px) 0 var(--bg),
+    inset calc(1.6em + 6px) 0 rgb(var(--callout-3));
+}
+.cm-line.md-callout-rtl.md-callout-d3 {
+  box-shadow:
+    inset -0.8em 0 rgba(var(--callout-1), 0.1), inset -0.8em 0 var(--bg),
+    inset calc(-0.8em - 3px) 0 rgb(var(--callout-2)),
+    inset calc(-1.6em - 3px) 0 rgba(var(--callout-2), 0.1), inset calc(-1.6em - 3px) 0 var(--bg),
+    inset calc(-1.6em - 6px) 0 rgb(var(--callout-3));
+}
+.md-callout-label {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.1em;
+}
+/* The label is text, so it keeps the text colour in both themes; the colour
+   is on the icon, which needs only 3:1 against its background. */
+.md-callout-label svg {
+  width: 1em;
+  height: 1em;
+  margin-inline-end: 0.4em;
+  color: rgb(var(--callout-rgb, 107, 114, 128));
+}
+.md-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* One hue per type, near ones apart (note blue, info sky; failure red, danger
+   crimson, bug brick) so the box says its type before the icon is read. Every
+   icon is 4:1 or better on its own 10% box; dark mode lightens each to keep
+   that on the dark background. */
+:root {
+  --callout-note: 51, 102, 214;
+  --callout-abstract: 11, 129, 148;
+  --callout-info: 10, 123, 189;
+  --callout-todo: 90, 103, 216;
+  --callout-tip: 15, 133, 113;
+  --callout-success: 46, 133, 64;
+  --callout-question: 168, 101, 10;
+  --callout-warning: 194, 87, 12;
+  --callout-failure: 207, 42, 42;
+  --callout-danger: 194, 29, 90;
+  --callout-bug: 179, 54, 31;
+  --callout-example: 124, 79, 209;
+  --callout-quote: 107, 114, 128;
+}
+html.dark {
+  --callout-note: 122, 162, 255;
+  --callout-abstract: 76, 201, 224;
+  --callout-info: 77, 184, 255;
+  --callout-todo: 139, 149, 255;
+  --callout-tip: 61, 214, 181;
+  --callout-success: 91, 193, 111;
+  --callout-question: 240, 185, 74;
+  --callout-warning: 255, 154, 77;
+  --callout-failure: 255, 107, 107;
+  --callout-danger: 247, 101, 152;
+  --callout-bug: 240, 138, 108;
+  --callout-example: 177, 151, 252;
+  --callout-quote: 160, 166, 173;
+}
+
 /* Fenced code block lines */
 .cm-line.md-code-block {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

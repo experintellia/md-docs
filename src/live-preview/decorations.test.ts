@@ -8,6 +8,7 @@ import { buildDecorations, buildTables, lineDirection } from './decorations.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
+import { CalloutLabelWidget } from './widgets/callout.ts';
 import { TableWidget } from './widgets/table.ts';
 
 // Tier 2: live-preview decoration builder. `buildDecorations` reads only
@@ -99,6 +100,92 @@ test('italic gets md-emphasis, inline code gets md-inline-code', () => {
 
 test('blockquote gets md-quote line class', () => {
   assert.ok(withClass(decorate('> q', 0), 'md-quote'), 'md-quote line class');
+});
+
+// The marker widget of a callout, if one is drawn.
+function calloutLabel(decos: Deco[]): Deco | undefined {
+  return decos.find((d) => d.spec.widget instanceof CalloutLabelWidget);
+}
+
+test('a callout is a box in its type colour, its first line marked and its marker an icon', () => {
+  const doc = '> [!warning] Careful\n> body';
+  const decos = decorate(doc, doc.length); // cursor on the body line
+  assert.ok(withClass(decos, 'md-callout-warning'), 'type class on the box');
+  assert.ok(!withClass(decos, 'md-quote'), 'not a plain quote');
+  const head = decos.filter((d) => d.spec.class?.includes('md-callout-head'));
+  assert.deepEqual(head.map((d) => d.from), [0], 'only the first line is the head');
+  const last = decos.filter((d) => d.spec.class?.includes('md-callout-last'));
+  assert.deepEqual(last.map((d) => d.from), [doc.indexOf('> body')], 'only the last line rounds the bottom');
+  const label = calloutLabel(decos);
+  assert.ok(label, 'marker stood in for by the icon');
+  assert.equal((label!.spec.widget as CalloutLabelWidget).group, 'warning');
+  assert.equal((label!.spec.widget as CalloutLabelWidget).label, '', 'titled: no type name drawn');
+  assert.equal(label!.from, 2, 'from the [ of [!warning]');
+  assert.equal(label!.to, 13, 'to the space after the marker');
+});
+
+test('a nested callout names its colour for its own level, and only the outermost rounds the bottom', () => {
+  const doc = '> [!warning] Out\n> > [!note] In\n> > body';
+  const decos = decorate(doc, 0);
+  const inner = doc.indexOf('> > [!note]');
+  const onLine = (from: number) => decos.filter((d) => d.from === from && d.spec.attributes?.style);
+  assert.deepEqual(onLine(0).map((d) => d.spec.attributes?.style), ['--callout-1: var(--callout-warning)']);
+  assert.deepEqual(onLine(inner).map((d) => d.spec.attributes?.style),
+    ['--callout-1: var(--callout-warning)', '--callout-2: var(--callout-note)']);
+  assert.ok(withClass(onLine(inner), 'md-callout-d2'), 'depth class on the inner lines');
+  assert.ok(!withClass(onLine(0), 'md-callout-d2'), 'none on the outer');
+  const last = decos.filter((d) => d.spec.class?.includes('md-callout-last'));
+  assert.equal(last.length, 1, 'one bottom, the outer box’s');
+});
+
+test('a callout with no title draws its type name as the title', () => {
+  const decos = decorate('> [!tip]\n> body', 14);
+  assert.equal((calloutLabel(decos)!.spec.widget as CalloutLabelWidget).label, 'Tip');
+});
+
+test('the marker shows raw on the callout line being edited', () => {
+  const decos = decorate('> [!info] Title\n> body', 3); // cursor on the head line
+  assert.ok(withClass(decos, 'md-callout-info'), 'still a callout box');
+  assert.equal(calloutLabel(decos), undefined, 'no icon while editing the line');
+});
+
+test('an Arabic callout is right-to-left, the Latin type name in its marker does not decide', () => {
+  const doc = '> [!note] ملاحظة مهمة\n> هذا نص عربي';
+  const decos = decorate(doc, doc.length);
+  assert.ok(withClass(decos, 'md-callout-rtl'), 'RTL callout bar');
+  assert.ok(!withClass(decos, 'md-callout-ltr'), 'not drawn left-to-right');
+});
+
+test('a callout indented or nested in a quote still gets its type name as title', () => {
+  for (const doc of ['  > [!tip]\n  > body', '> > [!tip]\n> > body']) {
+    assert.equal((calloutLabel(decorate(doc, doc.length))!.spec.widget as CalloutLabelWidget).label, 'Tip', doc);
+  }
+});
+
+test('todo is its own type, not an alias of info', () => {
+  const doc = '> [!todo]\n> b';
+  const label = calloutLabel(decorate(doc, doc.length))!.spec.widget as CalloutLabelWidget;
+  assert.equal(label.group, 'todo');
+  assert.equal(label.label, 'Todo');
+});
+
+test('an upper-case type is shown in title case, as Obsidian does', () => {
+  const doc = '> [!ERROR]\n> b';
+  const label = calloutLabel(decorate(doc, doc.length))!.spec.widget as CalloutLabelWidget;
+  assert.equal(label.group, 'danger');
+  assert.equal(label.label, 'Error');
+});
+
+test('Obsidian aliases share a type, an unknown type is a note', () => {
+  const group = (type: string) => {
+    const doc = `> [!${type}]\n> b`;
+    return (calloutLabel(decorate(doc, doc.length))!.spec.widget as CalloutLabelWidget).group;
+  };
+  assert.equal(group('hint'), 'tip');
+  assert.equal(group('caution'), 'warning');
+  assert.equal(group('error'), 'danger');
+  assert.equal(group('constructor'), 'note', 'a name Object inherits is not a type');
+  assert.equal(group('unknown-kind'), 'note');
 });
 
 test('a list item whose content is a quote (`- > x`) gets no md-quote line class', () => {
