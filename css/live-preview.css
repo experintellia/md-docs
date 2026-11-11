@@ -67,10 +67,6 @@
   /* Both sides the same, so a line's own direction cannot move them. */
   padding-inline-start: 0.7em;
   padding-inline-end: 0.7em;
-  /* A few pixels off the editor's edges, so a box at a phone's edge does not
-     touch it. Nested lines share one line box each, so they are not inset twice. */
-  margin-inline-start: 4px;
-  margin-inline-end: 4px;
 }
 /* Outer corners only, as for a code block: the box is one rectangle per line.
    All four sides round alike, so no side depends on the direction. A one-line
