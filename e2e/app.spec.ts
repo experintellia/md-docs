@@ -40,6 +40,19 @@ test('toolbar formats the selection and keeps the editor focused', async ({ page
   await expect(page.locator('.cm-editor')).toHaveClass(/cm-focused/);
 });
 
+test('bold follows the text that is already bold', async ({ page, isMobile }) => {
+  await page.keyboard.insertText('- **one**\n- two');
+  await page.keyboard.press('ControlOrMeta+a');
+  const bold = page.getByRole('button', { name: 'Bold' });
+  await press(bold, isMobile);
+  // One run per list item, each after its bullet (the selection shows the
+  // markers); `one` keeps the ones it had.
+  await expect(page.locator('.md-strong')).toHaveText(['**one**', '**two**']);
+  await press(bold, isMobile); // all bold now, so this takes it off
+  await expect(page.locator('.md-strong')).toHaveCount(0);
+  await expect(page.locator('.cm-content')).toContainText('one');
+});
+
 test('a checkbox toggles its task', async ({ page, isMobile }) => {
   await page.keyboard.insertText('- [ ] task\n');
   const box = page.locator('.md-task-checkbox');

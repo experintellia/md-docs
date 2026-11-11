@@ -7,12 +7,16 @@ import type { Command, EditorView } from '@codemirror/view';
 import {
   toggleBold,
   toggleItalic,
+  toggleStrikethrough,
+  toggleHighlight,
   toggleInlineCode,
   cycleHeading,
   toggleBullet,
   toggleChecklist,
   insertNewlineContinueMarkup,
 } from './commands.ts';
+import { mathBlock } from './live-preview/math.ts';
+import { highlight } from './live-preview/highlight.ts';
 
 // Tier 2: toolbar command behaviour. The commands only read `view.state` and
 // call `view.dispatch`, never the DOM — so a minimal state+dispatch stand-in
@@ -38,7 +42,10 @@ function parse(spec: string): { doc: string; selection: { anchor: number; head?:
   return { doc: spec.replace('|', ''), selection: { anchor: pos } };
 }
 
-function run(cmd: Command, spec: string, extensions: Extension = []): Result {
+// The inline toggles read the syntax tree, so the default is the app's parser.
+const md = markdown({ base: markdownLanguage, extensions: [mathBlock] });
+
+function run(cmd: Command, spec: string, extensions: Extension = md): Result {
   const { doc, selection } = parse(spec);
   let state = EditorState.create({ doc, selection, extensions });
   const view = {
@@ -158,6 +165,144 @@ test('cycleHeading resets H4-H6 (typed by hand) back to plain text', () => {
 test('toggleChecklist keeps indentation when creating a task', () => {
   assert.equal(show(run(toggleChecklist, '  hi|')), '  - [ ] |hi');
   assert.equal(show(run(toggleChecklist, '  * hi|')), '  * [ ] |hi');
+});
+
+// --- Inline toggles as a boolean operation on the styled text ----------------
+
+const bold = (spec: string): string => show(run(toggleBold, spec));
+const italic = (spec: string): string => show(run(toggleItalic, spec));
+const strike = (spec: string): string => show(run(toggleStrikethrough, spec));
+
+test('a selection inside bold text is cut out of it', () => {
+  assert.equal(bold('**ein «langer» text**'), '**ein** «langer» **text**');
+  assert.equal(bold('**«ein» langer**'), '«ein» **langer**');       // at the start
+  assert.equal(bold('**ein «langer»**'), '**ein** «langer»');       // at the end
+  assert.equal(bold('**a«b»c**'), '**a**«b»**c**');                 // inside a word
+  assert.equal(bold('**ein «langer »text**'), '**ein** «langer »**text**'); // markers hug the words
+  assert.equal(bold('«**ab**»'), '«ab»');                           // markers selected too
+  assert.equal(bold('**a«b**»'), '**a**«b»');                       // closing marker selected
+  assert.equal(bold('__ein «langer» text__'), '**ein** «langer» **text**'); // underscore form
+});
+
+test('a selection across the edge of bold text extends it', () => {
+  assert.equal(bold('**fett «fett** normal» rest'), '**fett «fett normal»** rest');
+  assert.equal(bold('rest «normal **fett» fett**'), 'rest **«normal fett» fett**');
+  assert.equal(bold('**a** «b»'), '**a «b»**');                     // next to it: joins
+  assert.equal(bold('«a» **b**'), '**«a» b**');
+  assert.equal(bold('**a**«b»'), '**a«b»**');
+  assert.equal(bold('**a** «b» **c**'), '**a «b» c**');             // bridges two
+  assert.equal(bold('«x **a** y»'), '**«x a y»**');                 // swallows one
+  assert.equal(bold('**a** x «b»'), '**a** x **«b»**');             // text between: stays apart
+});
+
+test('markers go around the words, not the selected spaces', () => {
+  assert.equal(bold('a« b »c'), 'a« **b** »c');
+  assert.equal(bold('a« »b'), 'a« »b');                              // nothing to make bold
+});
+
+test('several lines are styled one by one, outside their block markup', () => {
+  // (A marker set right at an edge of the selection stays outside it: `»**`.)
+  assert.equal(bold('- «eins\n- zwei»'), '- **«eins**\n- **zwei»**');
+  assert.equal(bold('«- eins\n- zwei»'), '«- **eins**\n- **zwei»**');
+  assert.equal(bold('«- [ ] a\n- [x] b»'), '«- [ ] **a**\n- [x] **b»**');
+  assert.equal(bold('«1. a\n2. b»'), '«1. **a**\n2. **b»**');
+  assert.equal(bold('«- a\n  - b»'), '«- **a**\n  - **b»**');
+  assert.equal(bold('«> a\n> b»'), '«> **a**\n> **b»**');
+  assert.equal(bold('«# a\nb»'), '«# **a**\n**b»**');
+  assert.equal(bold('«a\n\nb»'), '**«a**\n\n**b»**');              // blank line stays blank
+  assert.equal(bold('«| a | b |\n|---|---|\n| c | d |»'),
+    '«| **a** | **b** |\n|---|---|\n| **c** | **d** |»');
+});
+
+test('a mixed selection becomes bold first, and normal only once all of it is bold', () => {
+  assert.equal(bold('«- **a**\n- b»'), '«- **a**\n- **b»**');
+  assert.equal(bold('«- **a**\n- **b**»'), '«- a\n- b»');
+  assert.equal(bold('«**a** **b**»'), '«a b»');
+});
+
+test('italic and strikethrough work the same way', () => {
+  assert.equal(italic('*ein «langer» text*'), '*ein* «langer» *text*');
+  assert.equal(italic('*a «b* c»'), '*a «b c»*');
+  assert.equal(italic('_a «b_ c»'), '*a «b c»*');
+  assert.equal(strike('«ab»'), '~~«ab»~~');
+  assert.equal(strike('~~«ab»~~'), '«ab»');
+  assert.equal(strike('~~ein «langer» text~~'), '~~ein~~ «langer» ~~text~~');
+  assert.equal(strike('~~a «b~~ c»'), '~~a «b c»~~');
+  assert.equal(strike('- «a\n- b»'), '- ~~«a~~\n- ~~b»~~');
+  assert.equal(strike('a|b'), 'a~~|~~b');
+});
+
+const mark = (spec: string): string =>
+  show(run(toggleHighlight, spec, markdown({ base: markdownLanguage, extensions: [mathBlock, highlight] })));
+
+test('highlight follows the highlighted text as the other styles do', () => {
+  assert.equal(mark('«ab»'), '==«ab»==');
+  assert.equal(mark('==«ab»=='), '«ab»');
+  assert.equal(mark('==ein «langer» text=='), '==ein== «langer» ==text==');
+  assert.equal(mark('==a «b== c»'), '==a «b c»==');
+  assert.equal(mark('- «a\n- b»'), '- ==«a==\n- ==b»==');
+  // An empty one, with the caret inside, for the color menu to fill.
+  assert.equal(mark('a |b'), 'a ==|==b');
+  assert.equal(mark('**«ab»**'), '**==«ab»==**');
+  // Cut in two, a colored highlight keeps its color on both sides.
+  assert.equal(mark('==🔴ein «langer» text=='), '==🔴ein== «langer» ==🔴text==');
+  assert.equal(mark('==🔴ein «langer»=='), '==🔴ein== «langer»');
+  // Its emoji goes with it when it is removed, rather than stay as text.
+  assert.equal(mark('«==🔴ab==»'), '«ab»');
+  assert.equal(mark('==🔴«ab»=='), '«ab»');
+  assert.equal(mark('==🔴«ein» langer=='), '«ein» ==🔴langer==');
+});
+
+test('bold and italic nest without disturbing each other', () => {
+  assert.equal(italic('**«ab»**'), '***«ab»***');
+  assert.equal(italic('«**ab**»'), '*«**ab**»*');
+  assert.equal(bold('*«ab»*'), '***«ab»***');
+  assert.equal(italic('***«ab»***'), '**«ab»**');
+  assert.equal(bold('***«ab»***'), '*«ab»*');
+  assert.equal(bold('*a «b» c*'), '*a **«b»** c*');
+  assert.equal(italic('**a «b» c**'), '**a *«b»* c**');
+  assert.equal(bold('**a *b «c* d** e»'), '**a *b «c* d e»**');
+  // Across the edge of the other style: one piece on each side of it.
+  assert.equal(italic('**a «b** c»'), '**a *«b*** *c»*');
+  assert.equal(italic('***a «b»***'), '***a* «b»**');
+});
+
+test('markers stay where markdown reads them as markers', () => {
+  // Between a word and punctuation a marker is literal, so punctuation at the
+  // edge of a run stays outside it.
+  assert.equal(bold('**«Note», this** end'), '«Note», **this** end');
+  assert.equal(bold('**Hello «world»!** end'), '**Hello** «world»! end');
+  assert.equal(bold('foo«(bar)»'), 'foo«(**bar)»**');
+  assert.equal(bold('foo«(**bar**)»'), 'foo«(bar)»');                // and comes off again
+  assert.equal(bold('«(bar)»'), '**«(bar)»**');                      // no word outside: all of it
+  assert.equal(italic('*see «this», ok*'), '*see* «this», *ok*');
+  assert.equal(strike('a«(b)»c'), 'a«(~~b~~)»c');
+  // A hard break's backslash would escape the closing marker.
+  assert.equal(bold('«a\\\nb»'), '**«a**\\\n**b»**');
+  // A literal marker character in the text is escaped, not paired up.
+  assert.equal(italic('«2*3»'), '*«2\\*3»*');
+  assert.equal(italic('*«2\\*3»*'), '«2\\*3»');
+  assert.equal(bold('«a `*` $*$ b»'), '**«a `*` $*$ b»**');           // not in code or math
+  assert.equal(bold('«- [ ]\n- x»'), '«- [ ]\n- **x»**');            // an empty task is no text
+  assert.equal(bold('a <!-- «c» --> b'), 'a **<!-- «c» -->** b');
+  assert.equal(bold('1 \\«* 2»'), '1 **\\«* 2»**');                    // an escape stays whole
+  assert.equal(bold('«a \\\\* b»'), '**«a \\\\\\* b»**');              // `\\\\` is a backslash, the `*` literal
+  // Punctuation that belongs to other markup is not shed.
+  assert.equal(bold('**a «b»~~c~~**'), '**a** «b»**~~c~~**');
+  assert.equal(bold('wow«! 😀»'), 'wow«! **😀»**');
+  assert.equal(bold('wow«! **😀»**'), 'wow«! 😀»');
+});
+
+test('code, math and link targets are never split by a marker', () => {
+  assert.equal(bold('a `b«c` d»'), 'a **`b«c` d»**');               // whole code span
+  assert.equal(bold('a $b«c$ d»'), 'a **$b«c$ d»**');
+  assert.equal(bold('[te«xt](url) more»'), '**[te«xt](url) more»**');
+  assert.equal(bold('[a «b» c](url)'), '[a **«b»** c](url)');       // inside the link text
+  assert.equal(bold('**see [«text»](url) now**'), '**see** [«text»](url) **now**');
+  assert.equal(bold('**a [b«c»](u)**'), '**a** [**b**«c»](u)');
+  assert.equal(bold('**[«text»](url)**'), '[«text»](url)');
+  assert.equal(bold('«a\n```\ncode\n```\nb»'), '**«a**\n```\ncode\n```\n**b»**');
+  assert.equal(bold('```\n«code»\n```'), '```\n«code»\n```');
 });
 
 // Enter as the keymap runs it: ours first, then defaultKeymap's plain newline
