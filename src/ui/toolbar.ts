@@ -93,10 +93,27 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
   end.className = 'md-tool-end';
   end.append(readModeButton(container, view), ...moreMenu(utils));
   container.append(cmds, end);
+  fadeScrolledEdges(cmds);
 
   if (isMobile()) {
     fitAppToViewport();
   }
+}
+
+/**
+ * Mark the sides `el` scrolls on to, so CSS can fade them: an edge cut
+ * between two buttons gives no hint that there are more. Only while there are
+ * more: the last button, scrolled to, is not faded as if disabled.
+ */
+function fadeScrolledEdges(el: HTMLElement): void {
+  const update = (): void => {
+    el.classList.toggle('more-before', el.scrollLeft > 1);
+    el.classList.toggle('more-after', el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+  };
+  el.addEventListener('scroll', update, { passive: true });
+  // The width changes with the window, a turned phone and the keyboard.
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(update).observe(el);
+  update();
 }
 
 /** Toggle read mode: the editor stops taking input and shows no source, so a

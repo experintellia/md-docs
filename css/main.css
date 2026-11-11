@@ -136,6 +136,16 @@ html, body {
   align-self: stretch;
   overflow-x: auto;
   overflow-y: hidden;
+  /* The side with more buttons to scroll to fades out (see fadeScrolledEdges),
+     the buttons themselves rather than an overlay, so both themes work. */
+  --fade: 24px;
+  -webkit-mask-image: var(--mask, none);
+  mask-image: var(--mask, none);
+}
+.md-tool-cmds.more-after { --mask: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent); }
+.md-tool-cmds.more-before { --mask: linear-gradient(to left, #000 calc(100% - var(--fade)), transparent); }
+.md-tool-cmds.more-before.more-after {
+  --mask: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
 }
 
 /* Mobile: pin #app to the visual viewport (height/transform set in JS) and lay
