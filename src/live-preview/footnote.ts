@@ -1,6 +1,7 @@
 import { syntaxTree } from '@codemirror/language';
 import { type EditorState, StateField } from '@codemirror/state';
 import { tags } from '@lezer/highlight';
+import type { SyntaxNodeLike } from './decorations.ts';
 import type { BlockContext, Element, Line, MarkdownConfig } from '@lezer/markdown';
 
 // As in math.ts: the container depth and markers lezer keeps on a line, which
@@ -114,25 +115,19 @@ export const footnote: MarkdownConfig = {
   }],
 };
 
-// The lezer node type, read off the API: `@lezer/common` is not a declared
-// dependency (as in decorations.ts).
-type SyntaxNode = ReturnType<ReturnType<typeof syntaxTree>['resolveInner']>;
-
 /** A footnote as read mode lists it: its number, where it is first referred
  *  to, and the node holding its text (the definition, or the `^[note]`). */
 export interface Note {
   n: number;
   ref: number;
-  body: SyntaxNode;
+  body: SyntaxNodeLike;
 }
 
 export interface FootnoteIndex {
   /** The definition of each label: the first, if a label is defined twice. */
-  defs: Map<string, SyntaxNode>;
+  defs: Map<string, SyntaxNodeLike>;
   /** Every definition, for read mode to hide. */
-  allDefs: SyntaxNode[];
-  /** The number of each defined label, in the order of first reference. */
-  numbers: Map<string, number>;
+  allDefs: SyntaxNodeLike[];
   /** The number of each reference and inline footnote, by where it starts. */
   numberAt: Map<number, number>;
   notes: Note[];
@@ -149,9 +144,9 @@ export interface FootnoteIndex {
  */
 export function footnoteIndex(state: EditorState): FootnoteIndex {
   const doc = state.doc;
-  const defs = new Map<string, SyntaxNode>();
-  const allDefs: SyntaxNode[] = [];
-  const refs: { from: number; label: string | null; node: SyntaxNode }[] = [];
+  const defs = new Map<string, SyntaxNodeLike>();
+  const allDefs: SyntaxNodeLike[] = [];
+  const refs: { from: number; label: string | null; node: SyntaxNodeLike }[] = [];
   syntaxTree(state).iterate({
     enter: (n) => {
       if (n.name === 'FootnoteDefinition') {
@@ -188,7 +183,7 @@ export function footnoteIndex(state: EditorState): FootnoteIndex {
     }
     numberAt.set(ref.from, n);
   }
-  return { defs, allDefs, numbers, numberAt, notes };
+  return { defs, allDefs, numberAt, notes };
 }
 
 /** The footnote index of the current tree, kept up to date as it changes. */

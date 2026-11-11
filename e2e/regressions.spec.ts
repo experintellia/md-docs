@@ -160,3 +160,21 @@ test('on a phone the status line clears the toolbar and tasks are big enough to 
     parseFloat(getComputedStyle(box).fontSize) / parseFloat(getComputedStyle(box.parentElement!).fontSize));
   expect(scale, 'checkbox is the desktop size').toBeGreaterThan(1.3);
 });
+
+test('on a narrow phone only the editing commands scroll, not the buttons at the end', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'touch layout');
+  // The whole toolbar used to scroll, so the read toggle and ⋮ bounced along
+  // with the commands on iOS, held at the edge only by position: sticky.
+  await page.setViewportSize({ width: 300, height: 640 });
+  await open(page);
+  const cmds = page.locator('.md-tool-cmds');
+  const end = page.locator('.md-tool-end');
+  expect(await page.locator('#toolbar').evaluate((el) => el.scrollWidth <= el.clientWidth), 'toolbar scrolls').toBe(true);
+  expect(await cmds.evaluate((el) => el.scrollWidth > el.clientWidth), 'commands overflow at 300px').toBe(true);
+  const before = (await end.boundingBox())!;
+  await cmds.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+  expect((await end.boundingBox())!.x).toBe(before.x);
+  // The last command can be scrolled to, out from under the end group.
+  const last = (await page.getByRole('button', { name: 'Indent list item' }).boundingBox())!;
+  expect(last.x + last.width).toBeLessThanOrEqual(before.x + 1);
+});

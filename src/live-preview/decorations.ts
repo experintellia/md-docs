@@ -9,7 +9,7 @@ import {
 } from '@codemirror/view';
 import { footnotes } from './footnote.ts';
 import { HIGHLIGHT_COLORS } from './highlight.ts';
-import { FootnoteListWidget, FootnoteRefWidget, jumpToFootnote } from './widgets/footnote.ts';
+import { FootnoteListWidget, FootnoteRefWidget, followFootnote } from './widgets/footnote.ts';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
@@ -189,7 +189,7 @@ const dirDeco = {
 
 // The lezer node type, read off the API instead of imported: `@lezer/common` is
 // a transitive dependency here, not one this package declares.
-type SyntaxNodeLike = ReturnType<ReturnType<typeof syntaxTree>['resolveInner']>;
+export type SyntaxNodeLike = ReturnType<ReturnType<typeof syntaxTree>['resolveInner']>;
 
 // Does the selection touch anything between `from` and `to`? Blocks reveal
 // their source on the same rule single lines do, just over a range.
@@ -399,10 +399,7 @@ function safeHref(url: string): string | null {
 export const linkClickHandler = EditorView.domEventHandlers({
   mousedown(event, view) {
     const target = event.target as HTMLElement | null;
-    const ref = target?.closest<HTMLElement>('[data-fn-n], [data-fn-label]');
-    if (ref) {
-      const n = ref.dataset.fnN === undefined ? null : Number(ref.dataset.fnN);
-      if (!jumpToFootnote(view, ref.dataset.fnLabel ?? null, n)) return false;
+    if (followFootnote(view, target)) {
       event.preventDefault();
       return true;
     }
@@ -568,9 +565,7 @@ export function buildDecorations(view: EditorView): DecorationSet {
         if (state.readOnly && (name === 'FootnoteReference' || name === 'InlineFootnote')) {
           const n = footnotes(state).numberAt.get(node.from);
           if (n !== undefined) {
-            const label = node.node.getChild('FootnoteLabel');
-            const widget = new FootnoteRefWidget(n, label ? doc.sliceString(label.from, label.to) : null);
-            ranges.push(Decoration.replace({ widget }).range(node.from, node.to));
+            ranges.push(Decoration.replace({ widget: new FootnoteRefWidget(n) }).range(node.from, node.to));
             return false;
           }
         }

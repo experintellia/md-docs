@@ -122,9 +122,20 @@ html, body {
   padding: 0 6px;
   background: var(--toolbar-bg);
   border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+/* The editing commands, the part of the toolbar that scrolls sideways when it
+   does not fit; the read toggle and menu after it stay where they are. */
+.md-tool-cmds {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
   overflow-x: auto;
   overflow-y: hidden;
-  flex: 0 0 auto;
 }
 
 /* Mobile: pin #app to the visual viewport (height/transform set in JS) and lay
@@ -184,12 +195,11 @@ html, body {
    ponytail: a fixed breakpoint; raise it when the toolbar gains buttons. */
 @media (pointer: coarse), (max-width: 479px) {
   .md-tool-wide { display: none; }
-  /* Pinned to the end, so on a very narrow screen the commands scroll under it.
-     Sticky makes it a stacking context, so its z-index (not the menu's) decides
-     what the menu covers: above #status, a z-index 5 flex item on touch. */
-  .md-tool-end { position: sticky; right: 0; z-index: 10; background: var(--toolbar-bg); }
+  /* A stacking context, so its z-index (not the menu's) decides what the menu
+     covers: above #status, a z-index 5 flex item on touch. */
+  .md-tool-end { position: relative; z-index: 10; }
   .md-tool-more { display: inline-block; }
-  /* Fixed, because #toolbar scrolls sideways and would clip an absolute menu.
+  /* Fixed, so no ancestor's overflow can clip it.
      On touch #app carries a transform (src/ui/toolbar.ts), which makes it the
      containing block instead of the viewport; the offsets hold either way. */
   .md-tool-menu {

@@ -54,7 +54,7 @@ test('read mode: references become numbers, definitions leave, a list ends the d
   const doc = 'see[^n] and^[in **place**]\n\n[^n]: the *note*\n  goes on\n\nend';
   const s = state(doc, { readOnly: true });
   const refs = widgets(decorations(s), s).filter((w) => w instanceof FootnoteRefWidget) as FootnoteRefWidget[];
-  assert.deepEqual(refs.map((w) => [w.n, w.label]), [[1, 'n'], [2, null]]);
+  assert.deepEqual(refs.map((w) => w.n), [1, 2]);
 
   const list = buildFootnoteList(s);
   const hidden: string[] = [];

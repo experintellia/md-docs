@@ -1,6 +1,7 @@
 import { syntaxTree } from '@codemirror/language';
 import { type EditorState, type Extension, Prec, StateEffect, StateField } from '@codemirror/state';
 import { EditorView, keymap, showTooltip, type Tooltip } from '@codemirror/view';
+import type { SyntaxNodeLike } from './decorations.ts';
 import { HIGHLIGHT_COLORS } from './highlight.ts';
 
 // Where `==` is no markup.
@@ -29,7 +30,7 @@ export function colorMenuAt(state: EditorState): number | null {
   // `==|==`, an empty highlight (what the toolbar button inserts), is the one
   // `=` that may follow: not `==|=`, a `===` run.
   if (HIGHLIGHT_COLORS[after.slice(0, 2)] || (after.startsWith('=') && !/^==(?!=)/.test(after))) return null;
-  for (let n: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(state).resolveInner(head, -1); n; n = n.parent) {
+  for (let n: SyntaxNodeLike | null = syntaxTree(state).resolveInner(head, -1); n; n = n.parent) {
     if (NOT_PROSE.test(n.name)) return null;
     if (n.name === 'HighlightMark') return n.parent && n.from === n.parent.from ? head : null;
   }

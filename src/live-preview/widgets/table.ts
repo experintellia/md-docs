@@ -1,5 +1,5 @@
 import { type EditorView, WidgetType } from '@codemirror/view';
-import { jumpToFootnote } from './footnote.ts';
+import { followFootnote } from './footnote.ts';
 import { MAX_TEX, mathCost, typeset } from './math.ts';
 
 /** A run of cell text, carrying the class the live preview paints it with. */
@@ -68,13 +68,9 @@ export class TableWidget extends WidgetType {
     wrap.addEventListener('mousedown', (event) => {
       const target = event.target as Element | null;
       if (target?.closest('a')) return;
-      const ref = target?.closest<HTMLElement>('[data-fn-n], [data-fn-label]');
-      if (ref) {
-        const n = ref.dataset.fnN === undefined ? null : Number(ref.dataset.fnN);
-        if (jumpToFootnote(view, ref.dataset.fnLabel ?? null, n)) {
-          event.preventDefault();
-          return;
-        }
+      if (followFootnote(view, target)) {
+        event.preventDefault();
+        return;
       }
       event.preventDefault();
       view.dispatch({ selection: { anchor: this.spec.from } });

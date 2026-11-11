@@ -36,6 +36,14 @@ export function jumpToFootnote(view: EditorView, label: string | null, n: number
   return true;
 }
 
+/** Follow the footnote reference the press at `target` is on, if it is on one. */
+export function followFootnote(view: EditorView, target: EventTarget | null): boolean {
+  const ref = (target as Element | null)?.closest<HTMLElement>('[data-fn-n], [data-fn-label]');
+  if (!ref) return false;
+  const n = ref.dataset.fnN === undefined ? null : Number(ref.dataset.fnN);
+  return jumpToFootnote(view, ref.dataset.fnLabel ?? null, n);
+}
+
 function flash(el: HTMLElement): void {
   el.classList.remove('md-footnote-flash');
   void el.offsetWidth; // restart the animation on a second jump to the same note
@@ -45,16 +53,14 @@ function flash(el: HTMLElement): void {
 /** A reference in read mode: its number, as a superscript. */
 export class FootnoteRefWidget extends WidgetType {
   readonly n: number;
-  readonly label: string | null;
 
-  constructor(n: number, label: string | null) {
+  constructor(n: number) {
     super();
     this.n = n;
-    this.label = label;
   }
 
   override eq(other: FootnoteRefWidget): boolean {
-    return other.n === this.n && other.label === this.label;
+    return other.n === this.n;
   }
 
   override toDOM(): HTMLElement {
@@ -62,7 +68,6 @@ export class FootnoteRefWidget extends WidgetType {
     sup.className = 'md-footnote-ref';
     sup.textContent = String(this.n);
     sup.dataset.fnN = String(this.n);
-    if (this.label !== null) sup.dataset.fnLabel = this.label;
     return sup;
   }
 

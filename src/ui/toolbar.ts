@@ -68,6 +68,11 @@ const ACTIONS: Action[] = [
 export function mountToolbar(container: HTMLElement, view: EditorView, collab?: Collab): void {
   container.replaceChildren();
 
+  // The editing commands scroll sideways on their own when they do not fit, so
+  // the buttons at the end stay put, bounce and all, instead of riding along.
+  // Growing, they also push those to the right edge.
+  const cmds = document.createElement('div');
+  cmds.className = 'md-tool-cmds';
   for (const action of ACTIONS) {
     const btn = utilButton(action.icon, action.title);
     btn.classList.add('md-tool-cmd'); // hidden in read mode, see readModeButton
@@ -76,20 +81,18 @@ export function mountToolbar(container: HTMLElement, view: EditorView, collab?: 
       action.run(view);
       view.focus();
     });
-    container.appendChild(btn);
+    cmds.appendChild(btn);
   }
 
-  // Utility buttons (read mode, history, theme, help) pushed to the right;
-  // these are not editor commands, so a plain click is fine — no need to
-  // preserve selection.
-  const spacer = document.createElement('div');
-  spacer.className = 'md-tool-spacer';
+  // Utility buttons (read mode, history, theme, help) at the end; these are
+  // not editor commands, so a plain click is fine — no need to preserve
+  // selection.
   // History needs the synced update stream, so only when collaborating.
   const utils = [...(collab ? [historyButton(collab)] : []), themeButton(), helpButton()];
   const end = document.createElement('div');
   end.className = 'md-tool-end';
   end.append(readModeButton(container, view), ...moreMenu(utils));
-  container.append(spacer, end);
+  container.append(cmds, end);
 
   if (isMobile()) {
     fitAppToViewport();
