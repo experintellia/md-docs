@@ -5,6 +5,12 @@ All notable changes to MD-Docs are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Changed
+- Separators work as in Obsidian: `***` and `___` (and spaced forms such as
+  `* * *`) draw a rule as `---` does, the rule sits centred in its line, and
+  while the cursor is on the line only the raw markers show, with no rule
+  underneath.
+
 ## [0.5.0] - 2026-10-31
 
 ### Added

@@ -255,12 +255,29 @@ test('spaced (`- - -`) and indented (`   ---`) breaks render a separator', () =>
   assert.ok(hasRule(decorate('   ---\nbody', 8)), 'up to 3 leading spaces');
 });
 
-test('false positive: `***` / `___` breaks are minus-only, so no separator', () => {
-  // CommonMark calls these thematic breaks too, but this editor deliberately
-  // only draws a rule for minuses.
-  assert.ok(!hasRule(decorate('***\nbody', 5)), 'asterisk break stays text');
-  assert.ok(!hasRule(decorate('___\nbody', 5)), 'underscore break stays text');
-  assert.ok(!hasRule(decorate('*** \n* * *\nbody', 11)), 'spaced asterisks too');
+test('`***`, `___` and spaced variants render a separator, like Obsidian', () => {
+  for (const src of ['***', '****', '* * *', '___', '____', '_ _ _']) {
+    const decos = decorate(`${src}\nbody`, src.length + 2); // cursor on line 2
+    assert.ok(hasRule(decos), `${src} is a rule`);
+    assert.ok(
+      hiddenMarkers(decos).some((d) => d.from === 0 && d.to === src.length),
+      `${src}: markers hidden`,
+    );
+  }
+});
+
+test('false positive: mixed markers or fewer than three are not a separator', () => {
+  assert.ok(!hasRule(decorate('**\nbody', 4)), '`**` is not a break');
+  assert.ok(!hasRule(decorate('*-*\nbody', 5)), 'mixed markers');
+  assert.ok(!hasRule(decorate('_*_\nbody', 5)), 'mixed underscore and asterisk');
+  assert.ok(!hasRule(decorate('*** text\nbody', 11)), 'trailing text');
+});
+
+test('a rule after a list marker stays text; one inside a quote is drawn', () => {
+  // The rule is a line-wide stripe, which would strike through `1.` or `-`.
+  assert.ok(!hasRule(decorate('1. ___\nbody', 8)), 'ordered list item');
+  assert.ok(!hasRule(decorate('- ***\nbody', 7)), 'bullet list item');
+  assert.ok(hasRule(decorate('> * * *\nbody', 9)), 'blockquote');
 });
 
 test('false positive: fewer than three minuses is not a separator', () => {
@@ -282,13 +299,14 @@ test('false positive: `---` inside a fenced code block is not a separator', () =
   assert.ok(!hasRule(decorate('```\n---\n```\nbody', 13)), 'fenced code content');
 });
 
-test('reveal on cursor: raw `---` stays visible when the cursor is on the line', () => {
+test('reveal on cursor: raw `---` shows with no rule under it while the cursor is on the line', () => {
   const on = decorate('---\nbody', 1); // cursor inside the rule line
-  assert.ok(hasRule(on), 'md-hr class persists while editing');
+  assert.ok(!hasRule(on), 'no md-hr line class while editing (Obsidian-style)');
   assert.ok(
     !hiddenMarkers(on).some((d) => d.from === 0 && d.to === 3),
     'markers revealed when the cursor is on the line',
   );
+  assert.ok(hasRule(decorate('---\nbody', 6)), 'the rule returns once the cursor leaves the line');
 });
 
 test('fenced code block gets a copy button carrying the body without fences', () => {
