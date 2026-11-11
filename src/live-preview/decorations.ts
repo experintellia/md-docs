@@ -476,9 +476,12 @@ export function buildDecorations(view: EditorView): DecorationSet {
         //     alone, as in Obsidian: no rule underneath until the cursor
         //     leaves the line.
         if (name === 'HorizontalRule') {
-          if (!/^\s*([-*_])(\s*\1){2,}\s*$/.test(doc.sliceString(node.from, node.to))) return;
           if (lineHasSelection(state, node.from)) return;
           const line = doc.lineAt(node.from);
+          // ponytail: a rule after a list marker (`1. ___`, `- ***`) stays
+          // text, since the line-wide stripe would strike through the marker.
+          // A widget replacing just the markers would draw it if anyone asks.
+          if (!/^[\s>]*$/.test(doc.sliceString(line.from, node.from))) return;
           ranges.push(Decoration.line({ class: 'md-hr' }).range(line.from));
           ranges.push(hidden.range(node.from, node.to));
           return;

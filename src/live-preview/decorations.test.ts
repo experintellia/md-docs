@@ -273,6 +273,13 @@ test('false positive: mixed markers or fewer than three are not a separator', ()
   assert.ok(!hasRule(decorate('*** text\nbody', 11)), 'trailing text');
 });
 
+test('a rule after a list marker stays text; one inside a quote is drawn', () => {
+  // The rule is a line-wide stripe, which would strike through `1.` or `-`.
+  assert.ok(!hasRule(decorate('1. ___\nbody', 8)), 'ordered list item');
+  assert.ok(!hasRule(decorate('- ***\nbody', 7)), 'bullet list item');
+  assert.ok(hasRule(decorate('> * * *\nbody', 9)), 'blockquote');
+});
+
 test('false positive: fewer than three minuses is not a separator', () => {
   assert.ok(!hasRule(decorate('--\nbody', 4)), '`--` is not a break');
   assert.ok(!hasRule(decorate('-\nbody', 3)), 'a lone `-` is a list bullet');
