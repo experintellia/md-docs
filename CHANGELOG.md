@@ -10,7 +10,8 @@ All notable changes to MD-Docs are documented here. This project adheres to
   bold, italic and strikethrough. A color emoji right after the opening `==`
   picks the color: `==🔴Important==` is red, 🟠 orange, 🟡 yellow, 🟢 green,
   🔵 blue, 🟣 purple. The `==` and the emoji are hidden off the line, as the
-  other markup is. Right after an opening `==` a menu offers the six colors,
+  other markup is. Right after an opening `==` a menu offers the six colors
+  (↓ steps into it, ← → choose, Enter picks, Esc closes it),
   and a Highlight button joins the toolbar. Highlights are drawn in table
   cells too.
 - Footnotes, as in Obsidian: `text[^1]` shows a superscript number, and

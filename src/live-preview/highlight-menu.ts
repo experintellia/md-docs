@@ -1,10 +1,12 @@
 import { syntaxTree } from '@codemirror/language';
-import { type EditorState, StateField } from '@codemirror/state';
-import { type EditorView, showTooltip, type Tooltip } from '@codemirror/view';
+import { type EditorState, type Extension, Prec, StateEffect, StateField } from '@codemirror/state';
+import { EditorView, keymap, showTooltip, type Tooltip } from '@codemirror/view';
 import { HIGHLIGHT_COLORS } from './highlight.ts';
 
 // Where `==` is no markup.
 const NOT_PROSE = /Code|Math|HTML|Comment/;
+
+const COLORS = Object.entries(HIGHLIGHT_COLORS);
 
 /**
  * Where the color menu shows: at the caret, when it sits right after the
@@ -34,45 +36,151 @@ export function colorMenuAt(state: EditorState): number | null {
   return before === '' || /[\s\p{P}\p{S}]/u.test(before) ? head : null;
 }
 
-function menu(view: EditorView): HTMLElement {
+interface Menu {
+  pos: number;
+  /** The color the arrow keys are on, or null while typing goes to the text. */
+  active: number | null;
+  /** Closed with Escape, until the text or the caret moves on. */
+  dismissed: boolean;
+  tooltip: Tooltip;
+}
+
+const setActive = StateEffect.define<number | null>();
+const dismiss = StateEffect.define<null>();
+
+const optionId = (i: number): string => `md-hl-color-${i}`;
+
+// Put the color in, after the `==`, and the caret after it.
+function pick(view: EditorView, i: number): boolean {
+  const at = colorMenuAt(view.state);
+  const emoji = COLORS[i]?.[0];
+  if (at === null || !emoji) return false;
+  view.dispatch({ changes: { from: at, insert: emoji }, selection: { anchor: at + emoji.length } });
+  view.focus();
+  return true;
+}
+
+function menuDom(view: EditorView): { dom: HTMLElement; update: () => void } {
+  // A listbox the caret stays out of: the arrow keys move its selection from
+  // the editor, which points a screen reader at it with aria-activedescendant.
   const dom = document.createElement('div');
   dom.className = 'md-hl-menu';
-  dom.setAttribute('role', 'toolbar');
+  dom.setAttribute('role', 'listbox');
   dom.setAttribute('aria-label', 'Highlight color');
-  for (const [emoji, color] of Object.entries(HIGHLIGHT_COLORS)) {
+  dom.setAttribute('aria-orientation', 'horizontal');
+  const buttons = COLORS.map(([emoji, color], i) => {
     const btn = dom.appendChild(document.createElement('button'));
     btn.type = 'button';
+    btn.tabIndex = -1;
+    btn.id = optionId(i);
     btn.textContent = emoji;
     btn.title = color;
+    btn.setAttribute('role', 'option');
     btn.setAttribute('aria-label', `${color} highlight`);
     // Keep the caret, and a phone's keyboard, in the editor.
     btn.addEventListener('mousedown', (event) => event.preventDefault());
-    btn.addEventListener('click', () => {
-      const at = colorMenuAt(view.state);
-      if (at === null) return;
-      view.dispatch({ changes: { from: at, insert: emoji }, selection: { anchor: at + emoji.length } });
-      view.focus();
+    btn.addEventListener('click', () => pick(view, i));
+    return btn;
+  });
+  const update = (): void => {
+    const active = view.state.field(menuField)?.active ?? null;
+    buttons.forEach((btn, i) => {
+      btn.setAttribute('aria-selected', String(i === active));
+      btn.classList.toggle('md-hl-active', i === active);
     });
-  }
-  return dom;
+  };
+  update();
+  return { dom, update };
 }
 
-function tooltipAt(state: EditorState, current: Tooltip | null): Tooltip | null {
-  const pos = colorMenuAt(state);
-  if (pos === null) return null;
-  // The same menu while the caret stays put, rather than a new one per update.
-  if (current?.pos === pos) return current;
-  return { pos, create: (view) => ({ dom: menu(view) }) };
+function fresh(pos: number): Menu {
+  return { pos, active: null, dismissed: false, tooltip: { pos, create: (view) => menuDom(view) } };
 }
+
+const menuField = StateField.define<Menu | null>({
+  create: (state) => {
+    const pos = colorMenuAt(state);
+    return pos === null ? null : fresh(pos);
+  },
+  update: (value, tr) => {
+    if (tr.docChanged || tr.selection || tr.startState.readOnly !== tr.state.readOnly
+      || syntaxTree(tr.state) !== syntaxTree(tr.startState)) {
+      const pos = colorMenuAt(tr.state);
+      if (pos === null) return null;
+      // The same menu while the caret stays put, its arrow-key choice and an
+      // Escape included, rather than a new one per update.
+      value = !tr.docChanged && value?.pos === pos ? value : fresh(pos);
+    }
+    for (const effect of tr.effects) {
+      if (!value) break;
+      if (effect.is(setActive)) value = { ...value, active: effect.value };
+      if (effect.is(dismiss)) value = { ...value, active: null, dismissed: true };
+    }
+    return value;
+  },
+  provide: (field) => [
+    showTooltip.compute([field], (state) => {
+      const menu = state.field(field);
+      return menu && !menu.dismissed ? menu.tooltip : null;
+    }),
+    EditorView.contentAttributes.compute([field], (state): Record<string, string> => {
+      const active = state.field(field)?.active ?? null;
+      return active === null ? {} : { 'aria-activedescendant': optionId(active) };
+    }),
+  ],
+});
+
+// The menu as the keys see it: open, and where its selection is.
+function open(view: EditorView): Menu | null {
+  const menu = view.state.field(menuField);
+  return menu && !menu.dismissed ? menu : null;
+}
+
+const move = (step: number) => (view: EditorView): boolean => {
+  const active = open(view)?.active ?? null;
+  if (active === null) return false;
+  view.dispatch({ effects: setActive.of((active + step + COLORS.length) % COLORS.length) });
+  return true;
+};
+
+const choose = (view: EditorView): boolean => {
+  const active = open(view)?.active ?? null;
+  return active !== null && pick(view, active);
+};
+
+// Until ArrowDown steps into the menu, every key goes to the text as usual:
+// Enter after `==` still starts a new line.
+const menuKeymap = Prec.highest(keymap.of([
+  {
+    key: 'ArrowDown',
+    run: (view) => {
+      const menu = open(view);
+      if (!menu) return false;
+      if (menu.active === null) view.dispatch({ effects: setActive.of(0) });
+      return true;
+    },
+  },
+  {
+    key: 'ArrowUp',
+    run: (view) => {
+      if ((open(view)?.active ?? null) === null) return false;
+      view.dispatch({ effects: setActive.of(null) });
+      return true;
+    },
+  },
+  { key: 'ArrowRight', run: move(1) },
+  { key: 'ArrowLeft', run: move(-1) },
+  { key: 'Enter', run: choose },
+  { key: 'Space', run: choose },
+  {
+    key: 'Escape',
+    run: (view) => {
+      if (!open(view)) return false;
+      view.dispatch({ effects: dismiss.of(null) });
+      return true;
+    },
+  },
+]));
 
 /** The highlight color menu, as Obsidian suggests the colors after `==`. */
-export const highlightMenu = StateField.define<Tooltip | null>({
-  create: (state) => tooltipAt(state, null),
-  update: (value, tr) => (
-    tr.docChanged || tr.selection || tr.startState.readOnly !== tr.state.readOnly
-      || syntaxTree(tr.state) !== syntaxTree(tr.startState)
-      ? tooltipAt(tr.state, value)
-      : value
-  ),
-  provide: (field) => showTooltip.from(field),
-});
+export const highlightMenu: Extension = [menuField, menuKeymap];

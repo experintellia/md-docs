@@ -368,9 +368,9 @@ test('the Highlight button wraps the selection in ==', async ({ page, isMobile }
 
 test('after an opening ==, a menu picks the highlight color', async ({ page, isMobile }) => {
   await page.keyboard.insertText('a ==');
-  const menu = page.getByRole('toolbar', { name: 'Highlight color' });
+  const menu = page.getByRole('listbox', { name: 'Highlight color' });
   await expect(menu).toBeVisible();
-  await press(menu.getByRole('button', { name: 'purple highlight' }), isMobile);
+  await press(menu.getByRole('option', { name: 'purple highlight' }), isMobile);
   await expect(menu).toHaveCount(0);
   await page.keyboard.insertText('idea==');
   // A closing `==` opens no menu.
@@ -379,10 +379,53 @@ test('after an opening ==, a menu picks the highlight color', async ({ page, isM
   await expect(page.locator('.md-highlight-purple')).toHaveText('idea');
 });
 
+test('the arrow keys pick a highlight color from the menu', async ({ page }) => {
+  await page.keyboard.insertText('a ==');
+  const menu = page.getByRole('listbox', { name: 'Highlight color' });
+  await expect(menu).toBeVisible();
+  // Until ArrowDown steps in, nothing in the menu is chosen.
+  await expect(menu.locator('[aria-selected="true"]')).toHaveCount(0);
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('option', { selected: true })).toHaveAccessibleName('red highlight');
+  await expect(page.locator('.cm-content')).toHaveAttribute('aria-activedescendant', 'md-hl-color-0');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(menu.getByRole('option', { selected: true })).toHaveAccessibleName('yellow highlight');
+  // ArrowLeft wraps from the first color to the last.
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect(menu.getByRole('option', { selected: true })).toHaveAccessibleName('purple highlight');
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCount(0);
+  await page.keyboard.insertText('idea==');
+  await page.keyboard.press('Enter');
+  // On Android CodeMirror runs Enter a moment later, so wait for its new line.
+  await expect(page.locator('.cm-line')).toHaveCount(2);
+  await page.keyboard.insertText('next');
+  await expect(page.locator('.md-highlight-purple')).toHaveText('idea');
+});
+
+test('the color menu leaves Enter and the arrows alone until ArrowDown, and Escape closes it', async ({ page }) => {
+  await page.keyboard.insertText('a ==');
+  const menu = page.getByRole('listbox', { name: 'Highlight color' });
+  await expect(menu).toBeVisible();
+  // ArrowUp in the text moves nothing in the menu; Escape closes it.
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowRight');
+  // Back after the `==`, it offers the colors again; Enter is a new line.
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCount(0);
+  await expect(page.locator('.cm-line')).toHaveCount(2);
+});
+
 test('the Highlight button with no selection offers the colors', async ({ page, isMobile }) => {
   await press(page.getByRole('button', { name: 'Highlight' }), isMobile);
-  const menu = page.getByRole('toolbar', { name: 'Highlight color' });
-  await press(menu.getByRole('button', { name: 'red highlight' }), isMobile);
+  const menu = page.getByRole('listbox', { name: 'Highlight color' });
+  await press(menu.getByRole('option', { name: 'red highlight' }), isMobile);
   await page.keyboard.insertText('hot');
   await page.keyboard.press('End');
   await page.keyboard.insertText('\n\nnext');

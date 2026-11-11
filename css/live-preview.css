@@ -76,7 +76,9 @@
   background: none;
   cursor: pointer;
 }
-.md-hl-menu button:hover, .md-hl-menu button:focus-visible { background: var(--code-bg); }
+.md-hl-menu button:hover { background: var(--code-bg); }
+/* The color the arrow keys are on. */
+.md-hl-menu button.md-hl-active { background: var(--code-bg); outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* Thematic break (`---`, `***`, `___`): the markers are hidden, so the line itself is the
    rule. Not drawn while the cursor is on the line: there the raw `---` shows

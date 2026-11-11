@@ -211,7 +211,7 @@ function buildHelp(): HTMLElement {
           <tr><td><code>**bold**</code></td><td>Bold text (${ico(faBold)})</td></tr>
           <tr><td><code>*italic*</code></td><td>Italic text (${ico(faItalic)})</td></tr>
           <tr><td><code>~~text~~</code></td><td>Strikethrough</td></tr>
-          <tr><td><code>==text==</code></td><td>Highlight (${ico(faHighlighter)}); right after the <code>==</code>, pick a color from the menu, or type 🔴 🟠 🟡 🟢 🔵 🟣</td></tr>
+          <tr><td><code>==text==</code></td><td>Highlight (${ico(faHighlighter)}); right after the <code>==</code>, pick a color from the menu (or press <kbd>↓</kbd>, then <kbd>←</kbd> <kbd>→</kbd> and <kbd>Enter</kbd>), or type 🔴 🟠 🟡 🟢 🔵 🟣</td></tr>
           <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
           <tr><td><code>[text](url)</code></td><td>Link</td></tr>
           <tr><td><code>$x^2$</code></td><td>Math (LaTeX) in the text</td></tr>
