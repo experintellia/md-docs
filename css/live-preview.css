@@ -24,9 +24,10 @@
 
 /* Thematic break (`---`): the markers are hidden, so the line itself is the
    rule. Not drawn while the cursor is on the line: there the raw `---` shows
-   alone, as in Obsidian. */
+   alone, as in Obsidian. A 2px stripe at mid-height, not a border, so the rule
+   sits centred in the line rather than under it. */
 .cm-line.md-hr {
-  border-bottom: 2px solid var(--border);
+  background: linear-gradient(var(--border), var(--border)) center / 100% 2px no-repeat;
 }
 
 /* Blockquote. The bar's side is physical on purpose, and stated by the class
