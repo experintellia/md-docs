@@ -271,3 +271,19 @@ test('a read-mode switch reaches the same user’s other device, and no one else
   // Two silent updates from alice, nothing from bob, no info lines.
   expect(await chat(page)).toEqual(['alice', 'alice']);
 });
+
+test('Ctrl+Z in read mode changes nothing and publishes nothing', async ({ page, isMobile }) => {
+  // Found in the #59 edge-case run (and present since read mode shipped): the
+  // browser's own undo reached y-codemirror, which undid the session's edits.
+  await open(page);
+  await write(page, 'hello');
+  await page.reload(); // publish the edit, so anything later would show
+  await write(page, ' world');
+  await press(page.getByTitle('Toggle read / edit mode'), isMobile);
+  await page.keyboard.press('ControlOrMeta+z');
+  await page.waitForTimeout(300);
+  await expect(editor(page)).toContainText('hello world');
+  await page.reload(); // what was published is what peers get
+  await expect(editor(page)).toContainText('hello world');
+});
+

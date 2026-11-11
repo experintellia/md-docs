@@ -1,4 +1,4 @@
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, Prec, type Extension } from '@codemirror/state';
 import {
   EditorView,
   keymap,
@@ -60,6 +60,16 @@ export function baseExtensions(collab?: Collab): Extension[] {
     : [history(), keymap.of(historyKeymap)];
 
   return [
+    // The browser's own undo and redo (Ctrl+Z, the Edit menu, iOS shake) come
+    // as beforeinput events, which y-codemirror turns into an undo without
+    // checking readOnly. In read mode nothing may change, so drop them first.
+    Prec.highest(EditorView.domEventHandlers({
+      beforeinput: (e, view) => {
+        if (!view.state.readOnly) return false;
+        e.preventDefault();
+        return true;
+      },
+    })),
     ...undo,
     drawSelection(),
     dropCursor(),

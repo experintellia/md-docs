@@ -257,6 +257,41 @@ test('going into read mode takes our caret off peers\' screens', () => {
   }
 });
 
+test('in read mode the browser’s own undo changes nothing', () => {
+  // Ctrl+Z, the Edit menu and iOS shake reach the editor as a beforeinput
+  // event, which y-codemirror handles itself (#59 edge-case run).
+  const container = reset();
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('t');
+  const awareness = new Awareness(ydoc);
+  const collab = {
+    ydoc, ytext, awareness, undoManager: new Y.UndoManager(ytext),
+    readMode: createReadModePref(createChatLog().link('me@example.com'), 0),
+  } as unknown as Collab;
+  const view = createEditor(document.body, '', [], collab);
+  const nativeUndo = (): void => {
+    view.contentDOM.dispatchEvent(new window.InputEvent('beforeinput', {
+      inputType: 'historyUndo', bubbles: true, cancelable: true,
+    }) as unknown as Event);
+  };
+  try {
+    mountToolbar(container, view, collab);
+    view.dispatch({ changes: { from: 0, insert: 'hello' } });
+    btnByTitle(container, 'Toggle read / edit mode').click();
+    nativeUndo();
+    assert.equal(view.state.doc.toString(), 'hello', 'read mode: unchanged');
+    assert.equal(ytext.toString(), 'hello', 'and nothing reaches peers');
+
+    btnByTitle(container, 'Toggle read / edit mode').click();
+    nativeUndo();
+    assert.equal(view.state.doc.toString(), '', 'edit mode: the same event does undo');
+  } finally {
+    view.destroy();
+    awareness.destroy(); // its timer would keep the test process alive
+    ydoc.destroy();
+  }
+});
+
 /** One device of `me`, on the chat's log. Its editor has its own text; only the
  *  read-mode choice is shared, through the log. */
 function device(chat: ReturnType<typeof createChatLog>, me: string): {
