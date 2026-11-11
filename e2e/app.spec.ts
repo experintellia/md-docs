@@ -324,6 +324,71 @@ test('a footnote reads as a superscript number, and its definition as a note', a
   await expect(page.locator('.cm-line.md-footnote-def')).toHaveText('[^1]: the text');
 });
 
+test('a tap on a footnote reference goes to its note while editing', async ({ page }) => {
+  await page.keyboard.insertText('see[^1] here\n\nmiddle\n\n[^1]: the note\n\nend');
+  await page.locator('.md-footnote-ref').click();
+  // The caret lands at the start of the note's text.
+  await page.keyboard.insertText('X');
+  await expect(page.locator('.cm-line.md-footnote-def')).toHaveText('[^1]: Xthe note');
+});
+
+test('read mode numbers the footnotes and lists them at the end', async ({ page, isMobile }) => {
+  await page.keyboard.insertText(
+    'b[^b] a[^a] again[^b] inline^[in place]\n\n[^a]: note a\n[^b]: note **b**\n\nlast line',
+  );
+  await press(page.getByRole('button', { name: 'Toggle read / edit mode' }), isMobile);
+  // Numbered by first reference, named ones too; the inline note joins in.
+  await expect(page.locator('sup.md-footnote-ref')).toHaveText(['1', '2', '1', '3']);
+  await expect(page.locator('.md-footnote-def')).toHaveCount(0);
+  const items = page.locator('.md-footnotes li');
+  await expect(items).toHaveText(['note b↩', 'note a↩', 'in place↩']);
+  await expect(items.nth(0).locator('.md-strong')).toHaveText('b');
+  await page.locator('sup.md-footnote-ref').nth(1).click();
+  await expect(items.nth(1)).toHaveClass(/md-footnote-flash/);
+  // Back to editing, the definitions are where they were written.
+  await press(page.getByRole('button', { name: 'Toggle read / edit mode' }), isMobile);
+  await expect(page.locator('.md-footnotes')).toHaveCount(0);
+  await expect(page.locator('.md-footnote-def')).toHaveCount(2);
+});
+
+test('a table cell draws a colored highlight and a footnote reference', async ({ page }) => {
+  await page.keyboard.insertText('| a |\n|---|\n| ==🔴x== y[^1] |\n\n[^1]: note\n\nend');
+  const cell = page.locator('.md-table td');
+  await expect(cell.locator('.md-highlight-red')).toHaveText('x');
+  await expect(cell.locator('sup.md-footnote-ref')).toHaveText('1');
+  await expect(cell).toHaveText('x y1');
+});
+
+test('the Highlight button wraps the selection in ==', async ({ page, isMobile }) => {
+  await page.keyboard.insertText('word');
+  await page.keyboard.press('ControlOrMeta+a');
+  await press(page.getByRole('button', { name: 'Highlight' }), isMobile);
+  await expect(page.locator('.md-highlight')).toHaveText('==word==');
+});
+
+test('after an opening ==, a menu picks the highlight color', async ({ page, isMobile }) => {
+  await page.keyboard.insertText('a ==');
+  const menu = page.getByRole('toolbar', { name: 'Highlight color' });
+  await expect(menu).toBeVisible();
+  await press(menu.getByRole('button', { name: 'purple highlight' }), isMobile);
+  await expect(menu).toHaveCount(0);
+  await page.keyboard.insertText('idea==');
+  // A closing `==` opens no menu.
+  await expect(menu).toHaveCount(0);
+  await page.keyboard.insertText('\n\nnext');
+  await expect(page.locator('.md-highlight-purple')).toHaveText('idea');
+});
+
+test('the Highlight button with no selection offers the colors', async ({ page, isMobile }) => {
+  await press(page.getByRole('button', { name: 'Highlight' }), isMobile);
+  const menu = page.getByRole('toolbar', { name: 'Highlight color' });
+  await press(menu.getByRole('button', { name: 'red highlight' }), isMobile);
+  await page.keyboard.insertText('hot');
+  await page.keyboard.press('End');
+  await page.keyboard.insertText('\n\nnext');
+  await expect(page.locator('.md-highlight-red')).toHaveText('hot');
+});
+
 test('a negative size in TeX cannot make its line endlessly tall', async ({ page }) => {
   // KaTeX caps positive sizes only: this made a line 33 million px tall.
   await page.keyboard.insertText(String.raw`a $\raisebox{-99999999em}{X}$ b` + '\n\n$$\\rule[-99999em]{1em}{1em}$$\n\nafter');

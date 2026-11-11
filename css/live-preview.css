@@ -41,6 +41,42 @@
 .md-footnote-label { color: var(--muted); }
 .cm-line.md-footnote-def { font-size: 0.92em; }
 .md-footnote-inline { font-size: 0.85em; color: var(--muted); }
+[data-fn-label], [data-fn-n] { cursor: pointer; }
+
+/* Read mode lists the footnotes at the end, as Obsidian's reading view does. */
+.md-footnotes {
+  margin-top: 1.5em;
+  padding-top: 0.5em;
+  border-top: 1px solid var(--border);
+  font-size: 0.92em;
+  white-space: normal;
+}
+.md-footnotes ol { margin: 0; padding-inline-start: 1.6em; }
+.md-footnotes li { padding: 0.1em 0.3em; border-radius: 4px; }
+.md-footnote-back { margin-inline-start: 0.4em; color: var(--accent); text-decoration: none; }
+.md-footnote-flash { animation: md-footnote-flash 1.2s ease-out; }
+@keyframes md-footnote-flash { from { background: var(--hl-yellow); } to { background: transparent; } }
+
+/* The highlight color menu at the caret after `==`. */
+/* `.cm-editor` outranks CodeMirror's own tooltip theme. */
+.cm-editor .cm-tooltip.md-hl-menu {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+.md-hl-menu { display: flex; gap: 2px; padding: 3px; }
+.md-hl-menu button {
+  font-size: 1.1em;
+  line-height: 1;
+  min-width: 36px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+.md-hl-menu button:hover, .md-hl-menu button:focus-visible { background: var(--code-bg); }
 
 /* Thematic break (`---`, `***`, `___`): the markers are hidden, so the line itself is the
    rule. Not drawn while the cursor is on the line: there the raw `---` shows

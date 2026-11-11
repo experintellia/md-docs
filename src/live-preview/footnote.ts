@@ -1,3 +1,5 @@
+import { syntaxTree } from '@codemirror/language';
+import { type EditorState, StateField } from '@codemirror/state';
 import { tags } from '@lezer/highlight';
 import type { BlockContext, Element, Line, MarkdownConfig } from '@lezer/markdown';
 
@@ -111,3 +113,92 @@ export const footnote: MarkdownConfig = {
     },
   }],
 };
+
+// The lezer node type, read off the API: `@lezer/common` is not a declared
+// dependency (as in decorations.ts).
+type SyntaxNode = ReturnType<ReturnType<typeof syntaxTree>['resolveInner']>;
+
+/** A footnote as read mode lists it: its number, where it is first referred
+ *  to, and the node holding its text (the definition, or the `^[note]`). */
+export interface Note {
+  n: number;
+  ref: number;
+  body: SyntaxNode;
+}
+
+export interface FootnoteIndex {
+  /** The definition of each label: the first, if a label is defined twice. */
+  defs: Map<string, SyntaxNode>;
+  /** Every definition, for read mode to hide. */
+  allDefs: SyntaxNode[];
+  /** The number of each defined label, in the order of first reference. */
+  numbers: Map<string, number>;
+  /** The number of each reference and inline footnote, by where it starts. */
+  numberAt: Map<number, number>;
+  notes: Note[];
+}
+
+/**
+ * Number the footnotes as Obsidian's reading view does: by first reference,
+ * named ones too, and `^[inline]` notes in the same sequence. A reference to a
+ * label that is defined nowhere gets no number, and a definition nothing
+ * refers to is not listed.
+ *
+ * ponytail: a walk of the whole tree per parse, as the table and math fields
+ * already do per transaction.
+ */
+export function footnoteIndex(state: EditorState): FootnoteIndex {
+  const doc = state.doc;
+  const defs = new Map<string, SyntaxNode>();
+  const allDefs: SyntaxNode[] = [];
+  const refs: { from: number; label: string | null; node: SyntaxNode }[] = [];
+  syntaxTree(state).iterate({
+    enter: (n) => {
+      if (n.name === 'FootnoteDefinition') {
+        const label = n.node.getChild('FootnoteLabel');
+        if (label) {
+          const text = doc.sliceString(label.from, label.to);
+          if (!defs.has(text)) defs.set(text, n.node);
+        }
+        allDefs.push(n.node);
+        return false;
+      }
+      if (n.name === 'FootnoteReference') {
+        const label = n.node.getChild('FootnoteLabel');
+        if (label) refs.push({ from: n.from, label: doc.sliceString(label.from, label.to), node: n.node });
+        return false;
+      }
+      if (n.name === 'InlineFootnote') {
+        refs.push({ from: n.from, label: null, node: n.node });
+        return false;
+      }
+    },
+  });
+  const numbers = new Map<string, number>();
+  const numberAt = new Map<number, number>();
+  const notes: Note[] = [];
+  for (const ref of refs) {
+    let n = ref.label === null ? undefined : numbers.get(ref.label);
+    if (n === undefined) {
+      const body = ref.label === null ? ref.node : defs.get(ref.label);
+      if (!body) continue;
+      n = notes.length + 1;
+      notes.push({ n, ref: ref.from, body });
+      if (ref.label !== null) numbers.set(ref.label, n);
+    }
+    numberAt.set(ref.from, n);
+  }
+  return { defs, allDefs, numbers, numberAt, notes };
+}
+
+/** The footnote index of the current tree, kept up to date as it changes. */
+export const footnoteField = StateField.define<FootnoteIndex>({
+  create: footnoteIndex,
+  update: (value, tr) => (syntaxTree(tr.state) !== syntaxTree(tr.startState) ? footnoteIndex(tr.state) : value),
+});
+
+/** The index from the field, or worked out on the spot where the field is not
+ *  installed (a bare state, as in the unit tests). */
+export function footnotes(state: EditorState): FootnoteIndex {
+  return state.field(footnoteField, false) ?? footnoteIndex(state);
+}

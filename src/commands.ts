@@ -39,6 +39,7 @@ function toggleWrap(marker: string): Command {
 export const toggleBold = toggleWrap('**');
 export const toggleItalic = toggleWrap('*');
 export const toggleInlineCode = toggleWrap('`');
+export const toggleHighlight = toggleWrap('==');
 
 /** Cycle the current line's heading level: none -> H1 -> H2 -> H3 -> none. */
 export const cycleHeading: Command = (view) => {
