@@ -160,3 +160,41 @@ test('on a phone the status line clears the toolbar and tasks are big enough to 
     parseFloat(getComputedStyle(box).fontSize) / parseFloat(getComputedStyle(box.parentElement!).fontSize));
   expect(scale, 'checkbox is the desktop size').toBeGreaterThan(1.3);
 });
+
+test('on a narrow phone only the editing commands scroll, not the buttons at the end', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'touch layout');
+  // The whole toolbar used to scroll, so the read toggle and ⋮ bounced along
+  // with the commands on iOS, held at the edge only by position: sticky.
+  await page.setViewportSize({ width: 300, height: 640 });
+  await open(page);
+  const cmds = page.locator('.md-tool-cmds');
+  const end = page.locator('.md-tool-end');
+  expect(await page.locator('#toolbar').evaluate((el) => el.scrollWidth <= el.clientWidth), 'toolbar scrolls').toBe(true);
+  expect(await cmds.evaluate((el) => el.scrollWidth > el.clientWidth), 'commands overflow at 300px').toBe(true);
+  const before = (await end.boundingBox())!;
+  await cmds.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+  expect((await end.boundingBox())!.x).toBe(before.x);
+  // The last command can be scrolled to, out from under the end group.
+  const last = (await page.getByRole('button', { name: 'Indent list item' }).boundingBox())!;
+  expect(last.x + last.width).toBeLessThanOrEqual(before.x + 1);
+});
+
+test('the toolbar fades the side its commands scroll on to', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'touch layout');
+  const cmds = page.locator('.md-tool-cmds');
+  const mask = (): Promise<string> => cmds.evaluate((el) => getComputedStyle(el).maskImage);
+  await open(page);
+  // Everything fits at the phone's width: nothing to hint at.
+  await expect(cmds).not.toHaveClass(/more-/);
+  expect(await mask()).toBe('none');
+  await page.setViewportSize({ width: 300, height: 640 });
+  await expect(cmds).toHaveClass(/\bmore-after\b/);
+  await expect(cmds).not.toHaveClass(/more-before/);
+  expect(await mask()).toContain('linear-gradient');
+  await cmds.evaluate((el) => { el.scrollLeft = 40; });
+  await expect(cmds).toHaveClass(/more-before.*more-after|more-after.*more-before/);
+  // At the end the last button is not faded, only the side scrolled past.
+  await cmds.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+  await expect(cmds).toHaveClass(/\bmore-before\b/);
+  await expect(cmds).not.toHaveClass(/more-after/);
+});

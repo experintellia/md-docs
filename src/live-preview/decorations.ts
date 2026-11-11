@@ -7,6 +7,9 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from '@codemirror/view';
+import { footnotes } from './footnote.ts';
+import { HIGHLIGHT_COLORS } from './highlight.ts';
+import { FootnoteListWidget, FootnoteRefWidget, followFootnote } from './widgets/footnote.ts';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
@@ -31,19 +34,33 @@ const INLINE_MARK_CLASS: Record<string, string> = {
   Emphasis: 'md-emphasis',
   InlineCode: 'md-inline-code',
   Strikethrough: 'md-strike',
+  Highlight: 'md-highlight',
+  InlineFootnote: 'md-footnote-inline',
 };
+
+// A highlight's color, from the emoji right after its `==`, or undefined.
+function highlightColor(node: { from: number }, doc: Text): string | undefined {
+  return HIGHLIGHT_COLORS[doc.sliceString(node.from + 2, node.from + 4)];
+}
+
+const highlightClass = (color: string | undefined): string =>
+  (color ? `md-highlight md-highlight-${color}` : 'md-highlight');
 
 // Syntax-marker nodes that get hidden (unless revealed on the active line).
 const HIDDEN_MARKS = new Set([
   'EmphasisMark',
   'CodeMark',
   'StrikethroughMark',
+  'HighlightMark',
   'HeaderMark',
   'QuoteMark',
   'LinkMark',
   // `[text](url "the title")` — the title belongs to the destination, so it is
   // hidden with it rather than leaking into the rendered text.
   'LinkTitle',
+  // The `[^` and `]` of a reference, and the `^[` and `]` of an inline footnote.
+  // A definition's marker is not hidden: see the footnote branch below.
+  'FootnoteMark',
 ]);
 
 const hidden = Decoration.replace({});
@@ -172,7 +189,7 @@ const dirDeco = {
 
 // The lezer node type, read off the API instead of imported: `@lezer/common` is
 // a transitive dependency here, not one this package declares.
-type SyntaxNodeLike = ReturnType<ReturnType<typeof syntaxTree>['resolveInner']>;
+export type SyntaxNodeLike = ReturnType<ReturnType<typeof syntaxTree>['resolveInner']>;
 
 // Does the selection touch anything between `from` and `to`? Blocks reveal
 // their source on the same rule single lines do, just over a range.
@@ -219,7 +236,11 @@ function inDefinition(node: SyntaxNodeLike): boolean {
 // A cell's text, split where the live preview would paint it differently. The
 // markers that produce the formatting are dropped, the rest keeps the same
 // `md-*` classes the editor uses everywhere else.
-function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] {
+//
+// `numberAt` (read mode only) turns footnote references into their numbers.
+function cellSegments(
+  cell: SyntaxNodeLike, doc: Text, cls?: string, numberAt?: Map<number, number>,
+): Segment[] {
   const out: Segment[] = [];
   let pos = cell.from;
   for (let child = cell.firstChild; child; child = child.nextSibling) {
@@ -250,6 +271,28 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
       out.push(tex ? { text, math: { tex, display: child.name === 'DisplayMath' } } : { text, cls });
       continue;
     }
+    if (child.name === 'Highlight') {
+      const color = highlightColor(child, doc);
+      const inner = cellSegments(child, doc, highlightClass(color), numberAt);
+      // The emoji is the start of the first segment, right after the hidden `==`.
+      if (color && inner[0]) inner[0] = { ...inner[0], text: inner[0].text.slice(2) };
+      out.push(...inner.filter((seg) => seg.text !== '' || seg.href !== undefined));
+      continue;
+    }
+    if (child.name === 'FootnoteReference' || child.name === 'InlineFootnote') {
+      const labelNode = child.getChild('FootnoteLabel');
+      const label = labelNode ? doc.sliceString(labelNode.from, labelNode.to) : null;
+      const n = numberAt?.get(child.from) ?? null;
+      if (n !== null) {
+        out.push({ text: String(n), cls: 'md-footnote-ref', fn: { label, n } });
+      } else if (label !== null) {
+        out.push({ text: label, cls: 'md-footnote-ref', fn: { label, n } });
+      } else {
+        out.push(...cellSegments(child, doc, 'md-footnote-inline'));
+      }
+      continue;
+    }
+    if (child.name === 'FootnoteLabel' && child.parent?.name === 'FootnoteDefinition') continue;
     if (child.name === 'Escape') {
       // `\|` is the only way to put a pipe in a cell; show the pipe, not both.
       out.push({ text: doc.sliceString(child.from + 1, child.to), cls });
@@ -257,7 +300,7 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
     }
     if (child.name === 'Link') {
       const href = safeHref(linkDestination(child, doc) ?? '') ?? undefined;
-      const inner = cellSegments(child, doc, cls);
+      const inner = cellSegments(child, doc, cls, numberAt);
       // Math in the link text is typeset, the text around it still the link.
       if (inner.some((seg) => seg.math)) {
         out.push(...inner.map((seg) => (seg.math ? seg : { text: seg.text, cls: 'md-link', href })));
@@ -266,7 +309,7 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
       out.push({ text: inner.map((seg) => seg.text).join(''), cls: 'md-link', href });
       continue;
     }
-    out.push(...cellSegments(child, doc, INLINE_MARK_CLASS[child.name] ?? cls));
+    out.push(...cellSegments(child, doc, INLINE_MARK_CLASS[child.name] ?? cls, numberAt));
   }
   if (pos < cell.to) out.push({ text: doc.sliceString(pos, cell.to), cls });
   return out.filter((s) => s.text !== '' || s.href !== undefined);
@@ -276,12 +319,12 @@ function cellSegments(cell: SyntaxNodeLike, doc: Text, cls?: string): Segment[] 
 // there is content, so `| 1 |   | 3 |` would arrive as two cells and slide `3`
 // under the second column — silent, and invisible in a view that hides the
 // source. The pipes are the truth, so the cells are read between them.
-function rowCells(row: SyntaxNodeLike, doc: Text): Segment[][] {
+function rowCells(row: SyntaxNodeLike, doc: Text, numberAt?: Map<number, number>): Segment[][] {
   const cells: Segment[][] = [];
   let openedAt: number | null = null;
   for (let child = row.firstChild; child; child = child.nextSibling) {
     if (child.name === 'TableCell') {
-      cells.push(cellSegments(child, doc));
+      cells.push(cellSegments(child, doc, undefined, numberAt));
       openedAt = null;
       continue;
     }
@@ -354,8 +397,12 @@ function safeHref(url: string): string | null {
  * routing to the system browser.
  */
 export const linkClickHandler = EditorView.domEventHandlers({
-  mousedown(event) {
+  mousedown(event, view) {
     const target = event.target as HTMLElement | null;
+    if (followFootnote(view, target)) {
+      event.preventDefault();
+      return true;
+    }
     const href = target?.closest<HTMLElement>('.md-link[data-href]')?.dataset.href;
     if (!href) return false;
     event.preventDefault();
@@ -468,6 +515,20 @@ export function buildDecorations(view: EditorView): DecorationSet {
           return;
         }
 
+        // --- Footnote definition: its lines a little smaller. The `[^1]:` that
+        //     names it is styled below, not hidden, so the reader can tell which
+        //     note it is. The note's text is decorated as the children are visited.
+        if (name === 'FootnoteDefinition') {
+          // In read mode the note is listed at the end instead (footnoteListField).
+          if (state.readOnly) return false;
+          for (let pos = node.from; pos <= node.to;) {
+            const line = doc.lineAt(pos);
+            ranges.push(Decoration.line({ class: 'md-footnote-def' }).range(line.from));
+            pos = line.to + 1;
+          }
+          return;
+        }
+
         // --- Thematic break (`---`, `***`, `___`, any length, spaces allowed
         //     between markers): draw the rule with a line class and hide the
         //     markers. The parser already rejects the near-misses (2 markers,
@@ -485,6 +546,28 @@ export function buildDecorations(view: EditorView): DecorationSet {
           ranges.push(Decoration.line({ class: 'md-hr' }).range(line.from));
           ranges.push(hidden.range(node.from, node.to));
           return;
+        }
+
+        // --- Highlight: a color emoji right after the opening `==` picks the
+        //     color, and is hidden with the marks, as the rest of the markup.
+        if (name === 'Highlight') {
+          const color = highlightColor(node, doc);
+          ranges.push(Decoration.mark({ class: highlightClass(color) }).range(node.from, node.to));
+          if (color && !lineHasSelection(state, node.from)) {
+            ranges.push(hidden.range(node.from + 2, node.from + 4));
+          }
+          return;
+        }
+
+        // --- Footnotes in read mode: a reference or an inline note is its
+        //     number, as in Obsidian's reading view, and the notes are listed
+        //     at the end. One whose label is defined nowhere stays as it is.
+        if (state.readOnly && (name === 'FootnoteReference' || name === 'InlineFootnote')) {
+          const n = footnotes(state).numberAt.get(node.from);
+          if (n !== undefined) {
+            ranges.push(Decoration.replace({ widget: new FootnoteRefWidget(n) }).range(node.from, node.to));
+            return false;
+          }
         }
 
         // --- Inline emphasis / code styling
@@ -561,6 +644,25 @@ export function buildDecorations(view: EditorView): DecorationSet {
           return;
         }
 
+        // --- Footnotes: a reference's number is a superscript; a definition's
+        //     marker and label are muted (their brackets stay, see HIDDEN_MARKS).
+        const footnoteParent = node.node.parent?.name;
+        if (name === 'FootnoteLabel' && footnoteParent === 'FootnoteReference') {
+          // A tap follows it to its note, as for a link: not on the line
+          // being edited, where it is source.
+          const label = doc.sliceString(node.from, node.to);
+          const follow = !lineHasSelection(state, node.from) && footnotes(state).defs.has(label);
+          ranges.push(Decoration.mark({
+            class: 'md-footnote-ref',
+            attributes: follow ? { 'data-fn-label': label } : undefined,
+          }).range(node.from, node.to));
+          return;
+        }
+        if ((name === 'FootnoteMark' || name === 'FootnoteLabel') && footnoteParent === 'FootnoteDefinition') {
+          ranges.push(Decoration.mark({ class: 'md-footnote-label' }).range(node.from, node.to));
+          return;
+        }
+
         // --- Hide syntax markers, revealing them on the active line
         if (HIDDEN_MARKS.has(name) && !inDefinition(node.node)) {
           if (lineHasSelection(state, node.from)) return;
@@ -620,6 +722,7 @@ export function buildTables(state: EditorState): DecorationSet {
       // follow, over a range instead of a line.
       if (rangeHasSelection(state, node.from, node.to)) return;
       const rows: Segment[][][] = [];
+      const numberAt = state.readOnly ? footnotes(state).numberAt : undefined;
       let header: Segment[][] = [];
       let align: TableSpec['align'] = [];
       for (let row = node.node.firstChild; row; row = row.nextSibling) {
@@ -632,7 +735,7 @@ export function buildTables(state: EditorState): DecorationSet {
         // Only real rows: inside a blockquote the parser hangs a QuoteMark on
         // the table for every line, and those are not rows.
         if (row.name !== 'TableHeader' && row.name !== 'TableRow') continue;
-        const cells = rowCells(row, doc);
+        const cells = rowCells(row, doc, numberAt);
         if (row.name === 'TableHeader') header = cells;
         else rows.push(cells);
       }
@@ -651,6 +754,7 @@ export function buildTables(state: EditorState): DecorationSet {
             align,
             dir: blockDirection(state, node.from, node.to),
             source: doc.sliceString(node.from, node.to),
+            notes: JSON.stringify([header, sized].flat(3).flatMap((seg) => (seg.fn ? [seg.fn.n] : []))),
           }),
           block: true,
         }).range(node.from, node.to),
@@ -684,6 +788,33 @@ function blockField(build: (state: EditorState) => DecorationSet): StateField<De
 }
 
 export const tableField = blockField(buildTables);
+
+/**
+ * Read mode's footnotes, as in Obsidian's reading view: the definitions leave
+ * their place in the text, and every note referred to is listed, numbered, at
+ * the end of the document. While editing, nothing: the definitions are where
+ * they were written.
+ */
+export function buildFootnoteList(state: EditorState): DecorationSet {
+  if (!state.readOnly) return Decoration.none;
+  const { allDefs, notes, numberAt } = footnotes(state);
+  const doc = state.doc;
+  const ranges: Range<Decoration>[] = [];
+  for (const def of allDefs) {
+    // With the blank lines above it, which would otherwise stack up into a gap
+    // where the notes were.
+    let first = doc.lineAt(def.from);
+    while (first.number > 1 && !doc.line(first.number - 1).text.trim()) first = doc.line(first.number - 1);
+    ranges.push(Decoration.replace({ block: true }).range(first.from, doc.lineAt(def.to).to));
+  }
+  if (notes.length) {
+    const listed = notes.map((note) => ({ n: note.n, ref: note.ref, segments: cellSegments(note.body, doc, undefined, numberAt) }));
+    ranges.push(Decoration.widget({ widget: new FootnoteListWidget(listed), block: true, side: 1 }).range(doc.length));
+  }
+  return Decoration.set(ranges, true);
+}
+
+export const footnoteListField = blockField(buildFootnoteList);
 
 // The TeX a `$$` block is typeset from, or null while it shows its source:
 // while it is being edited, while it is unclosed (rendering a block whose `$$`

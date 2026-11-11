@@ -1,4 +1,5 @@
 import { type EditorView, WidgetType } from '@codemirror/view';
+import { followFootnote } from './footnote.ts';
 import { MAX_TEX, mathCost, typeset } from './math.ts';
 
 /** A run of cell text, carrying the class the live preview paints it with. */
@@ -9,6 +10,8 @@ export interface Segment {
   href?: string;
   /** Set on math (`$x$`, `$$x$$`): the TeX, typeset in place of `text`. */
   math?: { tex: string; display: boolean };
+  /** Set on a footnote reference: what a tap on it follows (see jumpToFootnote). */
+  fn?: { label: string | null; n: number | null };
 }
 
 export interface TableSpec {
@@ -22,6 +25,9 @@ export interface TableSpec {
   dir: 'ltr' | 'rtl' | null;
   /** The markdown this was built from — the widget's identity. */
   source: string;
+  /** The footnote numbers its cells show in read mode, which the source alone
+   *  does not decide: a reference above the table renumbers them. */
+  notes?: string;
 }
 
 /**
@@ -41,7 +47,8 @@ export class TableWidget extends WidgetType {
   }
 
   override eq(other: TableWidget): boolean {
-    return other.spec.source === this.spec.source && other.spec.dir === this.spec.dir;
+    return other.spec.source === this.spec.source && other.spec.dir === this.spec.dir
+      && other.spec.notes === this.spec.notes;
   }
 
   override toDOM(view: EditorView): HTMLElement {
@@ -59,7 +66,12 @@ export class TableWidget extends WidgetType {
     // fall back on, so put the caret in the source here — except on a link,
     // which has its own job.
     wrap.addEventListener('mousedown', (event) => {
-      if ((event.target as Element | null)?.closest('a')) return;
+      const target = event.target as Element | null;
+      if (target?.closest('a')) return;
+      if (followFootnote(view, target)) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       view.dispatch({ selection: { anchor: this.spec.from } });
     });
@@ -85,13 +97,14 @@ export class TableWidget extends WidgetType {
       const cell = tr.appendChild(document.createElement(tag));
       // Logical, so a right-to-left table's "start" is its right-hand edge.
       if (align[column]) cell.style.textAlign = align[column]!;
-      for (const segment of segments) cell.append(node(segment, view, budget));
+      for (const segment of segments) cell.append(segmentNode(segment, view, budget));
     });
     return tr;
   }
 }
 
-function node(segment: Segment, view: EditorView, budget: { left: number }): Node {
+/** A segment as the DOM shows it, in a table cell or the footnote list. */
+export function segmentNode(segment: Segment, view: EditorView, budget: { left: number }): Node {
   if (segment.math && mathCost(segment.math.tex) <= budget.left) {
     budget.left -= mathCost(segment.math.tex);
     const { tex, display } = segment.math;
@@ -104,9 +117,11 @@ function node(segment: Segment, view: EditorView, budget: { left: number }): Nod
   if (segment.href === undefined && segment.cls === undefined) {
     return document.createTextNode(segment.text);
   }
-  const el = document.createElement(segment.href === undefined ? 'span' : 'a');
+  const el = document.createElement(segment.href !== undefined ? 'a' : segment.fn ? 'sup' : 'span');
   el.className = segment.cls ?? '';
   el.textContent = segment.text;
+  if (segment.fn?.label != null) el.dataset.fnLabel = segment.fn.label;
+  if (segment.fn?.n != null) el.dataset.fnN = String(segment.fn.n);
   if (segment.href !== undefined) {
     // A real href, so the link is focusable and a screen reader announces it.
     (el as HTMLAnchorElement).href = segment.href;

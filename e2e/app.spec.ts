@@ -24,6 +24,13 @@ test('renders markdown live as you type', async ({ page }) => {
   await expect(page.locator('#toolbar')).toBeInViewport();
 });
 
+test('==🟢done== is a green highlight, its == and emoji hidden off the line', async ({ page }) => {
+  await page.keyboard.insertText('==🟢done==\n\nafter');
+  // The cursor is on the last line, so the first reads as its rendered text alone.
+  await expect(page.locator('.cm-line').first()).toHaveText('done');
+  await expect(page.locator('.md-highlight-green')).toHaveText('done');
+});
+
 test('toolbar formats the selection and keeps the editor focused', async ({ page, isMobile }) => {
   await page.keyboard.insertText('word');
   await page.keyboard.press('ControlOrMeta+a');
@@ -317,6 +324,125 @@ test('math in a table cell typesets in the table', async ({ page }) => {
   await expect(table.locator('.md-math-inline .katex')).toHaveCount(1);
   await expect(table.locator('.katex-error')).toHaveCount(0);
   await expect(table.locator('td').nth(1)).toHaveText('$5');
+});
+
+test('a footnote reads as a superscript number, and its definition as a note', async ({ page }) => {
+  // The cursor ends on `after`, away from both lines, so their markup is hidden.
+  await page.keyboard.insertText('a note[^1] here\n\n[^1]: the text\n\nafter');
+  const ref = page.locator('.md-footnote-ref');
+  await expect(ref).toHaveText('1');
+  await expect(ref).toHaveCSS('vertical-align', 'super');
+  await expect(page.locator('.cm-line', { hasText: 'a note' })).toHaveText('a note1 here');
+  // The definition keeps its `[^1]:`: that is how a reader knows which note it is.
+  await expect(page.locator('.cm-line.md-footnote-def')).toHaveText('[^1]: the text');
+});
+
+test('a tap on a footnote reference goes to its note while editing', async ({ page }) => {
+  await page.keyboard.insertText('see[^1] here\n\nmiddle\n\n[^1]: the note\n\nend');
+  await page.locator('.md-footnote-ref').click();
+  // The caret lands at the start of the note's text.
+  await page.keyboard.insertText('X');
+  await expect(page.locator('.cm-line.md-footnote-def')).toHaveText('[^1]: Xthe note');
+});
+
+test('read mode numbers the footnotes and lists them at the end', async ({ page, isMobile }) => {
+  await page.keyboard.insertText(
+    'b[^b] a[^a] again[^b] inline^[in place]\n\n[^a]: note a\n[^b]: note **b**\n\nlast line',
+  );
+  await press(page.getByRole('button', { name: 'Toggle read / edit mode' }), isMobile);
+  // Numbered by first reference, named ones too; the inline note joins in.
+  await expect(page.locator('sup.md-footnote-ref')).toHaveText(['1', '2', '1', '3']);
+  await expect(page.locator('.md-footnote-def')).toHaveCount(0);
+  const items = page.locator('.md-footnotes li');
+  await expect(items).toHaveText(['note b↩', 'note a↩', 'in place↩']);
+  await expect(items.nth(0).locator('.md-strong')).toHaveText('b');
+  await page.locator('sup.md-footnote-ref').nth(1).click();
+  await expect(items.nth(1)).toHaveClass(/md-footnote-flash/);
+  // Back to editing, the definitions are where they were written.
+  await press(page.getByRole('button', { name: 'Toggle read / edit mode' }), isMobile);
+  await expect(page.locator('.md-footnotes')).toHaveCount(0);
+  await expect(page.locator('.md-footnote-def')).toHaveCount(2);
+});
+
+test('a table cell draws a colored highlight and a footnote reference', async ({ page }) => {
+  await page.keyboard.insertText('| a |\n|---|\n| ==🔴x== y[^1] |\n\n[^1]: note\n\nend');
+  const cell = page.locator('.md-table td');
+  await expect(cell.locator('.md-highlight-red')).toHaveText('x');
+  await expect(cell.locator('sup.md-footnote-ref')).toHaveText('1');
+  await expect(cell).toHaveText('x y1');
+});
+
+test('the Highlight button wraps the selection in ==', async ({ page, isMobile }) => {
+  await page.keyboard.insertText('word');
+  await page.keyboard.press('ControlOrMeta+a');
+  await press(page.getByRole('button', { name: 'Highlight' }), isMobile);
+  await expect(page.locator('.md-highlight')).toHaveText('==word==');
+});
+
+test('after an opening ==, a menu picks the highlight color', async ({ page, isMobile }) => {
+  await page.keyboard.insertText('a ==');
+  const menu = page.getByRole('listbox', { name: 'Highlight color' });
+  await expect(menu).toBeVisible();
+  await press(menu.getByRole('option', { name: 'purple highlight' }), isMobile);
+  await expect(menu).toHaveCount(0);
+  await page.keyboard.insertText('idea==');
+  // A closing `==` opens no menu.
+  await expect(menu).toHaveCount(0);
+  await page.keyboard.insertText('\n\nnext');
+  await expect(page.locator('.md-highlight-purple')).toHaveText('idea');
+});
+
+test('the arrow keys pick a highlight color from the menu', async ({ page }) => {
+  await page.keyboard.insertText('a ==');
+  const menu = page.getByRole('listbox', { name: 'Highlight color' });
+  await expect(menu).toBeVisible();
+  // Until ArrowDown steps in, nothing in the menu is chosen.
+  await expect(menu.locator('[aria-selected="true"]')).toHaveCount(0);
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('option', { selected: true })).toHaveAccessibleName('red highlight');
+  await expect(page.locator('.cm-content')).toHaveAttribute('aria-activedescendant', 'md-hl-color-0');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(menu.getByRole('option', { selected: true })).toHaveAccessibleName('yellow highlight');
+  // ArrowLeft wraps from the first color to the last.
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect(menu.getByRole('option', { selected: true })).toHaveAccessibleName('purple highlight');
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCount(0);
+  await page.keyboard.insertText('idea==');
+  await page.keyboard.press('Enter');
+  // On Android CodeMirror runs Enter a moment later, so wait for its new line.
+  await expect(page.locator('.cm-line')).toHaveCount(2);
+  await page.keyboard.insertText('next');
+  await expect(page.locator('.md-highlight-purple')).toHaveText('idea');
+});
+
+test('the color menu leaves Enter and the arrows alone until ArrowDown, and Escape closes it', async ({ page }) => {
+  await page.keyboard.insertText('a ==');
+  const menu = page.getByRole('listbox', { name: 'Highlight color' });
+  await expect(menu).toBeVisible();
+  // ArrowUp in the text moves nothing in the menu; Escape closes it.
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowRight');
+  // Back after the `==`, it offers the colors again; Enter is a new line.
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCount(0);
+  await expect(page.locator('.cm-line')).toHaveCount(2);
+});
+
+test('the Highlight button with no selection offers the colors', async ({ page, isMobile }) => {
+  await press(page.getByRole('button', { name: 'Highlight' }), isMobile);
+  const menu = page.getByRole('listbox', { name: 'Highlight color' });
+  await press(menu.getByRole('option', { name: 'red highlight' }), isMobile);
+  await page.keyboard.insertText('hot');
+  await page.keyboard.press('End');
+  await page.keyboard.insertText('\n\nnext');
+  await expect(page.locator('.md-highlight-red')).toHaveText('hot');
 });
 
 test('a negative size in TeX cannot make its line endlessly tall', async ({ page }) => {

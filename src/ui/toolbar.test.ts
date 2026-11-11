@@ -55,13 +55,14 @@ const COMMAND_TITLES = [
   'Bold',
   'Italic',
   'Strikethrough',
+  'Highlight',
   'Bullet list',
   'Checklist item',
   'Outdent list item',
   'Indent list item',
 ];
 
-test('mountToolbar builds the 8 command buttons with title + aria-label', () => {
+test('mountToolbar builds the 9 command buttons with title + aria-label', () => {
   const container = reset();
   const { view } = makeView('hi', 0, 0);
   mountToolbar(container, view);
@@ -72,8 +73,8 @@ test('mountToolbar builds the 8 command buttons with title + aria-label', () => 
   }
   // Only strikethrough steps aside where the toolbar is short of room (main.css).
   assert.deepEqual([...container.querySelectorAll('.md-tool-wide')].map((b) => b.getAttribute('title')), ['Strikethrough']);
-  // spacer + theme + help utility buttons
-  assert.ok(container.querySelector('.md-tool-spacer'), 'spacer exists');
+  // The commands in their own scroller, then theme + help at the end.
+  assert.equal(container.querySelectorAll('.md-tool-cmds .md-tool-cmd').length, COMMAND_TITLES.length);
   assert.ok(btnByTitle(container, 'Toggle dark / light theme'));
   assert.ok(btnByTitle(container, 'Help & markdown syntax'));
 });

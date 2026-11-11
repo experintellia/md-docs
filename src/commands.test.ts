@@ -8,6 +8,7 @@ import {
   toggleBold,
   toggleItalic,
   toggleStrikethrough,
+  toggleHighlight,
   toggleInlineCode,
   cycleHeading,
   toggleBullet,
@@ -15,6 +16,7 @@ import {
   insertNewlineContinueMarkup,
 } from './commands.ts';
 import { mathBlock } from './live-preview/math.ts';
+import { highlight } from './live-preview/highlight.ts';
 
 // Tier 2: toolbar command behaviour. The commands only read `view.state` and
 // call `view.dispatch`, never the DOM — so a minimal state+dispatch stand-in
@@ -228,6 +230,27 @@ test('italic and strikethrough work the same way', () => {
   assert.equal(strike('~~a «b~~ c»'), '~~a «b c»~~');
   assert.equal(strike('- «a\n- b»'), '- ~~«a~~\n- ~~b»~~');
   assert.equal(strike('a|b'), 'a~~|~~b');
+});
+
+const mark = (spec: string): string =>
+  show(run(toggleHighlight, spec, markdown({ base: markdownLanguage, extensions: [mathBlock, highlight] })));
+
+test('highlight follows the highlighted text as the other styles do', () => {
+  assert.equal(mark('«ab»'), '==«ab»==');
+  assert.equal(mark('==«ab»=='), '«ab»');
+  assert.equal(mark('==ein «langer» text=='), '==ein== «langer» ==text==');
+  assert.equal(mark('==a «b== c»'), '==a «b c»==');
+  assert.equal(mark('- «a\n- b»'), '- ==«a==\n- ==b»==');
+  // An empty one, with the caret inside, for the color menu to fill.
+  assert.equal(mark('a |b'), 'a ==|==b');
+  assert.equal(mark('**«ab»**'), '**==«ab»==**');
+  // Cut in two, a colored highlight keeps its color on both sides.
+  assert.equal(mark('==🔴ein «langer» text=='), '==🔴ein== «langer» ==🔴text==');
+  assert.equal(mark('==🔴ein «langer»=='), '==🔴ein== «langer»');
+  // Its emoji goes with it when it is removed, rather than stay as text.
+  assert.equal(mark('«==🔴ab==»'), '«ab»');
+  assert.equal(mark('==🔴«ab»=='), '«ab»');
+  assert.equal(mark('==🔴«ein» langer=='), '«ein» ==🔴langer==');
 });
 
 test('bold and italic nest without disturbing each other', () => {

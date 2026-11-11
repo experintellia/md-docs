@@ -4,7 +4,10 @@ import { EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import type { MarkdownConfig } from '@lezer/markdown';
 import { buildDecorations, buildTables, lineDirection } from './decorations.ts';
+import { highlight } from './highlight.ts';
+import { footnote } from './footnote.ts';
 import { CheckboxWidget } from './widgets/checkbox.ts';
 import { BulletWidget } from './widgets/bullet.ts';
 import { CopyButtonWidget } from './widgets/copy-button.ts';
@@ -26,12 +29,13 @@ interface Deco {
   };
 }
 
-// Build decorations for `doc` with the cursor at `cursor` (default 0).
-function decorate(doc: string, cursor = 0): Deco[] {
+// Build decorations for `doc` with the cursor at `cursor` (default 0), and any
+// parser extensions the test needs on top of the stock markdown.
+function decorate(doc: string, cursor = 0, extensions: MarkdownConfig[] = []): Deco[] {
   const state = EditorState.create({
     doc,
     selection: { anchor: cursor },
-    extensions: [markdown({ base: markdownLanguage })],
+    extensions: [markdown({ base: markdownLanguage, extensions })],
   });
   ensureSyntaxTree(state, state.doc.length, 5000);
   const view = {
@@ -818,6 +822,29 @@ test('strikethrough gets md-strike', () => {
   assert.ok(withClass(decorate('top\n~~x~~', 0), 'md-strike'), 'md-strike mark');
 });
 
+test('highlight gets md-highlight, and a color emoji adds its color class', () => {
+  const plain = decorate('top\n==x==', 0, [highlight]);
+  assert.ok(withClass(plain, 'md-highlight'), 'md-highlight mark');
+  assert.equal(withClass(plain, 'md-highlight-red'), undefined, 'no emoji, no color');
+  const red = decorate('top\n==🔴x==', 0, [highlight]);
+  assert.ok(withClass(red, 'md-highlight'), 'md-highlight still on a colored one');
+  assert.ok(withClass(red, 'md-highlight-red'), 'md-highlight-red mark');
+});
+
+test('highlight hides its == and a color emoji while the cursor is elsewhere', () => {
+  // `top\n` is 4 units; `==🔴x==` puts the emoji at 6..8 (two UTF-16 units).
+  const colored = decorate('top\n==🔴x==', 0, [highlight]);
+  assert.deepEqual(hiddenMarkers(colored).map((d) => [d.from, d.to]), [[4, 6], [6, 8], [9, 11]]);
+  const plain = decorate('top\n==x==', 0, [highlight]);
+  assert.deepEqual(hiddenMarkers(plain).map((d) => [d.from, d.to]), [[4, 6], [7, 9]]);
+});
+
+test('reveal on cursor: the == and the emoji show when the cursor is on the line', () => {
+  const decos = decorate('==🔴x==', 0, [highlight]);
+  assert.equal(hiddenMarkers(decos).length, 0, 'nothing hidden on the active line');
+  assert.ok(withClass(decos, 'md-highlight-red'), 'still colored');
+});
+
 test('a selection spanning several lines reveals the markup on all of them', () => {
   // lineHasSelection tests each line against every range, so a drag across two
   // headings must un-hide both — hiding markup mid-selection shifts the text
@@ -941,4 +968,33 @@ test('ordinary links, autolinks and images are unaffected', () => {
   assert.equal(dataHref('visit https://bare.example now\nbody', 33), 'https://bare.example');
   // An image is still not a link, and its destination stays hidden.
   assert.equal(withClass(decorate('![alt](http://img.png)\nbody', 24), 'md-link'), undefined);
+});
+
+test('a reference is a superscript, and its brackets are hidden off the line', () => {
+  const doc = 'text[^1]\n\nnext';
+  const off = decorate(doc, doc.length, [footnote]);
+  assert.equal(withClass(off, 'md-footnote-ref')?.from, 6, 'the number is a superscript');
+  assert.ok(hiddenMarkers(off).some((d) => d.from === 4 && d.to === 6), '`[^` is hidden');
+  assert.ok(hiddenMarkers(off).some((d) => d.from === 7 && d.to === 8), '`]` is hidden');
+  assert.deepEqual(hiddenMarkers(decorate(doc, 5, [footnote])), [], 'shown on the line the cursor is on');
+});
+
+test('a definition keeps its marker visible and muted, and its line is set smaller', () => {
+  const doc = '[^1]: the note\n\nnext';
+  const decos = decorate(doc, doc.length, [footnote]);
+  assert.ok(withClass(decos, 'md-footnote-def'), 'the line gets md-footnote-def');
+  assert.equal(withClass(decos, 'md-footnote-def')?.from, 0);
+  // `[^`, the label, and `]:`: all three muted, none of them hidden.
+  const muted = decos.filter((d) => d.spec.class === 'md-footnote-label').map((d) => [d.from, d.to]);
+  assert.deepEqual(muted, [[0, 2], [2, 3], [3, 5]]);
+  assert.deepEqual(hiddenMarkers(decos), [], 'the marker stays visible');
+});
+
+test('an inline footnote is muted, and its `^[` and `]` are hidden off the line', () => {
+  const doc = 'a ^[note] b\n\nnext';
+  const off = decorate(doc, doc.length, [footnote]);
+  assert.ok(withClass(off, 'md-footnote-inline'), 'the note gets md-footnote-inline');
+  assert.ok(hiddenMarkers(off).some((d) => d.from === 2 && d.to === 4), '`^[` is hidden');
+  assert.ok(hiddenMarkers(off).some((d) => d.from === 8 && d.to === 9), '`]` is hidden');
+  assert.deepEqual(hiddenMarkers(decorate(doc, 1, [footnote])), [], 'shown on the line the cursor is on');
 });

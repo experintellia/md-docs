@@ -6,6 +6,21 @@ All notable changes to MD-Docs are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Highlights, as in Obsidian: `==text==` is drawn highlighted, and nests with
+  bold, italic and strikethrough. A color emoji right after the opening `==`
+  picks the color: `==🔴Important==` is red, 🟠 orange, 🟡 yellow, 🟢 green,
+  🔵 blue, 🟣 purple. The `==` and the emoji are hidden off the line, as the
+  other markup is. Right after an opening `==` a menu offers the six colors
+  (↓ steps into it, ← → choose, Enter picks, Esc closes it),
+  and a Highlight button joins the toolbar. Highlights are drawn in table
+  cells too.
+- Footnotes, as in Obsidian: `text[^1]` shows a superscript number, and
+  `[^1]: note` defines it (indent a continued line by two spaces). `^[note]` is
+  an inline footnote. The brackets are hidden off the line the cursor is on, and
+  a definition's `[^1]:` stays visible, muted. A tap on a reference goes to its
+  note. In read mode the footnotes are numbered as in Obsidian's reading view,
+  named and inline ones included, and listed at the end of the document, each
+  with a ↩ back to the text.
 - Strikethrough has a shortcut, Ctrl/Cmd+Shift+X, and a toolbar button on wide
   screens.
 

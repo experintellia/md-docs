@@ -9,6 +9,7 @@ import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
 import type { SyntaxNode } from '@lezer/common';
 import type { Command, KeyBinding } from '@codemirror/view';
 import { insertNewlineContinueMarkupCommand, deleteMarkupBackward } from '@codemirror/lang-markdown';
+import { HIGHLIGHT_COLORS } from './live-preview/highlight.ts';
 
 type RangeChange = { changes: ChangeSpec; range: SelectionRange };
 interface Span { from: number; to: number }
@@ -49,7 +50,9 @@ function command(change: (state: EditorState, range: SelectionRange) => RangeCha
 }
 
 /** The syntax node each style's marker produces. */
-const STYLES: Record<string, string> = { '**': 'StrongEmphasis', '*': 'Emphasis', '~~': 'Strikethrough' };
+const STYLES: Record<string, string> = {
+  '**': 'StrongEmphasis', '*': 'Emphasis', '~~': 'Strikethrough', '==': 'Highlight',
+};
 const STYLE_NODES = new Set(Object.values(STYLES));
 /** Inline nodes a marker must not land inside: a selection edge in one of
  *  these moves out to its border. */
@@ -121,6 +124,8 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
   while (/[ \t]/.test(state.sliceDoc(lookTo, lookTo + 1))) lookTo++;
   const nodes: Span[] = [];
   const old: Span[] = [];
+  // Highlights with a color emoji, from the emoji to the closing `==`.
+  const colored: (Span & { emoji: string })[] = [];
   tree.iterate({
     from: lookFrom,
     to: lookTo,
@@ -130,6 +135,8 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
       const close = n.node.lastChild;
       if (!open || !close || open.from === close.from) return;
       nodes.push({ from: open.to, to: close.from });
+      const emoji = state.sliceDoc(open.to, open.to + 2);
+      if (marker === '==' && HIGHLIGHT_COLORS[emoji]) colored.push({ from: open.to, to: close.from, emoji });
       old.push({ from: open.from, to: open.to }, { from: close.from, to: close.to });
     },
   });
@@ -254,6 +261,14 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
     return { from: f + lo, to: t + lo };
   }).filter((s) => s.from < s.to);
 
+  // A color emoji is the highlight's, not text: a run of nothing else is no
+  // highlight, and the emoji of one no run keeps goes with its markers.
+  const drop: Span[] = [];
+  for (const c of colored) {
+    styled = styled.filter((s) => !(s.from === c.from && s.to === c.from + 2));
+    if (!styled.some((s) => s.from <= c.from && c.from < s.to)) drop.push({ from: c.from, to: c.from + 2 });
+  }
+
   // A marker that is already where one is needed stays, so an unchanged run
   // produces no edit (and nothing for a peer's cursor to trip over).
   const changes: ChangeSpec[] = [];
@@ -265,7 +280,10 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
     else changes.push({ from: pos, insert: marker });
   };
   for (const s of styled) {
-    place(s.from, endsAt.get(s.from));
+    // A colored highlight cut in two keeps its color on the far side too.
+    const emoji = add ? undefined : colored.find((c) => c.from < s.from && s.from < c.to)?.emoji;
+    if (emoji) changes.push({ from: s.from, insert: marker + emoji });
+    else place(s.from, endsAt.get(s.from));
     // A literal `*` in newly styled text would pair up with the new markers.
     for (let i = Math.max(s.from, from) - lo; add && i < Math.min(s.to, to) - lo; i++) {
       if (text[i] === marker[0] && !(flags[i] & (MARK | ATOM))) {
@@ -275,6 +293,7 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
     place(s.to, startsAt.get(s.to));
   }
   for (const o of old) if (!keep.has(o)) changes.push(o);
+  changes.push(...drop);
 
   // The selection stays on the text, inside markers set at its edges.
   const mapped = state.changes(changes);
@@ -286,6 +305,7 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
 export const toggleBold = command((state, range) => styleRange(state, range, '**'));
 export const toggleItalic = command((state, range) => styleRange(state, range, '*'));
 export const toggleStrikethrough = command((state, range) => styleRange(state, range, '~~'));
+export const toggleHighlight = command((state, range) => styleRange(state, range, '=='));
 export const toggleInlineCode = command((state, range) => wrapRange(state, range, '`'));
 
 /** Cycle the current line's heading level: none -> H1 -> H2 -> H3 -> none. */
