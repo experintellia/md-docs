@@ -512,18 +512,22 @@ export function buildDecorations(view: EditorView): DecorationSet {
           return;
         }
 
-        // --- Thematic break (`---`, any length): draw the rule with a line
-        //     class and hide the markers. The parser already rejects the
-        //     near-misses (2 markers, trailing text, `---` under text is a
-        //     setext heading, anything inside a code fence). It also accepts
-        //     `***` / `___`, which we deliberately leave as plain text.
+        // --- Thematic break (`---`, `***`, `___`, any length, spaces allowed
+        //     between markers): draw the rule with a line class and hide the
+        //     markers. The parser already rejects the near-misses (2 markers,
+        //     trailing text, `---` under text is a setext heading, anything
+        //     inside a code fence). Under the cursor the raw markers show
+        //     alone, as in Obsidian: no rule underneath until the cursor
+        //     leaves the line.
         if (name === 'HorizontalRule') {
-          if (!/^[-\s]+$/.test(doc.sliceString(node.from, node.to))) return;
+          if (lineHasSelection(state, node.from)) return;
           const line = doc.lineAt(node.from);
+          // ponytail: a rule after a list marker (`1. ___`, `- ***`) stays
+          // text, since the line-wide stripe would strike through the marker.
+          // A widget replacing just the markers would draw it if anyone asks.
+          if (!/^[\s>]*$/.test(doc.sliceString(line.from, node.from))) return;
           ranges.push(Decoration.line({ class: 'md-hr' }).range(line.from));
-          if (!lineHasSelection(state, node.from)) {
-            ranges.push(hidden.range(node.from, node.to));
-          }
+          ranges.push(hidden.range(node.from, node.to));
           return;
         }
 

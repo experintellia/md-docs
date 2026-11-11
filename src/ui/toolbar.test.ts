@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { EditorState, Transaction, type TransactionSpec } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import type { Collab } from '../collab.ts';
@@ -20,7 +21,8 @@ after(() => GlobalRegistrator.unregister());
 // Stub view: the toolbar commands only read `view.state`, call `view.dispatch`,
 // and `view.focus()` — mirror commands.test.ts's stand-in over a real EditorState.
 function makeView(doc: string, anchor: number, head: number): { view: EditorView; doc: () => string } {
-  let state = EditorState.create({ doc, selection: { anchor, head } });
+  // The inline toggles read the syntax tree, so the state needs the parser.
+  let state = EditorState.create({ doc, selection: { anchor, head }, extensions: markdown({ base: markdownLanguage }) });
   const view = {
     get state() {
       return state;
@@ -52,13 +54,14 @@ const COMMAND_TITLES = [
   'Heading (cycle level)',
   'Bold',
   'Italic',
+  'Strikethrough',
   'Bullet list',
   'Checklist item',
   'Outdent list item',
   'Indent list item',
 ];
 
-test('mountToolbar builds the 7 command buttons with title + aria-label', () => {
+test('mountToolbar builds the 8 command buttons with title + aria-label', () => {
   const container = reset();
   const { view } = makeView('hi', 0, 0);
   mountToolbar(container, view);
@@ -67,6 +70,8 @@ test('mountToolbar builds the 7 command buttons with title + aria-label', () => 
     const btn = btnByTitle(container, title);
     assert.equal(btn.getAttribute('aria-label'), title);
   }
+  // Only strikethrough steps aside where the toolbar is short of room (main.css).
+  assert.deepEqual([...container.querySelectorAll('.md-tool-wide')].map((b) => b.getAttribute('title')), ['Strikethrough']);
   // spacer + theme + help utility buttons
   assert.ok(container.querySelector('.md-tool-spacer'), 'spacer exists');
   assert.ok(btnByTitle(container, 'Toggle dark / light theme'));

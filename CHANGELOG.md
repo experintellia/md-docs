@@ -9,9 +9,26 @@ All notable changes to MD-Docs are documented here. This project adheres to
 - Obsidian callouts: a quote whose first line is `> [!info] Title` is drawn as
   a box in its type's colour, with the type's icon in place of the marker. The
   syntax is Obsidian's, so a note copied across keeps its look. Types: `note`,
-  `abstract`, `info`, `tip`, `success`, `question`, `warning`, `failure`,
-  `danger`, `bug`, `example`, `quote`, with Obsidian's aliases; an unknown type
-  is a note. Folding (`[!info]-`) is not drawn yet, the sign is read and ignored.
+  `abstract`, `info`, `todo`, `tip`, `success`, `question`, `warning`,
+  `failure`, `danger`, `bug`, `example`, `quote`, with Obsidian's aliases; an
+  unknown type is a note, and the type is shown in title case when there is no
+  title. Callouts nest, each level in its own colour. Folding (`[!info]-`) is
+  not drawn yet: the sign is read and ignored.
+- Strikethrough has a shortcut, Ctrl/Cmd+Shift+X, and a toolbar button on wide
+  screens.
+
+### Changed
+- The editor keeps a 10px gutter at the window's sides, so no box, bar or line
+  touches the edge.
+- Bold, italic and strikethrough (buttons and shortcuts) follow the text that
+  is already styled. A selection inside bold text is cut out of it; one that
+  reaches past its edge extends it instead of adding a second pair of markers.
+  Over several lines or list items each line gets its own markers, after its
+  bullet, checkbox, number, `>` or `#`, and tight around the words.
+- Separators work as in Obsidian: `***` and `___` (and spaced forms such as
+  `* * *`) draw a rule as `---` does, the rule sits centred in its line, and
+  while the cursor is on the line only the raw markers show, with no rule
+  underneath.
 
 ## [0.5.0] - 2026-10-31
 
