@@ -53,20 +53,27 @@ const STYLES: Record<string, string> = { '**': 'StrongEmphasis', '*': 'Emphasis'
 const STYLE_NODES = new Set(Object.values(STYLES));
 /** Inline nodes a marker must not land inside: a selection edge in one of
  *  these moves out to its border. */
-const ATOMS = new Set(['InlineCode', 'InlineMath', 'DisplayMath', 'URL', 'Autolink', 'HTMLTag', 'Image']);
+const ATOMS = new Set(['InlineCode', 'InlineMath', 'DisplayMath', 'URL', 'Autolink', 'HTMLTag', 'Comment', 'Image']);
 /** What a styled run cannot cross: block markup and blocks that hold no
  *  markdown. Line breaks are added to these. */
 const BREAKS = new Set([
-  'ListMark', 'QuoteMark', 'HeaderMark', 'TaskMarker', 'TableDelimiter', 'HorizontalRule',
+  'ListMark', 'QuoteMark', 'HeaderMark', 'TaskMarker', 'TableDelimiter', 'HorizontalRule', 'HardBreak',
   'FencedCode', 'CodeBlock', 'MathBlock', 'HTMLBlock', 'CommentBlock', 'LinkReference',
 ]);
 
-const within = (spans: readonly Span[], pos: number): boolean => spans.some((s) => s.from <= pos && pos < s.to);
 const minus = (spans: readonly Span[], cut: Span): Span[] =>
   spans.flatMap((s) => [
     { from: s.from, to: Math.min(s.to, cut.from) },
     { from: Math.max(s.from, cut.to), to: s.to },
   ].filter((p) => p.from < p.to));
+
+// What a character of the text around the selection is, as bit flags.
+const MARK = 1; // markup of any kind, not text
+const BREAK = 2; // a styled run cannot cross it
+const OLD = 4; // a marker of the toggled style that is being replaced
+const ATOM = 8; // inside code, math, a URL: not markdown
+const PUNCT = /[\p{P}\p{S}]/u;
+const WORD = /[\p{L}\p{N}]/u;
 
 /**
  * Toggle bold, italic or strikethrough on a selection as a set operation on
@@ -81,9 +88,12 @@ const minus = (spans: readonly Span[], cut: Span): Span[] =>
  */
 function styleRange(state: EditorState, range: SelectionRange, marker: string): RangeChange {
   if (range.empty) return wrapRange(state, range, marker);
+  const none: RangeChange = { changes: [], range };
   const type = STYLES[marker];
-  const tree = ensureSyntaxTree(state, state.doc.lineAt(range.to).to, 500) ?? syntaxTree(state);
-  const at = (pos: number): string => state.sliceDoc(pos, pos + 1);
+  // Without a finished parse the markers can't be placed; better no edit than
+  // one made on a guess (only a document of megabytes gets here).
+  const tree = ensureSyntaxTree(state, state.doc.lineAt(range.to).to, 500);
+  if (!tree) return none;
 
   // Move a selection edge out of a node no marker may split. A link counts,
   // unless the whole selection is inside its text.
@@ -105,9 +115,9 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
   // their markers go, their text is what is styled now.
   let lookFrom = from;
   let lookTo = to;
-  while (/[ \t]/.test(at(lookFrom - 1)) && lookFrom > 0) lookFrom--;
-  while (/[ \t]/.test(at(lookTo))) lookTo++;
-  let styled: Span[] = [];
+  while (lookFrom > 0 && /[ \t]/.test(state.sliceDoc(lookFrom - 1, lookFrom))) lookFrom--;
+  while (/[ \t]/.test(state.sliceDoc(lookTo, lookTo + 1))) lookTo++;
+  const nodes: Span[] = [];
   const old: Span[] = [];
   tree.iterate({
     from: lookFrom,
@@ -117,25 +127,38 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
       const open = n.node.firstChild;
       const close = n.node.lastChild;
       if (!open || !close || open.from === close.from) return;
-      styled.push({ from: open.to, to: close.from });
+      nodes.push({ from: open.to, to: close.from });
       old.push({ from: open.from, to: open.to }, { from: close.from, to: close.to });
     },
   });
+
+  // Everything below works on [lo, hi): the selection plus those nodes, as one
+  // string with a flag byte and a styled-or-not byte per character.
   const lo = Math.min(from, ...old.map((s) => s.from));
   const hi = Math.max(to, ...old.map((s) => s.to));
-
-  const breaks: Span[] = [];
-  const marks: Span[] = [];
+  const text = state.sliceDoc(lo, hi);
+  const flags = new Uint8Array(text.length);
+  const on = new Uint8Array(text.length);
+  const flag = (s: Span, bit: number): void => {
+    for (let i = Math.max(s.from, lo) - lo; i < Math.min(s.to, hi) - lo; i++) flags[i] |= bit;
+  };
   const others: (Span & { inner: Span })[] = []; // the other styles' nodes
   tree.iterate({
     from: lo,
     to: hi,
     enter: (n) => {
       if (BREAKS.has(n.name)) {
-        breaks.push({ from: n.from, to: n.to });
+        flag(n, BREAK);
+        // `- [ ]` with nothing after it is a task to the app (toggleChecklist),
+        // though the parser sees no TaskMarker there.
+        if (n.name === 'ListMark') {
+          const line = state.doc.lineAt(n.to);
+          if (/^[ \t]+\[[ xX]\][ \t]*$/.test(state.sliceDoc(n.to, line.to))) flag({ from: n.to, to: line.to }, BREAK);
+        }
         return false;
       }
-      if (n.name.endsWith('Mark')) marks.push({ from: n.from, to: n.to });
+      if (ATOMS.has(n.name)) flag(n, ATOM);
+      if (n.name.endsWith('Mark')) flag(n, MARK);
       if (STYLE_NODES.has(n.name) && n.name !== type) {
         const open = n.node.firstChild;
         const close = n.node.lastChild;
@@ -144,40 +167,52 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
       return undefined;
     },
   });
-  for (let pos = lo; pos < hi; pos++) if (at(pos) === '\n') breaks.push({ from: pos, to: pos + 1 });
+  for (let i = 0; i < text.length; i++) if (text[i] === '\n') flags[i] |= BREAK;
+  for (const o of old) flag(o, OLD);
+  for (const s of nodes) on.fill(1, s.from - lo, s.to - lo);
 
-  // ponytail: per-character scans against span lists, fine for a selection of
-  // a few thousand characters; index the spans if select-all + bold gets slow.
-  const isText = (pos: number): boolean => /\S/.test(at(pos)) && !within(marks, pos) && !within(breaks, pos);
+  // Is everything selected styled already? Judged by the letters and digits:
+  // punctuation next to a word may have to stay outside the markers (below).
   let any = false;
   let all = true;
-  for (let pos = from; pos < to; pos++) {
-    if (!isText(pos)) continue;
+  let anyWord = false;
+  let allWords = true;
+  for (let i = from - lo; i < to - lo; i++) {
+    if (!/\S/.test(text[i]) || flags[i] & (MARK | BREAK)) continue;
+    const word = WORD.test(text[i]);
     any = true;
-    if (!within(styled, pos)) all = false;
+    anyWord ||= word;
+    if (!on[i]) {
+      all = false;
+      if (word) allWords = false;
+    }
   }
-  if (!any) return { changes: [], range };
+  if (!any) return none;
+  const add = anyWord ? !allWords : !all;
 
   // Whitespace and the markers being removed: runs join across these and don't
   // start or end on them.
-  const blank = (pos: number): boolean => /\s/.test(at(pos)) || within(old, pos);
-  const add = !all;
+  const blank = (i: number): boolean => /\s/.test(text[i]) || !!(flags[i] & OLD);
+  on.fill(add ? 1 : 0, from - lo, to - lo);
   if (add) {
-    styled.push({ from, to });
-    styled.sort((a, b) => a.from - b.from);
-    const joined: Span[] = [];
-    for (const s of styled) {
-      const last = joined[joined.length - 1];
-      let gap = !!last;
-      for (let pos = last?.to ?? 0; gap && pos < s.from; pos++) if (!blank(pos)) gap = false;
-      if (last && gap) last.to = Math.max(last.to, s.to);
-      else joined.push({ ...s });
+    for (let i = 0, gap = -1; i < text.length; i++) {
+      if (on[i]) {
+        if (gap >= 0) on.fill(1, gap, i);
+        gap = i + 1;
+      } else if (!blank(i)) {
+        gap = -1;
+      }
     }
-    styled = joined;
-  } else {
-    styled = minus(styled, { from, to });
   }
-  for (const cut of breaks) styled = minus(styled, cut);
+  let styled: Span[] = [];
+  for (let i = 0, start = -1; i <= text.length; i++) {
+    const run = i < text.length && on[i] && !(flags[i] & BREAK);
+    if (run && start < 0) start = i;
+    if (!run && start >= 0) {
+      styled.push({ from: start + lo, to: i + lo });
+      start = -1;
+    }
+  }
   // A run that crosses the edge of another style's node would not nest: split
   // it into the part inside that node and the part outside.
   for (let split = true; split;) {
@@ -191,23 +226,43 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
         .filter((p) => p.from < p.to);
     });
   }
-  styled = styled.map(({ from: f, to: t }) => {
-    while (f < t && blank(f)) f++;
-    while (f < t && blank(t - 1)) t--;
-    return { from: f, to: t };
+  // Markdown only reads a marker as one where it "flanks" the text: not next
+  // to a space on its inner side, and not between a word and punctuation
+  // (`a**(b)**c` stays literal). So a run sheds blanks at its edges, and
+  // punctuation there when a word follows on the other side of the marker. A
+  // backslash at the end would escape the closing marker.
+  const wordAt = (pos: number, step: number): boolean => {
+    while (pos >= lo && pos < hi && flags[pos - lo] & OLD) pos += step;
+    const ch = state.sliceDoc(pos, pos + 1);
+    return /\S/.test(ch) && !PUNCT.test(ch);
+  };
+  styled = styled.map((s) => {
+    let f = s.from - lo;
+    let t = s.to - lo;
+    while (f < t && (blank(f) || (PUNCT.test(text[f]) && wordAt(f + lo - 1, -1)))) f++;
+    while (f < t && (blank(t - 1) || text[t - 1] === '\\' || (PUNCT.test(text[t - 1]) && wordAt(t + lo, 1)))) t--;
+    return { from: f + lo, to: t + lo };
   }).filter((s) => s.from < s.to);
 
   // A marker that is already where one is needed stays, so an unchanged run
   // produces no edit (and nothing for a peer's cursor to trip over).
   const changes: ChangeSpec[] = [];
+  const endsAt = new Map(old.map((o) => [o.to, o]));
+  const startsAt = new Map(old.map((o) => [o.from, o]));
   const keep = new Set<Span>();
   const place = (pos: number, existing: Span | undefined): void => {
-    if (existing && state.sliceDoc(existing.from, existing.to) === marker) keep.add(existing);
+    if (existing && !keep.has(existing) && state.sliceDoc(existing.from, existing.to) === marker) keep.add(existing);
     else changes.push({ from: pos, insert: marker });
   };
   for (const s of styled) {
-    place(s.from, old.find((o) => o.to === s.from && !keep.has(o)));
-    place(s.to, old.find((o) => o.from === s.to && !keep.has(o)));
+    place(s.from, endsAt.get(s.from));
+    // A literal `*` in newly styled text would pair up with the new markers.
+    for (let i = Math.max(s.from, from) - lo; add && i < Math.min(s.to, to) - lo; i++) {
+      if (text[i] === marker[0] && !(flags[i] & (MARK | ATOM)) && text[i - 1] !== '\\') {
+        changes.push({ from: i + lo, insert: '\\' });
+      }
+    }
+    place(s.to, startsAt.get(s.to));
   }
   for (const o of old) if (!keep.has(o)) changes.push(o);
 

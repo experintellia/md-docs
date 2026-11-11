@@ -213,7 +213,7 @@ function buildHelp(): HTMLElement {
           <tr><td><code># Heading</code></td><td>Heading (use the ${ico(faHeading)} button to cycle levels)</td></tr>
           <tr><td><code>**bold**</code></td><td>Bold text (${ico(faBold)})</td></tr>
           <tr><td><code>*italic*</code></td><td>Italic text (${ico(faItalic)})</td></tr>
-          <tr><td><code>~~text~~</code></td><td>Strikethrough (${ico(faStrikethrough)}, on wide screens)</td></tr>
+          <tr><td><code>~~text~~</code></td><td>Strikethrough (${ico(faStrikethrough)}; not on a phone or in a narrow window)</td></tr>
           <tr><td><code>\`code\`</code></td><td>Inline code</td></tr>
           <tr><td><code>[text](url)</code></td><td>Link</td></tr>
           <tr><td><code>$x^2$</code></td><td>Math (LaTeX) in the text</td></tr>

@@ -244,6 +244,26 @@ test('bold and italic nest without disturbing each other', () => {
   assert.equal(italic('***a «b»***'), '***a* «b»**');
 });
 
+test('markers stay where markdown reads them as markers', () => {
+  // Between a word and punctuation a marker is literal, so punctuation at the
+  // edge of a run stays outside it.
+  assert.equal(bold('**«Note», this** end'), '«Note», **this** end');
+  assert.equal(bold('**Hello «world»!** end'), '**Hello** «world»! end');
+  assert.equal(bold('foo«(bar)»'), 'foo«(**bar)»**');
+  assert.equal(bold('foo«(**bar**)»'), 'foo«(bar)»');                // and comes off again
+  assert.equal(bold('«(bar)»'), '**«(bar)»**');                      // no word outside: all of it
+  assert.equal(italic('*see «this», ok*'), '*see* «this», *ok*');
+  assert.equal(strike('a«(b)»c'), 'a«(~~b~~)»c');
+  // A hard break's backslash would escape the closing marker.
+  assert.equal(bold('«a\\\nb»'), '**«a**\\\n**b»**');
+  // A literal marker character in the text is escaped, not paired up.
+  assert.equal(italic('«2*3»'), '*«2\\*3»*');
+  assert.equal(italic('*«2\\*3»*'), '«2\\*3»');
+  assert.equal(bold('«a `*` $*$ b»'), '**«a `*` $*$ b»**');           // not in code or math
+  assert.equal(bold('«- [ ]\n- x»'), '«- [ ]\n- **x»**');            // an empty task is no text
+  assert.equal(bold('a <!-- «c» --> b'), 'a **<!-- «c» -->** b');
+});
+
 test('code, math and link targets are never split by a marker', () => {
   assert.equal(bold('a `b«c` d»'), 'a **`b«c` d»**');               // whole code span
   assert.equal(bold('a $b«c$ d»'), 'a **$b«c$ d»**');

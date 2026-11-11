@@ -70,6 +70,8 @@ test('mountToolbar builds the 8 command buttons with title + aria-label', () => 
     const btn = btnByTitle(container, title);
     assert.equal(btn.getAttribute('aria-label'), title);
   }
+  // Only strikethrough steps aside where the toolbar is short of room (main.css).
+  assert.deepEqual([...container.querySelectorAll('.md-tool-wide')].map((b) => b.getAttribute('title')), ['Strikethrough']);
   // spacer + theme + help utility buttons
   assert.ok(container.querySelector('.md-tool-spacer'), 'spacer exists');
   assert.ok(btnByTitle(container, 'Toggle dark / light theme'));
