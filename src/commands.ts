@@ -53,7 +53,10 @@ const STYLES: Record<string, string> = { '**': 'StrongEmphasis', '*': 'Emphasis'
 const STYLE_NODES = new Set(Object.values(STYLES));
 /** Inline nodes a marker must not land inside: a selection edge in one of
  *  these moves out to its border. */
-const ATOMS = new Set(['InlineCode', 'InlineMath', 'DisplayMath', 'URL', 'Autolink', 'HTMLTag', 'Comment', 'Image']);
+const ATOMS = new Set([
+  'InlineCode', 'InlineMath', 'DisplayMath', 'URL', 'Autolink', 'HTMLTag', 'Comment', 'Image',
+  'Escape', 'Entity', 'Emoji',
+]);
 /** What a styled run cannot cross: block markup and blocks that hold no
  *  markdown. Line breaks are added to these. */
 const BREAKS = new Set([
@@ -73,7 +76,6 @@ const BREAK = 2; // a styled run cannot cross it
 const OLD = 4; // a marker of the toggled style that is being replaced
 const ATOM = 8; // inside code, math, a URL: not markdown
 const PUNCT = /[\p{P}\p{S}]/u;
-const WORD = /[\p{L}\p{N}]/u;
 
 /**
  * Toggle bold, italic or strikethrough on a selection as a set operation on
@@ -142,7 +144,9 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
   const flag = (s: Span, bit: number): void => {
     for (let i = Math.max(s.from, lo) - lo; i < Math.min(s.to, hi) - lo; i++) flags[i] |= bit;
   };
-  const others: (Span & { inner: Span })[] = []; // the other styles' nodes
+  // Nodes a run may be inside of or around, but not across the edge of: the
+  // other styles, and links (inside means in the link's text).
+  const others: (Span & { inner: Span })[] = [];
   tree.iterate({
     from: lo,
     to: hi,
@@ -164,6 +168,10 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
         const close = n.node.lastChild;
         if (open && close) others.push({ from: n.from, to: n.to, inner: { from: open.to, to: close.from } });
       }
+      if (n.name === 'Link') {
+        const [open, close] = n.node.getChildren('LinkMark');
+        if (open && close) others.push({ from: n.from, to: n.to, inner: { from: open.to, to: close.from } });
+      }
       return undefined;
     },
   });
@@ -171,7 +179,7 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
   for (const o of old) flag(o, OLD);
   for (const s of nodes) on.fill(1, s.from - lo, s.to - lo);
 
-  // Is everything selected styled already? Judged by the letters and digits:
+  // Is everything selected styled already? Judged by what is not punctuation:
   // punctuation next to a word may have to stay outside the markers (below).
   let any = false;
   let all = true;
@@ -179,7 +187,7 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
   let allWords = true;
   for (let i = from - lo; i < to - lo; i++) {
     if (!/\S/.test(text[i]) || flags[i] & (MARK | BREAK)) continue;
-    const word = WORD.test(text[i]);
+    const word = !PUNCT.test(text[i]);
     any = true;
     anyWord ||= word;
     if (!on[i]) {
@@ -213,8 +221,8 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
       start = -1;
     }
   }
-  // A run that crosses the edge of another style's node would not nest: split
-  // it into the part inside that node and the part outside.
+  // A run that crosses the edge of such a node would not nest: split it into
+  // the part inside the node and the part outside.
   for (let split = true; split;) {
     split = false;
     styled = styled.flatMap((s) => {
@@ -230,7 +238,9 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
   // to a space on its inner side, and not between a word and punctuation
   // (`a**(b)**c` stays literal). So a run sheds blanks at its edges, and
   // punctuation there when a word follows on the other side of the marker. A
-  // backslash at the end would escape the closing marker.
+  // backslash at the end would escape the closing marker. Only text is shed,
+  // never part of other markup.
+  const loose = (i: number): boolean => PUNCT.test(text[i]) && !(flags[i] & (MARK | ATOM));
   const wordAt = (pos: number, step: number): boolean => {
     while (pos >= lo && pos < hi && flags[pos - lo] & OLD) pos += step;
     const ch = state.sliceDoc(pos, pos + 1);
@@ -239,8 +249,8 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
   styled = styled.map((s) => {
     let f = s.from - lo;
     let t = s.to - lo;
-    while (f < t && (blank(f) || (PUNCT.test(text[f]) && wordAt(f + lo - 1, -1)))) f++;
-    while (f < t && (blank(t - 1) || text[t - 1] === '\\' || (PUNCT.test(text[t - 1]) && wordAt(t + lo, 1)))) t--;
+    while (f < t && (blank(f) || (loose(f) && wordAt(f + lo - 1, -1)))) f++;
+    while (f < t && (blank(t - 1) || (loose(t - 1) && (text[t - 1] === '\\' || wordAt(t + lo, 1))))) t--;
     return { from: f + lo, to: t + lo };
   }).filter((s) => s.from < s.to);
 
@@ -258,7 +268,7 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
     place(s.from, endsAt.get(s.from));
     // A literal `*` in newly styled text would pair up with the new markers.
     for (let i = Math.max(s.from, from) - lo; add && i < Math.min(s.to, to) - lo; i++) {
-      if (text[i] === marker[0] && !(flags[i] & (MARK | ATOM)) && text[i - 1] !== '\\') {
+      if (text[i] === marker[0] && !(flags[i] & (MARK | ATOM))) {
         changes.push({ from: i + lo, insert: '\\' });
       }
     }

@@ -262,6 +262,12 @@ test('markers stay where markdown reads them as markers', () => {
   assert.equal(bold('«a `*` $*$ b»'), '**«a `*` $*$ b»**');           // not in code or math
   assert.equal(bold('«- [ ]\n- x»'), '«- [ ]\n- **x»**');            // an empty task is no text
   assert.equal(bold('a <!-- «c» --> b'), 'a **<!-- «c» -->** b');
+  assert.equal(bold('1 \\«* 2»'), '1 **\\«* 2»**');                    // an escape stays whole
+  assert.equal(bold('«a \\\\* b»'), '**«a \\\\\\* b»**');              // `\\\\` is a backslash, the `*` literal
+  // Punctuation that belongs to other markup is not shed.
+  assert.equal(bold('**a «b»~~c~~**'), '**a** «b»**~~c~~**');
+  assert.equal(bold('wow«! 😀»'), 'wow«! **😀»**');
+  assert.equal(bold('wow«! **😀»**'), 'wow«! 😀»');
 });
 
 test('code, math and link targets are never split by a marker', () => {
@@ -269,6 +275,9 @@ test('code, math and link targets are never split by a marker', () => {
   assert.equal(bold('a $b«c$ d»'), 'a **$b«c$ d»**');
   assert.equal(bold('[te«xt](url) more»'), '**[te«xt](url) more»**');
   assert.equal(bold('[a «b» c](url)'), '[a **«b»** c](url)');       // inside the link text
+  assert.equal(bold('**see [«text»](url) now**'), '**see** [«text»](url) **now**');
+  assert.equal(bold('**a [b«c»](u)**'), '**a** [**b**«c»](u)');
+  assert.equal(bold('**[«text»](url)**'), '[«text»](url)');
   assert.equal(bold('«a\n```\ncode\n```\nb»'), '**«a**\n```\ncode\n```\n**b»**');
   assert.equal(bold('```\n«code»\n```'), '```\n«code»\n```');
 });
