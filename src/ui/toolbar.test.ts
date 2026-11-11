@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { EditorState, Transaction, type TransactionSpec } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import type { Collab } from '../collab.ts';
@@ -20,7 +21,8 @@ after(() => GlobalRegistrator.unregister());
 // Stub view: the toolbar commands only read `view.state`, call `view.dispatch`,
 // and `view.focus()` — mirror commands.test.ts's stand-in over a real EditorState.
 function makeView(doc: string, anchor: number, head: number): { view: EditorView; doc: () => string } {
-  let state = EditorState.create({ doc, selection: { anchor, head } });
+  // The inline toggles read the syntax tree, so the state needs the parser.
+  let state = EditorState.create({ doc, selection: { anchor, head }, extensions: markdown({ base: markdownLanguage }) });
   const view = {
     get state() {
       return state;
@@ -52,13 +54,14 @@ const COMMAND_TITLES = [
   'Heading (cycle level)',
   'Bold',
   'Italic',
+  'Strikethrough',
   'Bullet list',
   'Checklist item',
   'Outdent list item',
   'Indent list item',
 ];
 
-test('mountToolbar builds the 7 command buttons with title + aria-label', () => {
+test('mountToolbar builds the 8 command buttons with title + aria-label', () => {
   const container = reset();
   const { view } = makeView('hi', 0, 0);
   mountToolbar(container, view);

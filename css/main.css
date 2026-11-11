@@ -165,9 +165,11 @@ html, body {
 .md-tool-more { display: none; }
 
 /* Fold history/theme/help into a menu on touch, and wherever the full row would
-   not fit (~430px: 11 buttons at 36px plus gaps).
+   not fit (~470px: 12 buttons at 36px plus gaps). Strikethrough, the least
+   used command, is dropped there too: it can still be typed as ~~text~~.
    ponytail: a fixed breakpoint; raise it when the toolbar gains buttons. */
 @media (pointer: coarse), (max-width: 479px) {
+  .md-tool-wide { display: none; }
   /* Pinned to the end, so on a very narrow screen the commands scroll under it.
      Sticky makes it a stacking context, so its z-index (not the menu's) decides
      what the menu covers: above #status, a z-index 5 flex item on touch. */
