@@ -124,6 +124,20 @@ test('a callout is a box in its type colour, its first line marked and its marke
   assert.equal(label!.to, 13, 'to the space after the marker');
 });
 
+test('a nested callout names its colour for its own level, and only the outermost rounds the bottom', () => {
+  const doc = '> [!warning] Out\n> > [!note] In\n> > body';
+  const decos = decorate(doc, 0);
+  const inner = doc.indexOf('> > [!note]');
+  const onLine = (from: number) => decos.filter((d) => d.from === from && d.spec.attributes?.style);
+  assert.deepEqual(onLine(0).map((d) => d.spec.attributes?.style), ['--callout-1: var(--callout-warning)']);
+  assert.deepEqual(onLine(inner).map((d) => d.spec.attributes?.style),
+    ['--callout-1: var(--callout-warning)', '--callout-2: var(--callout-note)']);
+  assert.ok(withClass(onLine(inner), 'md-callout-d2'), 'depth class on the inner lines');
+  assert.ok(!withClass(onLine(0), 'md-callout-d2'), 'none on the outer');
+  const last = decos.filter((d) => d.spec.class?.includes('md-callout-last'));
+  assert.equal(last.length, 1, 'one bottom, the outer box’s');
+});
+
 test('a callout with no title draws its type name as the title', () => {
   const decos = decorate('> [!tip]\n> body', 14);
   assert.equal((calloutLabel(decos)!.spec.widget as CalloutLabelWidget).label, 'Tip');

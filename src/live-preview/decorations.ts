@@ -460,9 +460,24 @@ export function buildDecorations(view: EditorView): DecorationSet {
           // A quote nested in one of the opposite direction therefore draws
           // both bars on its lines, which reads as a box around the inner
           // quote. Fine, and better than a spine that breaks.
+          // A callout inside callouts paints its ancestors' bars and tints in
+          // a strip at its start, so its lines need every level's colour. A
+          // line carries all its callouts' type classes, which cannot say
+          // which one is innermost, so each callout names its colour for its
+          // own level instead: `--callout-2: var(--callout-tip)`. The CSS
+          // draws at most three levels; ponytail: a fourth reuses level 3.
+          let depth = 1;
+          if (callout) {
+            for (let up = node.node.parent; up; up = up.parent) {
+              if (up.name === 'Blockquote' && CALLOUT.test(doc.sliceString(up.from, doc.lineAt(up.from).to))) depth++;
+            }
+            depth = Math.min(depth, 3);
+          }
           const cls = callout
-            ? `md-callout md-callout-${calloutGroup(callout[1])} md-callout-${quoteDir}`
+            ? `md-callout md-callout-${calloutGroup(callout[1])} md-callout-${quoteDir}` +
+              (depth > 1 ? ` md-callout-d${depth}` : '')
             : name === 'Blockquote' ? `md-quote md-quote-${quoteDir}` : 'md-code-block';
+          const attributes = callout ? { style: `--callout-${depth}: var(--callout-${calloutGroup(callout[1])})` } : undefined;
           let pos = node.from;
           while (pos <= node.to) {
             const line = doc.lineAt(pos);
@@ -471,10 +486,13 @@ export function buildDecorations(view: EditorView): DecorationSet {
             // get tagged for the CSS to round the outer corners. A one-line
             // block gets both, which is why they set corners and not the
             // `border-radius` shorthand.
+            // A nested callout's last line is not the box's bottom: the
+            // outermost callout rounds that.
             const edges = name === 'Blockquote'
-              ? (callout && pos === node.from ? ' md-callout-head' : '') + (callout && isLast ? ' md-callout-last' : '')
+              ? (callout && pos === node.from ? ' md-callout-head' : '') +
+                (callout && isLast && depth === 1 ? ' md-callout-last' : '')
               : (pos === node.from ? ' md-code-first' : '') + (isLast ? ' md-code-last' : '');
-            ranges.push(Decoration.line({ class: cls + edges }).range(line.from));
+            ranges.push(Decoration.line({ class: cls + edges, attributes }).range(line.from));
             if (isLast) break;
             pos = line.to + 1;
           }
