@@ -10,10 +10,12 @@ All notable changes to MD-Docs are documented here. This project adheres to
   document opens in the mode you last chose, and a switch on one device reaches
   your others a moment later. The choice is a status update of its own, not a
   document edit, so it posts no notice to the chat and does not touch the
-  document's updates. (#58)
+  document's updates. Devices agree on the latest choice whatever order the
+  chat delivers updates in and whatever their clocks say, and a choice whose
+  send did not get out before the app closed goes out on the next open. (#58)
 - A document waits to appear until the chat's stored updates have loaded, so
   it does not fill in piece by piece. If that takes more than 4 seconds, a
-  progress bar shows.
+  progress bar shows; after 10 seconds the document appears regardless.
 
 ## [0.5.0] - 2026-10-31
 

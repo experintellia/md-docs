@@ -1,5 +1,5 @@
 import {
-  test, expect, press, serveMockWebxdc, chat, editor, open, write, peer, REALTIME_UP, realtimeUp,
+  test, expect, press, serveMockWebxdc, chat, editor, open, write, peer, UPDATES_KEY, REALTIME_UP, realtimeUp,
 } from './fixtures';
 
 // Bugs the app has had, pinned where they lived: in the wiring between
@@ -189,4 +189,85 @@ test('a read-mode tap right before closing is kept, and tells the chat nothing',
   await expect(editor(page)).toHaveAttribute('contenteditable', 'false');
   // One update from alice, with no info line and no summary.
   expect(await chat(page)).toEqual(['alice']);
+});
+
+test('a desktop close sends a read-mode choice still in its debounce', async ({ page, isMobile }) => {
+  // #59 review: desktop closes through beforeunload, with no visibilitychange.
+  // Fired on its own here, well inside the 1 s debounce.
+  await open(page);
+  await press(page.getByTitle('Toggle read / edit mode'), isMobile);
+  const log = await page.evaluate((key) => {
+    window.dispatchEvent(new Event('beforeunload'));
+    return localStorage.getItem(key);
+  }, UPDATES_KEY);
+  expect(log).toContain('"readMode"');
+});
+
+test('a replay that never settles shows the page after 10 s, in the stored read mode', async ({ page, context }) => {
+  // #59 review: the wait for the replay is capped, for the page and for read
+  // mode alike. This messenger delivers the log but never settles its promise.
+  await serveMockWebxdc(context, `{
+    const deliver = window.webxdc.setUpdateListener;
+    window.webxdc.setUpdateListener = (cb, serial) => {
+      deliver(cb, serial);
+      return new Promise(() => {});
+    };
+  }`);
+  await context.addInitScript(([key, update]) => {
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify([update]));
+  }, [UPDATES_KEY, {
+    payload: { readMode: { addr: 'alice@local.host', on: true, n: 1, dev: 'seed' } },
+    serial: 1,
+    _sender: 'alice@local.host',
+  }] as const);
+  await page.goto(peer('alice'));
+  await expect(page.locator('#loading')).toBeVisible({ timeout: 6000 });
+  await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 10_000 });
+  await expect(editor(page)).toHaveAttribute('contenteditable', 'false');
+});
+
+test('a read-mode choice whose send was lost goes out on the next open, once', async ({ page, context, isMobile }) => {
+  // #59 review: iOS can freeze the page before an async send lands. This
+  // messenger drops read-mode sends while the tab is flagged.
+  await serveMockWebxdc(context, `{
+    const send = window.webxdc.sendUpdate;
+    window.webxdc.sendUpdate = (u, d) => {
+      if (u.payload.readMode && sessionStorage.getItem('drop-read-mode')) return;
+      return send(u, d);
+    };
+  }`);
+  await open(page);
+  await page.evaluate(() => sessionStorage.setItem('drop-read-mode', '1'));
+  await press(page.getByTitle('Toggle read / edit mode'), isMobile);
+  await page.waitForTimeout(1500); // the debounce runs out; the send is dropped
+  expect(await chat(page)).toEqual([]);
+
+  await page.evaluate(() => sessionStorage.removeItem('drop-read-mode'));
+  await page.reload();
+  await expect(editor(page)).toHaveAttribute('contenteditable', 'false');
+  expect(await chat(page)).toEqual(['alice']);
+
+  await page.reload(); // the log has it now: nothing more goes out
+  await expect(editor(page)).toHaveAttribute('contenteditable', 'false');
+  expect(await chat(page)).toEqual(['alice']);
+});
+
+test('a read-mode switch reaches the same user’s other device, and no one else', async ({ page, context, isMobile }) => {
+  // The feature's headline, end to end: two pages as alice are two of her
+  // devices; bob is someone else in the chat.
+  await open(page);
+  const laptop = await context.newPage();
+  await open(laptop, 'alice');
+  const bob = await context.newPage();
+  await open(bob, 'bob');
+  const toggle = (p: typeof page) => press(p.getByTitle('Toggle read / edit mode'), isMobile);
+
+  await toggle(page);
+  await expect(editor(laptop)).toHaveAttribute('contenteditable', 'false');
+  await expect(editor(bob)).toHaveAttribute('contenteditable', 'true');
+
+  await toggle(laptop);
+  await expect(editor(page)).toHaveAttribute('contenteditable', 'true');
+  // Two silent updates from alice, nothing from bob, no info lines.
+  expect(await chat(page)).toEqual(['alice', 'alice']);
 });

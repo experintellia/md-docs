@@ -11,7 +11,7 @@ const choice = (p: Payload | undefined): { on: boolean; n: number; dev: string }
 
 /** A link the test drives by hand: what it hears, in what order, and when the
  *  replay ends. Sends are only recorded. */
-function manualLink(me = ALICE): {
+function manualLink(me = ALICE, unsent?: ReadModeLink['unsent']): {
   link: ReadModeLink;
   sent: Payload[];
   deliver(p: Payload): void;
@@ -25,6 +25,7 @@ function manualLink(me = ALICE): {
     send: (p) => { sent.push(p); },
     onMessage: (cb) => { listener = cb; },
     replayed: new Promise<void>((r) => { finish = r; }),
+    unsent,
   };
   return { link, sent, deliver: (p) => listener(p), finishReplay: () => finish() };
 }
@@ -197,4 +198,90 @@ test('flush sends a pending choice at once', () => {
   assert.equal(choice(chat.stored[0]).on, true);
   phone.flush();
   assert.equal(chat.stored.length, 1, 'nothing left to send');
+});
+
+/** Stand-in for the device's localStorage slot, surviving a "relaunch". */
+function memoryStore(): NonNullable<ReadModeLink['unsent']> & { value: unknown } {
+  const store = {
+    value: null as unknown,
+    load: () => store.value,
+    save: (p: Payload | null) => { store.value = p; },
+  };
+  return store;
+}
+
+test('a choice whose send never reached the log goes out again after the next replay', async () => {
+  // iOS can freeze the page before an async send reaches the messenger.
+  const store = memoryStore();
+  const before = manualLink(ALICE, store);
+  const phone = createReadModePref(before.link, 10);
+  before.finishReplay();
+  await tick();
+  phone.set(true);
+  phone.flush();
+  assert.equal(before.sent.length, 1, 'sent, but it never lands: nothing is delivered back');
+  assert.deepEqual(store.value, before.sent[0], 'kept on the device meanwhile');
+
+  // Relaunch: the log replays without it.
+  const after = manualLink(ALICE, store);
+  const relaunched = createReadModePref(after.link, 10);
+  after.finishReplay();
+  await tick();
+  assert.deepEqual(after.sent, [before.sent[0]], 'sent again, unchanged');
+  assert.equal(relaunched.get(), true, 'and shown');
+
+  // Its echo clears the slot; the next launch sends nothing.
+  after.deliver(after.sent[0]!);
+  assert.equal(store.value, null);
+});
+
+test('a kept choice already in the log, or outranked, is not sent again', async () => {
+  for (const [label, log, shows] of [
+    ['landed', (p: Payload) => [p], true],
+    ['outranked', () => [{ readMode: { addr: ALICE, on: false, n: 7, dev: 'laptop' } }], false],
+  ] as const) {
+    const store = memoryStore();
+    const first = manualLink(ALICE, store);
+    const phone = createReadModePref(first.link, 10);
+    first.finishReplay();
+    await tick();
+    phone.set(true);
+    phone.flush();
+
+    const next = manualLink(ALICE, store);
+    const pref = createReadModePref(next.link, 10);
+    for (const p of log(first.sent[0]!)) next.deliver(p);
+    next.finishReplay();
+    await tick();
+    assert.deepEqual(next.sent, [], `${label}: nothing resent`);
+    assert.equal(store.value, null, `${label}: slot cleared`);
+    assert.equal(pref.get(), shows, `${label}: shows the log's choice`);
+  }
+});
+
+test('a corrupt kept slot is dropped', async () => {
+  const store = memoryStore();
+  store.value = { readMode: 'garbage' };
+  const m = manualLink(ALICE, store);
+  const pref = createReadModePref(m.link, 10);
+  m.finishReplay();
+  await tick();
+  assert.equal(store.value, null);
+  assert.deepEqual(m.sent, []);
+  assert.equal(pref.get(), false);
+});
+
+test('a counter that is not a safe positive integer is refused', async () => {
+  // At 2^53 or Infinity, n + 1 === n: every later tap would tie with it.
+  const m = manualLink();
+  const pref = createReadModePref(m.link, 0);
+  for (const n of [Infinity, 2 ** 53, 0, -1, 1.5, NaN]) {
+    m.deliver({ readMode: { addr: ALICE, on: true, n, dev: 'peer' } });
+  }
+  m.finishReplay();
+  await tick();
+  assert.equal(pref.get(), false, 'none of them applied');
+  pref.set(true);
+  pref.flush();
+  assert.equal(choice(m.sent[0]).n, 1, 'the counter was not advanced by them');
 });

@@ -11,6 +11,8 @@ const DRAFT_KEY = 'md-docs-draft';
 // be missing from the chat. Every app start is a new ID; a restored draft's
 // unsent tail is ours only if it carries one of these.
 const OWN_KEY = 'md-docs-own-clients';
+// The last read-mode choice sent, until the log shows it (see read-mode.ts).
+const READ_MODE_UNSENT_KEY = 'md-docs-read-mode-unsent';
 
 /** The clients with edits in `update` that `doc` does not have yet. */
 function clientsAhead(update: Uint8Array, doc: Y.Doc): number[] {
@@ -263,6 +265,23 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
     send: (payload) => history.sendSilent(payload),
     onMessage: (cb) => history.onSilent(cb),
     replayed,
+    unsent: {
+      load: () => {
+        try {
+          return JSON.parse(localStorage.getItem(READ_MODE_UNSENT_KEY) ?? 'null');
+        } catch {
+          return null; // unreadable or corrupt: nothing to resend
+        }
+      },
+      save: (payload) => {
+        try {
+          if (payload) localStorage.setItem(READ_MODE_UNSENT_KEY, JSON.stringify(payload));
+          else localStorage.removeItem(READ_MODE_UNSENT_KEY);
+        } catch {
+          // Blocked storage: the choice still goes out, just without the net.
+        }
+      },
+    },
   });
   window.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') readMode.flush();
