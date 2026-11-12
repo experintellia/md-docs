@@ -80,13 +80,19 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
   const undoManager = new Y.UndoManager(ytext);
 
   // ponytail: no destroy() — a webxdc app is one long-lived page, nothing to
-  // tear down. The provider's own visibilitychange/beforeunload flush handles
-  // saving on close.
+  // tear down. Saving on close is the provider's visibilitychange flush plus
+  // the beforeunload listener below.
   // First line becomes the webxdc document title (shown in the chat), as
   // plaintext — markdown syntax would look like noise in the chat list.
   const title = (): string =>
     (titleFromMarkdown(ytext.toString().split('\n', 1)[0] || '') || 'Untitled').slice(0, 60);
-  const provider = new WebxdcProvider({
+  // y-webxdc answers beforeunload by cancelling it and closing the window
+  // itself 100ms later (a workaround for Delta Chat Desktop #3321, which
+  // Desktop's own source now asks apps to drop). So any beforeunload closed the
+  // app, also one that never meant to: Desktop fires one when a link click
+  // becomes its "Open link?" dialog. The provider is built without that
+  // listener; the flush it did is done below, without cancelling or closing.
+  const provider = withoutBeforeUnload(() => new WebxdcProvider({
     webxdc,
     ydoc,
     autosaveInterval: 10_000, // matches the webxdc default sendUpdateInterval
@@ -102,7 +108,7 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
         startinfo: `${webxdc.selfName} updated the document`,
       };
     },
-  });
+  }));
 
   // Synchronous local safety net. The provider only persists via the async
   // webxdc.sendUpdate() (autosave loop + visibilitychange/beforeunload flush).
@@ -232,6 +238,13 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
   window.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') saveDraft();
   });
+  // The close-time flush y-webxdc's dropped listener did, minus its cancel and
+  // close. The send may not get out of a closing window on Desktop; the draft
+  // is a synchronous write, so what the send misses is resent on the next open.
+  window.addEventListener('beforeunload', () => {
+    provider.syncToChatPeers();
+    saveDraft();
+  });
 
   // Debounced save on edit, to also cover a hard kill with no visibilitychange.
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -241,4 +254,21 @@ export function createCollab(onDraftSave?: (ok: boolean) => void): Collab {
   });
 
   return { ydoc, ytext, awareness, undoManager, provider, history };
+}
+
+/**
+ * Run `make` with `window.addEventListener` ignoring 'beforeunload', so a
+ * library's constructor cannot register one (see the y-webxdc note above).
+ * Every other listener is added as usual.
+ */
+function withoutBeforeUnload<T>(make: () => T): T {
+  const add = window.addEventListener;
+  window.addEventListener = function (this: Window, type: string, ...rest: unknown[]): void {
+    if (type !== 'beforeunload') Reflect.apply(add, this, [type, ...rest]);
+  } as typeof window.addEventListener;
+  try {
+    return make();
+  } finally {
+    window.addEventListener = add;
+  }
 }

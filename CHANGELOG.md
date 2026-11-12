@@ -30,6 +30,12 @@ All notable changes to MD-Docs are documented here. This project adheres to
   while the cursor is on the line only the raw markers show, with no rule
   underneath.
 
+### Fixed
+- Clicking a link no longer closes the app on Delta Chat Desktop. y-webxdc
+  answered the `beforeunload` that Desktop fires for its "Open link?" dialog
+  by closing the window itself; that listener is no longer registered, and
+  the flush it did on close is kept, without cancelling or closing.
+
 ## [0.5.0] - 2026-10-31
 
 ### Added

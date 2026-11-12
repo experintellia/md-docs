@@ -368,3 +368,30 @@ test('a corrupt draft that cannot be removed still leaves saving enabled', async
   assert.ok(localStorage.getItem(DRAFT_KEY), 'and the new draft was written');
   localStorage.removeItem(DRAFT_KEY);
 });
+
+test('a beforeunload neither cancels nor closes the app, and still flushes', async () => {
+  // y-webxdc cancels beforeunload and closes the window itself 100ms later.
+  // Delta Chat Desktop fires a beforeunload when a link click becomes its
+  // "Open link?" dialog, so clicking a link closed the app.
+  localStorage.removeItem(DRAFT_KEY);
+  const sent = mockWebxdc([]);
+  const collab = createCollab();
+  await settle();
+  collab.ytext.insert(0, 'typed right before clicking a link');
+
+  let closed = 0;
+  const close = window.close;
+  window.close = () => { closed++; };
+  try {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    await new Promise((r) => setTimeout(r, 150)); // past y-webxdc's 100ms
+    assert.equal(event.defaultPrevented, false, 'the unload is not cancelled');
+    assert.equal(closed, 0, 'the app does not close itself');
+    assert.ok(sent.some((u) => u.payload.serializedYjsUpdate), 'queued edits are sent');
+    assert.ok(localStorage.getItem(DRAFT_KEY), 'and the local draft is written');
+  } finally {
+    window.close = close;
+    localStorage.removeItem(DRAFT_KEY);
+  }
+});
