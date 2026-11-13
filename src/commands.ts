@@ -75,6 +75,7 @@ const MARK = 1; // markup of any kind, not text
 const BREAK = 2; // a styled run cannot cross it
 const OLD = 4; // a marker of the toggled style that is being replaced
 const ATOM = 8; // inside code, math, a URL: not markdown
+const SUB = 16; // the `~` of `~subscript~`, which nothing here draws as one
 const PUNCT = /[\p{P}\p{S}]/u;
 
 /**
@@ -110,8 +111,28 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
     }
     return found;
   };
-  const from = atom(range.from)?.from ?? range.from;
-  const to = atom(range.to)?.to ?? range.to;
+  let from = atom(range.from)?.from ?? range.from;
+  let to = atom(range.to)?.to ?? range.to;
+  // A marker between a word and the edge of code, math, a link or the other
+  // kind of style (`foo**\`bar\`**`) is not one to markdown, and there is no
+  // tighter place for it. So markup that hangs on a word takes the word along.
+  const wordChar = (pos: number): boolean => {
+    const ch = state.sliceDoc(pos, pos + 1);
+    return /\S/.test(ch) && !PUNCT.test(ch);
+  };
+  // (Another style written with the marker's own character is no obstacle:
+  // `foo***bar***` reads fine.)
+  const solid = (n: SyntaxNode): boolean => ATOMS.has(n.name) || n.name === 'Link'
+    || (STYLE_NODES.has(n.name) && n.name !== type && state.sliceDoc(n.from, n.from + 1) !== marker[0]);
+  const edge = (pos: number, side: 1 | -1): boolean => {
+    for (let n: SyntaxNode | null = tree.resolve(pos, side); n; n = n.parent) {
+      if ((side > 0 ? n.from : n.to) === pos && solid(n)) return true;
+    }
+    return false;
+  };
+  const picked = { from, to }; // before any word is taken along
+  if (edge(from, 1)) while (from > 0 && wordChar(from - 1)) from--;
+  if (edge(to, -1)) while (wordChar(to)) to++;
 
   // The style's nodes on or next to the selection (spaces don't separate):
   // their markers go, their text is what is styled now.
@@ -134,10 +155,11 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
     },
   });
 
-  // Everything below works on [lo, hi): the selection plus those nodes, as one
-  // string with a flag byte and a styled-or-not byte per character.
-  const lo = Math.min(from, ...old.map((s) => s.from));
-  const hi = Math.max(to, ...old.map((s) => s.to));
+  // Everything below works on [lo, hi): the lines of the selection and those
+  // nodes, as one string with a flag byte and a styled-or-not byte per character.
+  // Whole lines, so that what is next to a run can be looked at as well.
+  const lo = state.doc.lineAt(Math.min(from, ...old.map((s) => s.from))).from;
+  const hi = state.doc.lineAt(Math.max(to, ...old.map((s) => s.to))).to;
   const text = state.sliceDoc(lo, hi);
   const flags = new Uint8Array(text.length);
   const on = new Uint8Array(text.length);
@@ -162,7 +184,7 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
         return false;
       }
       if (ATOMS.has(n.name)) flag(n, ATOM);
-      if (n.name.endsWith('Mark')) flag(n, MARK);
+      if (n.name.endsWith('Mark')) flag(n, n.name === 'SubscriptMark' ? MARK | SUB : MARK);
       if (STYLE_NODES.has(n.name) && n.name !== type) {
         const open = n.node.firstChild;
         const close = n.node.lastChild;
@@ -188,7 +210,7 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
   for (let i = from - lo; i < to - lo; i++) {
     if (!/\S/.test(text[i]) || flags[i] & (MARK | BREAK)) continue;
     const word = !PUNCT.test(text[i]);
-    any = true;
+    if (i >= picked.from - lo && i < picked.to - lo) any = true;
     anyWord ||= word;
     if (!on[i]) {
       all = false;
@@ -251,8 +273,23 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
     let t = s.to - lo;
     while (f < t && (blank(f) || (loose(f) && wordAt(f + lo - 1, -1)))) f++;
     while (f < t && (blank(t - 1) || (loose(t - 1) && (text[t - 1] === '\\' || wordAt(t + lo, 1))))) t--;
+    // What is left of a run after a cut can start or end on markup that hangs
+    // on a word, as a selection can (above): take the word along here too.
+    const hangs = (i: number): boolean => PUNCT.test(text[i]) && !loose(i) && text[i] !== marker[0];
+    if (f < t && hangs(f)) while (f > 0 && wordChar(f + lo - 1)) f--;
+    if (f < t && hangs(t - 1)) while (wordChar(t + lo)) t++;
     return { from: f + lo, to: t + lo };
-  }).filter((s) => s.from < s.to);
+  }).filter((s) => s.from < s.to).sort((a, b) => a.from - b.from);
+  // Taking a word along can make two runs meet, or leave only blanks between
+  // them outside the selection: then they are one run, as they were.
+  styled = styled.reduce<Span[]>((runs, s) => {
+    const last = runs[runs.length - 1];
+    let apart = !last || (last.to < to && from < s.from);
+    for (let i = (last?.to ?? 0) - lo; !apart && i < s.from - lo; i++) if (!blank(i)) apart = true;
+    if (last && !apart) last.to = Math.max(last.to, s.to);
+    else runs.push(s);
+    return runs;
+  }, []);
 
   // A marker that is already where one is needed stays, so an unchanged run
   // produces no edit (and nothing for a peer's cursor to trip over).
@@ -260,19 +297,29 @@ function styleRange(state: EditorState, range: SelectionRange, marker: string): 
   const endsAt = new Map(old.map((o) => [o.to, o]));
   const startsAt = new Map(old.map((o) => [o.from, o]));
   const keep = new Set<Span>();
-  const place = (pos: number, existing: Span | undefined): void => {
-    if (existing && !keep.has(existing) && state.sliceDoc(existing.from, existing.to) === marker) keep.add(existing);
-    else changes.push({ from: pos, insert: marker });
+  // A literal marker character right outside the new marker would run into it
+  // (`~a~` struck through as `~~~a~~~` opens a code fence): it becomes part of
+  // the marker instead.
+  const literal = (i: number): boolean =>
+    i >= 0 && i < text.length && text[i] === marker[0] && (!(flags[i] & (MARK | ATOM | BREAK)) || !!(flags[i] & SUB));
+  const place = (pos: number, existing: Span | undefined, step: 1 | -1): void => {
+    if (existing && !keep.has(existing) && state.sliceDoc(existing.from, existing.to) === marker) {
+      keep.add(existing);
+      return;
+    }
+    let have = 0;
+    while (have < marker.length && literal(pos - lo + (step < 0 ? -1 - have : have))) have++;
+    if (have < marker.length) changes.push({ from: pos, insert: marker.slice(have) });
   };
   for (const s of styled) {
-    place(s.from, endsAt.get(s.from));
+    place(s.from, endsAt.get(s.from), -1);
     // A literal `*` in newly styled text would pair up with the new markers.
     for (let i = Math.max(s.from, from) - lo; add && i < Math.min(s.to, to) - lo; i++) {
       if (text[i] === marker[0] && !(flags[i] & (MARK | ATOM))) {
         changes.push({ from: i + lo, insert: '\\' });
       }
     }
-    place(s.to, startsAt.get(s.to));
+    place(s.to, startsAt.get(s.to), 1);
   }
   for (const o of old) if (!keep.has(o)) changes.push(o);
 
